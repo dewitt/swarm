@@ -15,20 +15,16 @@ func TestLoadSkill_ValidSkill(t *testing.T) {
 	err := os.Mkdir(skillDir, 0755)
 	assert.NoError(t, err)
 
-	// Write instructions.md
-	instructions := "You are a test skill. Do test things."
-	err = os.WriteFile(filepath.Join(skillDir, "instructions.md"), []byte(instructions), 0644)
-	assert.NoError(t, err)
-
-	// Write tools.yaml
-	toolsYaml := `
+	skillContent := `---
 name: test-skill
 description: A mock skill for testing
 tools:
   - write_local_file
   - list_local_files
+---
+You are a test skill. Do test things.
 `
-	err = os.WriteFile(filepath.Join(skillDir, "tools.yaml"), []byte(toolsYaml), 0644)
+	err = os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(skillContent), 0644)
 	assert.NoError(t, err)
 
 	skill, err := sdk.LoadSkill(skillDir)
@@ -38,10 +34,10 @@ tools:
 	assert.Equal(t, "test-skill", skill.Manifest.Name)
 	assert.Equal(t, "A mock skill for testing", skill.Manifest.Description)
 	assert.ElementsMatch(t, []string{"write_local_file", "list_local_files"}, skill.Manifest.Tools)
-	assert.Equal(t, instructions, skill.Instructions)
+	assert.Equal(t, "You are a test skill. Do test things.\n", skill.Instructions)
 }
 
-func TestLoadSkill_MissingInstructions(t *testing.T) {
+func TestLoadSkill_MissingSkillMd(t *testing.T) {
 	tempDir := t.TempDir()
 	skillDir := filepath.Join(tempDir, "empty-skill")
 	err := os.Mkdir(skillDir, 0755)
@@ -50,17 +46,17 @@ func TestLoadSkill_MissingInstructions(t *testing.T) {
 	skill, err := sdk.LoadSkill(skillDir)
 	assert.Error(t, err)
 	assert.Nil(t, skill)
-	assert.Contains(t, err.Error(), "missing required instructions.md")
+	assert.Contains(t, err.Error(), "failed to read SKILL.md")
 }
 
-func TestLoadSkill_NoToolsYaml(t *testing.T) {
+func TestLoadSkill_NoFrontmatter(t *testing.T) {
 	tempDir := t.TempDir()
 	skillDir := filepath.Join(tempDir, "simple-skill")
 	err := os.Mkdir(skillDir, 0755)
 	assert.NoError(t, err)
 
-	instructions := "I only have instructions."
-	err = os.WriteFile(filepath.Join(skillDir, "instructions.md"), []byte(instructions), 0644)
+	skillContent := "I only have instructions."
+	err = os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(skillContent), 0644)
 	assert.NoError(t, err)
 
 	skill, err := sdk.LoadSkill(skillDir)
@@ -69,6 +65,6 @@ func TestLoadSkill_NoToolsYaml(t *testing.T) {
 	
 	// Should fallback to the directory name
 	assert.Equal(t, "simple-skill", skill.Manifest.Name)
-	assert.Equal(t, instructions, skill.Instructions)
+	assert.Equal(t, skillContent, skill.Instructions)
 	assert.Empty(t, skill.Manifest.Tools)
 }

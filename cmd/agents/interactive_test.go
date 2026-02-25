@@ -16,8 +16,8 @@ func TestSnapshotUI(t *testing.T) {
 	newModel, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	m = newModel.(model)
 
-	// Simulate typing /help
-	for _, r := range "/help" {
+	// Simulate typing /skills
+	for _, r := range "/skills" {
 		newModel, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
 		m = newModel.(model)
 	}

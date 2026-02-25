@@ -1,7 +1,7 @@
 package sdk
 
 import (
-	"errors"
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,24 +9,22 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// SkillManifest defines the structure of a skill's tools.yaml file.
-// For now, it simply declares a list of SDK-provided tools the skill requires.
+// SkillManifest defines the structure of a skill's metadata (from YAML frontmatter).
 type SkillManifest struct {
 	Name        string   `yaml:"name"`
 	Description string   `yaml:"description"`
 	Tools       []string `yaml:"tools"`
 }
 
-// Skill represents a dynamically loaded set of capabilities.
+// Skill represents a dynamically loaded set of capabilities following the open agentskills.io standard.
 type Skill struct {
 	Manifest     SkillManifest
 	Instructions string
 	Path         string
 }
 
-// LoadSkill reads a skill directory and returns the parsed Skill.
-// A valid skill directory must contain an instructions.md file.
-// A tools.yaml file is optional.
+// LoadSkill reads a skill directory adhering to the agentskills.io standard.
+// It looks for a SKILL.md file with YAML frontmatter for metadata, and the rest as instructions.
 func LoadSkill(skillDir string) (*Skill, error) {
 	info, err := os.Stat(skillDir)
 	if err != nil {
@@ -40,29 +38,34 @@ func LoadSkill(skillDir string) (*Skill, error) {
 		Path: skillDir,
 	}
 
-	// 1. Read instructions.md (Required)
-	instructionsPath := filepath.Join(skillDir, "instructions.md")
-	instructionsData, err := os.ReadFile(instructionsPath)
+	skillPath := filepath.Join(skillDir, "SKILL.md")
+	data, err := os.ReadFile(skillPath)
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return nil, fmt.Errorf("skill missing required instructions.md: %s", skillDir)
-		}
-		return nil, fmt.Errorf("error reading instructions.md: %w", err)
-	}
-	skill.Instructions = string(instructionsData)
-
-	// 2. Read tools.yaml (Optional)
-	toolsPath := filepath.Join(skillDir, "tools.yaml")
-	toolsData, err := os.ReadFile(toolsPath)
-	if err == nil {
-		if err := yaml.Unmarshal(toolsData, &skill.Manifest); err != nil {
-			return nil, fmt.Errorf("invalid tools.yaml format: %w", err)
-		}
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return nil, fmt.Errorf("error reading tools.yaml: %w", err)
+		return nil, fmt.Errorf("failed to read SKILL.md in %s: %w", skillDir, err)
 	}
 
-	// Fallback name if tools.yaml is missing or didn't provide one
+	// Parse YAML frontmatter
+	const separator = "---\n"
+	if bytes.HasPrefix(data, []byte(separator)) {
+		parts := bytes.SplitN(data[4:], []byte(separator), 2)
+		if len(parts) == 2 {
+			frontmatter := parts[0]
+			instructions := parts[1]
+
+			if err := yaml.Unmarshal(frontmatter, &skill.Manifest); err != nil {
+				return nil, fmt.Errorf("invalid YAML frontmatter in SKILL.md: %w", err)
+			}
+			skill.Instructions = string(instructions)
+		} else {
+			// Malformed frontmatter, treat whole thing as instructions
+			skill.Instructions = string(data)
+		}
+	} else {
+		// No frontmatter found
+		skill.Instructions = string(data)
+	}
+
+	// Fallback name if frontmatter is missing or didn't provide one
 	if skill.Manifest.Name == "" {
 		skill.Manifest.Name = filepath.Base(skillDir)
 	}

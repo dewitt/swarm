@@ -243,12 +243,29 @@ func (m *model) handleSlashCommand(input string) {
 			"  /clear       Clears the conversation history.",
 			"  /context     Displays the current files and metadata loaded in memory.",
 			"  /drop [file] Removes a specific file from the active context window.",
+			"  /skills      Lists dynamically loaded agent skills.",
 			"  /model       Set the active LLM provider (e.g. /model auto).",
 			"  /exit        Gracefully terminates the session.",
 		)
 		
 		icon := agentMsgStyle.Render("✦ ")
 		m.messages = append(m.messages, lipgloss.JoinHorizontal(lipgloss.Top, icon, helpText))
+	case "/skills":
+		skills := m.manager.Skills()
+		if len(skills) == 0 {
+			m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"No dynamic skills are currently loaded.")
+			return
+		}
+		
+		var lines []string
+		lines = append(lines, lipgloss.NewStyle().Bold(true).Render("Loaded Skills"))
+		lines = append(lines, "")
+		for _, s := range skills {
+			lines = append(lines, fmt.Sprintf("  - %s: %s", lipgloss.NewStyle().Foreground(primaryColor).Render(s.Manifest.Name), s.Manifest.Description))
+		}
+		
+		icon := agentMsgStyle.Render("✦ ")
+		m.messages = append(m.messages, lipgloss.JoinHorizontal(lipgloss.Top, icon, lipgloss.JoinVertical(lipgloss.Left, lines...)))
 	case "/model":
 		if len(parts) < 2 {
 			m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"Usage: /model <name>\nExample: /model gemini-2.5-pro\nCurrent mode is: auto")

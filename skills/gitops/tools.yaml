@@ -1,6 +1,0 @@
-name: gitops_agent
-description: "Specialized in crafting CI/CD pipelines, writing GitHub Actions, and executing Git operations for deployment."
-tools:
-  - write_local_file
-  - git_commit
-  - git_push

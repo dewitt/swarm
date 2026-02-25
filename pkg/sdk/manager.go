@@ -83,6 +83,8 @@ type AgentManager interface {
 	// Chat sends a natural language prompt to the internal Router Agent.
 	// It returns a channel that streams the response back to the caller.
 	Chat(ctx context.Context, prompt string) (<-chan string, error)
+	// Skills returns a list of all dynamically loaded skills in the workspace.
+	Skills() []*Skill
 }
 
 // AgentManifest represents a parsed agent.yaml configuration.
@@ -98,6 +100,7 @@ type defaultManager struct {
 	run       *runner.Runner
 	userID    string
 	sessionID string
+	skills    []*Skill
 }
 
 // ManagerConfig defines configuration for the AgentManager.
@@ -180,10 +183,11 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 
 	// 2. Dynamically load skills to create sub-agents
 	var subAgents []agent.Agent
+	var loadedSkills []*Skill
 
 	// Assuming the binary is run from the project root for now. 
 	// In a real installation, we would search ~/.config/agents/skills or an embedded FS.
-	skillDirs := []string{"skills/builder", "skills/gitops"}
+	skillDirs := []string{"skills/builder", "skills/gitops", "skills/adk-skill"}
 
 	for _, dir := range skillDirs {
 		skill, err := LoadSkill(dir)
@@ -192,6 +196,7 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 			// instead of fatally crashing, to preserve development flow.
 			continue
 		}
+		loadedSkills = append(loadedSkills, skill)
 
 		var skillTools []tool.Tool
 		for _, toolName := range skill.Manifest.Tools {
@@ -250,7 +255,12 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 		run:       r,
 		userID:    "local_user",
 		sessionID: "local_session",
+		skills:    loadedSkills,
 	}
+}
+
+func (m *defaultManager) Skills() []*Skill {
+	return m.skills
 }
 
 func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan string, error) {

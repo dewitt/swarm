@@ -182,7 +182,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.state = stateChat
 				return m, nil
 			}
-			if msg.Type == tea.KeyEnter {
+			if msg.Type == tea.KeyEnter && m.listModel.FilterState() != list.Filtering {
 				if i, ok := m.listModel.SelectedItem().(item); ok {
 					newModelName := string(i)
 					cfg, err := sdk.LoadConfig()
@@ -199,6 +199,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			
 			var listCmd tea.Cmd
 			m.listModel, listCmd = m.listModel.Update(msg)
+			
+			// Intercept the quit command that the list component returns on 'q' or 'ctrl+c'
+			if listCmd != nil {
+				// If the list tells us to quit, just return to the chat state instead of exiting the app.
+				// We can't easily introspect the command, but we know if they pressed 'q' while not filtering.
+				if msg.String() == "q" && m.listModel.FilterState() != list.Filtering {
+					m.state = stateChat
+					return m, nil
+				}
+			}
 			return m, listCmd
 		}
 	}
@@ -339,7 +349,7 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 			"  /drop [file] Removes a specific file from the active context window.",
 			"  /skills      Lists dynamically loaded agent skills.",
 			"  /model       Set the active LLM provider (e.g. /model auto).",
-			"  /models list Open an interactive list of all available models.",
+			"  /model list  Open an interactive list of all available models.",
 			"  /exit        Gracefully terminates the session.",
 		)
 		
@@ -361,17 +371,16 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 		
 		icon := agentMsgStyle.Render("✦ ")
 		m.messages = append(m.messages, lipgloss.JoinHorizontal(lipgloss.Top, icon, lipgloss.JoinVertical(lipgloss.Left, lines...)))
-	case "/models":
-		if len(parts) > 1 && parts[1] == "list" {
+	case "/model":
+		if len(parts) < 2 {
+			m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"Usage: /model <name> OR /model list\nCurrent mode is: auto")
+			return nil
+		}
+		
+		if parts[1] == "list" {
 			m.state = stateModelList
 			m.loading = true
 			return tea.Batch(m.fetchModels(), m.spinner.Tick)
-		}
-		m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"Usage: /models list")
-	case "/model":
-		if len(parts) < 2 {
-			m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"Usage: /model <name>\nExample: /model gemini-2.5-pro\nCurrent mode is: auto")
-			return nil
 		}
 		
 		newModelName := parts[1]
@@ -416,7 +425,7 @@ func autocompleteCommand(input string) string {
 		"/drop",
 		"/skills",
 		"/model",
-		"/models list",
+		"/model list",
 		"/exit",
 		"/quit",
 	}

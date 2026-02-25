@@ -1,0 +1,4 @@
+name: builder_agent
+description: "Specialized in scaffolding new agent projects across different frameworks and writing boilerplate code."
+tools:
+  - write_local_file

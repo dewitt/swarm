@@ -115,7 +115,7 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 		m = cfg[0].Model
 	} else {
 		apiKey := os.Getenv("GOOGLE_API_KEY")
-		
+
 		// We create the model using the API key. If it's empty, the client might fail later
 		// but we allow it to initialize so the UI can launch.
 		clientConfig := &genai.ClientConfig{}
@@ -130,6 +130,7 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 		}
 	}
 
+	// 1. Initialize the global tool registry
 	listTool, err := functiontool.New(functiontool.Config{
 		Name:        "list_local_files",
 		Description: "Lists files in the local directory to help understand the current workspace.",
@@ -144,17 +145,6 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 	}, writeLocalFile)
 	if err != nil {
 		log.Fatalf("Failed to create writeTool: %v", err)
-	}
-
-	builderAgent, err := llmagent.New(llmagent.Config{
-		Name:        "builder_agent",
-		Model:       m,
-		Description: "Specialized in scaffolding new agent projects across different frameworks (ADK, LangGraph) and writing boilerplate code.",
-		Instruction: "You are the Builder Agent. Scaffold projects and write initial agent.yaml, requirements.txt, and agent scripts. Use the write_local_file tool to create them.",
-		Tools:       []tool.Tool{writeTool},
-	})
-	if err != nil {
-		log.Fatalf("Failed to create builder agent: %v", err)
 	}
 
 	gitCommit, err := functiontool.New(functiontool.Config{
@@ -173,23 +163,58 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 		log.Fatalf("Failed to create gitPush tool: %v", err)
 	}
 
-	gitopsAgent, err := llmagent.New(llmagent.Config{
-		Name:        "gitops_agent",
-		Model:       m,
-		Description: "Specialized in crafting CI/CD pipelines, writing GitHub Actions, and executing Git operations for deployment.",
-		Instruction: "You are the GitOps Agent. When asked to deploy an agent, scaffold a standard deployment workflow (e.g., GitHub Actions in .github/workflows/), use write_local_file to save it, then use git_commit and git_push to deploy it.",
-		Tools:       []tool.Tool{writeTool, gitCommit, gitPush},
-	})
-	if err != nil {
-		log.Fatalf("Failed to create gitops agent: %v", err)
+	// A map to resolve string names from tools.yaml to actual ADK Tool instances
+	toolRegistry := map[string]tool.Tool{
+		"list_local_files": listTool,
+		"write_local_file": writeTool,
+		"git_commit":       gitCommit,
+		"git_push":         gitPush,
 	}
 
+	// 2. Dynamically load skills to create sub-agents
+	var subAgents []agent.Agent
+
+	// Assuming the binary is run from the project root for now. 
+	// In a real installation, we would search ~/.config/agents/skills or an embedded FS.
+	skillDirs := []string{"skills/builder", "skills/gitops"}
+
+	for _, dir := range skillDirs {
+		skill, err := LoadSkill(dir)
+		if err != nil {
+			// If we are in tests or running from a weird directory, just skip loading the skill
+			// instead of fatally crashing, to preserve development flow.
+			continue
+		}
+
+		var skillTools []tool.Tool
+		for _, toolName := range skill.Manifest.Tools {
+			if t, ok := toolRegistry[toolName]; ok {
+				skillTools = append(skillTools, t)
+			} else {
+				log.Printf("Warning: Skill %s requested unknown tool %s", skill.Manifest.Name, toolName)
+			}
+		}
+
+		skillAgent, err := llmagent.New(llmagent.Config{
+			Name:        skill.Manifest.Name,
+			Model:       m,
+			Description: skill.Manifest.Description,
+			Instruction: skill.Instructions,
+			Tools:       skillTools,
+		})
+		if err != nil {
+			log.Fatalf("Failed to create agent for skill %s: %v", skill.Manifest.Name, err)
+		}
+		subAgents = append(subAgents, skillAgent)
+	}
+
+	// 3. Create the Router Agent
 	routerAgent, err := llmagent.New(llmagent.Config{
 		Name:        "router_agent",
 		Model:       m,
-		Instruction: "You are the primary Router Agent for the Agents CLI. Help the user build, test, and deploy AI agents. Keep your answers brief, professional, and use markdown formatting. Use the list_local_files tool if you need to inspect the workspace. If the user wants to build or scaffold a new project, transfer to the builder_agent. If the user wants to deploy the agent to production via CI/CD, transfer to the gitops_agent.",
+		Instruction: "You are the primary Router Agent for the Agents CLI. Help the user build, test, and deploy AI agents. Keep your answers brief, professional, and use markdown formatting. Use the list_local_files tool if you need to inspect the workspace. Transfer to sub-agents (like builder_agent or gitops_agent) based on the user's intent.",
 		Tools:       []tool.Tool{listTool},
-		SubAgents:   []agent.Agent{builderAgent, gitopsAgent},
+		SubAgents:   subAgents,
 	})
 	if err != nil {
 		log.Fatalf("Failed to create agent: %v", err)

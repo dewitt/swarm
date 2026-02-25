@@ -233,6 +233,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				m.updateViewport()
 			}
+		case tea.KeyTab:
+			if !m.loading {
+				m.textInput.SetValue(autocompleteCommand(m.textInput.Value()))
+				m.textInput.SetCursor(len(m.textInput.Value()))
+			}
 		case tea.KeyUp, tea.KeyDown, tea.KeyPgUp, tea.KeyPgDown:
 			m.viewport, vpCmd = m.viewport.Update(msg)
 			return m, vpCmd
@@ -397,6 +402,33 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 		m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Render("Unknown command: "+cmd))
 	}
 	return nil
+}
+
+func autocompleteCommand(input string) string {
+	if !strings.HasPrefix(input, "/") {
+		return input
+	}
+
+	commands := []string{
+		"/help",
+		"/clear",
+		"/context",
+		"/drop",
+		"/skills",
+		"/model",
+		"/models list",
+		"/exit",
+		"/quit",
+	}
+
+	for _, cmd := range commands {
+		if strings.HasPrefix(cmd, input) {
+			// If we matched exactly or typed space after (e.g. "/models " expecting list), don't aggressively replace.
+			// But for simplicity, just return the first match that is longer than what's typed.
+			return cmd
+		}
+	}
+	return input
 }
 
 func (m *model) updateViewport() {

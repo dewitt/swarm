@@ -12,11 +12,48 @@ import (
 	"github.com/dewitt/agents/pkg/sdk"
 )
 
-// Define styles for rich text polish as per docs/design/02-cli-ux.md
 var (
-	promptStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("205")).Bold(true)
-	agentMsgStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("86"))
+	// Brand Colors
+	primaryColor   = lipgloss.Color("#8A2BE2") // Purple
+	secondaryColor = lipgloss.Color("#4169E1") // Royal Blue
+	tipColor       = lipgloss.Color("#696969") // Dim Gray
+	agentColor     = lipgloss.Color("#00FA9A") // Medium Spring Green
+	
+	// Styles
+	logoStyle = lipgloss.NewStyle().
+		Foreground(primaryColor).
+		Bold(true)
+		
+	tipStyle = lipgloss.NewStyle().
+		Foreground(tipColor).
+		Italic(true)
+		
+	promptStyle = lipgloss.NewStyle().
+		Foreground(primaryColor).
+		Bold(true)
+		
+	agentMsgStyle = lipgloss.NewStyle().
+		Foreground(agentColor).
+		Bold(true)
+		
+	statusBar = lipgloss.NewStyle().
+		Foreground(tipColor).
+		PaddingTop(1)
 )
+
+const splashLogo = `
+    ___   ____________   __________
+   /   | / ____/ ____/  / | / /_  /
+  / /| |/ / __/ __/    /  |/ / / / 
+ / ___ / /_/ / /___   / /|  / / /  
+/_/  |_\____/_____/  /_/ |_/ /_/   
+`
+
+const initialTips = `Tips for getting started:
+1. Ask questions, build agents, or run deployments.
+2. Be specific for the best results.
+3. Type /help for more information.
+`
 
 type model struct {
 	textInput textinput.Model
@@ -27,14 +64,18 @@ type model struct {
 
 func initialModel() model {
 	ti := textinput.New()
-	ti.Placeholder = "Ask the Router Agent something..."
+	ti.Placeholder = "Type your message or /help"
 	ti.Focus()
-	ti.CharLimit = 256
-	ti.Width = 50
+	ti.CharLimit = 500
+	ti.Width = 80
+	ti.Prompt = promptStyle.Render("> ")
+
+	// The first "message" in our history is the splash screen and tips
+	welcomeScreen := fmt.Sprintf("%s\n\n%s", logoStyle.Render(splashLogo), tipStyle.Render(initialTips))
 
 	return model{
 		textInput: ti,
-		messages:  []string{"Welcome to Agents! I'm the internal Router Agent."},
+		messages:  []string{welcomeScreen},
 		manager:   sdk.NewManager(),
 	}
 }
@@ -54,20 +95,21 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeyEnter:
 			input := m.textInput.Value()
 			if input != "" {
+				// Record the user's input
 				m.messages = append(m.messages, promptStyle.Render("> ")+input)
+				
+				// Clear the input field while processing
+				m.textInput.SetValue("")
 				
 				// Call the SDK to handle the business logic
 				ch, err := m.manager.Chat(context.Background(), input)
 				if err != nil {
 					m.messages = append(m.messages, "Error: "+err.Error())
 				} else {
-					// In a real implementation we would stream this cleanly,
-					// but for Phase 1 we just block on the stub response.
+					// In Phase 2, this will stream. For now, it blocks on the stub.
 					resp := <-ch
-					m.messages = append(m.messages, agentMsgStyle.Render("[Router] ")+resp)
+					m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+resp)
 				}
-				
-				m.textInput.SetValue("")
 			}
 		}
 
@@ -84,13 +126,19 @@ func (m model) View() string {
 	var s strings.Builder
 	
 	s.WriteString("\n")
+	
+	// Render history
 	for _, msg := range m.messages {
 		s.WriteString(msg)
 		s.WriteString("\n\n")
 	}
 
+	// Render input prompt
 	s.WriteString(m.textInput.View())
-	s.WriteString("\n\n(esc or ctrl+c to quit)\n")
+	
+	// Render fake status bar
+	s.WriteString(statusBar.Render("~\\Agents        local mode (see /docs)                 auto"))
+	s.WriteString("\n")
 	
 	return s.String()
 }

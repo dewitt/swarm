@@ -23,6 +23,16 @@ Sleep 500ms
 Enter
 
 Sleep 3s
+Type "/model list"
+Sleep 500ms
+Enter
+
+Sleep 2s
+Down 2
+Sleep 500ms
+Enter
+
+Sleep 3s
 Type "I want to build a local python ADK agent."
 Sleep 500ms
 Enter

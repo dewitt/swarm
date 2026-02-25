@@ -226,6 +226,20 @@ func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan string
 
 	go func() {
 		defer close(out)
+
+		if os.Getenv("AGENTS_DRY_RUN") == "true" {
+			// Provide fast, deterministic mock responses for vhs tape recordings
+			if strings.Contains(strings.ToLower(prompt), "build") {
+				out <- "I have scaffolded a Python LangGraph agent for you. I created `agent.yaml`, `requirements.txt`, and `agent.py`."
+				return
+			}
+			if strings.Contains(strings.ToLower(prompt), "deploy") {
+				out <- "I have generated `.github/workflows/deploy.yml` and pushed it to `main`. Your agent is deploying to Google Agent Engine."
+				return
+			}
+			out <- "This is a deterministic dry-run response."
+			return
+		}
 		
 		events := m.run.Run(ctx, m.userID, m.sessionID, genai.NewContentFromText(prompt, genai.Role("user")), agent.RunConfig{})
 		

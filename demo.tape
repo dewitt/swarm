@@ -28,13 +28,13 @@ Sleep 500ms
 Enter
 
 Sleep 1s
-Type "I need to build a new Python ADK agent."
+Type "I need to build a new Python LangGraph agent."
 Sleep 1s
 Enter
 
-Sleep 4s
+Sleep 2s
 Type "Great. Now please deploy it to Google Agent Engine using GitHub Actions."
 Sleep 1s
 Enter
 
-Sleep 6s
+Sleep 3s

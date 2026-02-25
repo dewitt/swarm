@@ -61,10 +61,10 @@ CI/CD configurations.
 - **Task 4.4:** Ensure this workflow satisfies
   `docs/cuj/02-deploy-to-google-agent-engine.md`.
 
-## Phase 5: Dynamic Skills Architecture
+## Phase 5: Dynamic Skills Architecture & Configuration
 
-**Goal:** Move away from hardcoded tools and allow the CLI to dynamically load
-capabilities from plain-text markdown and YAML files.
+**Goal:** Move away from hardcoded tools, allow dynamic Skill loading, and
+enable user configuration (like selecting the active LLM).
 
 - **Task 5.1:** Design the physical structure of a Skill (e.g., a `.skills/`
   folder containing `instructions.md` and `tools.yaml`).
@@ -73,6 +73,10 @@ capabilities from plain-text markdown and YAML files.
   internal agents.
 - **Task 5.3:** Refactor Phase 3 and Phase 4 to use the new Skills
   architecture instead of hardcoded Go logic.
+- **Task 5.4:** Implement configuration management. Introduce an
+  `agents config` command and a `/model` slash command to allow the user to
+  override the default `gemini-2.5-flash` model (including an "auto" routing
+  mode).
 
 ## Phase 6: Multi-Agent Orchestration & Swarms
 

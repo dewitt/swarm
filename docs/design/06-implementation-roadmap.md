@@ -37,6 +37,8 @@ CLI's internal "Router Agent".
 
 **Goal:** Enable the CLI to understand and scaffold user-defined agents.
 
+- **Task 3.0:** Implement the Client-Side Slash Command Router (`/help`,
+  `/clear`) to intercept local commands before they are sent to the LLM.
 - **Task 3.1:** Define the schema for `agent.yaml`.
 - **Task 3.2:** Implement the SDK logic to parse and validate `agent.yaml`
   files.

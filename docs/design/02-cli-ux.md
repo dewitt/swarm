@@ -93,3 +93,23 @@ agent is currently acting.
   (e.g., during the Design Swarm CUJ), their logs should be multiplexed
   neatly. The user should see a split-pane or a clean, interleaved log where
   each agent has a distinct color code.
+
+## 7. Slash Commands & Client-Side Routing
+
+To ensure a fast, frictionless experience, the CLI must distinguish between
+natural language prompts intended for the LLM and strict, actionable commands
+intended for the local client.
+
+- **Client-Side Interception:** Any input starting with a forward slash (`/`)
+  must be intercepted by a local Go command router *before* it hits the ADK
+  LLM. This prevents burning tokens and suffering network latency for simple
+  UI tasks.
+- **Core Commands:**
+  - `/help`: Instantly renders a rich markdown help menu in the viewport.
+  - `/clear`: Wipes the viewport history.
+  - `/context`: Displays the current files and metadata loaded in memory.
+  - `/drop [file]`: Removes a specific file from the active context window.
+  - `/exit`: Gracefully terminates the session.
+- **Agent Handoff:** Certain slash commands might exist to force a manual
+  handoff to a specific agent (e.g., `/agent builder`) rather than relying on
+  the Router Agent's natural language inference.

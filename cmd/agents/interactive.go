@@ -16,26 +16,33 @@ import (
 
 var (
 	// Brand Colors
-	primaryColor   = lipgloss.Color("#FF7F50") // Coral (similar to Claude Code's accent)
-	secondaryColor = lipgloss.Color("#8A2BE2") // Purple (Gemini vibe)
-	tipColor       = lipgloss.Color("#888888") // Dim Gray
-	agentColor     = lipgloss.Color("#00FA9A") // Medium Spring Green
+	primaryColor   = lipgloss.Color("#FF7F50") // Coral
+	secondaryColor = lipgloss.Color("#4169E1") // Royal Blue
+	tipColor       = lipgloss.Color("#666666") 
+	agentColor     = lipgloss.Color("#00FA9A")
 	errorColor     = lipgloss.Color("#FF4500") // Orange Red
-	bgDark         = lipgloss.Color("#111111") // Very dark gray for boxes
+	borderColor    = lipgloss.Color("#333333")
+	statusBg       = lipgloss.Color("#1A1A1A")
+	statusFg       = lipgloss.Color("#888888")
 
 	// Styles
+	appStyle = lipgloss.NewStyle().
+			Border(lipgloss.NormalBorder()).
+			BorderForeground(borderColor)
+
 	logoStyle = lipgloss.NewStyle().
 			Foreground(primaryColor).
 			Bold(true)
 
-	boxStyle = lipgloss.NewStyle().
+	welcomeBoxStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
-			BorderForeground(primaryColor).
-			Padding(1, 2)
+			BorderForeground(borderColor).
+			Padding(1, 2).
+			MarginRight(2)
 
 	infoBoxStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("#444444")).
+			BorderForeground(borderColor).
 			Padding(1, 2)
 
 	promptStyle = lipgloss.NewStyle().
@@ -47,31 +54,29 @@ var (
 			Bold(true)
 
 	statusBarStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#AAAAAA")).
-			Background(lipgloss.Color("#222222")).
-			Padding(0, 1)
+			Foreground(statusFg).
+			Background(statusBg).
+			Height(1)
 
 	// Layout padding
 	inputBoxStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder(), true, false, false, false).
-			BorderForeground(lipgloss.Color("#333333")).
-			PaddingTop(1).
-			PaddingBottom(1)
+			Padding(0, 1).
+			Height(1)
 )
 
 const splashLogo = `
-   ___                    __      
-  / _ |  ___  ___  ___  / /____ 
- / __ | / _ \/ -_)/ _ \/ __(_-<
-/_/ |_| \_, /\__//_//_/\__/___/
-       /___/                    
+   ▄▄▄▄▀ ▄███▄      ▄      ▄▄▄▄▀ ▄▄▄▄▄   
+▀▀▀ █    █▀   ▀      █  ▀▀▀ █   █     ▀▄ 
+    █    ██▄▄    ██   █     █ ▄  ▀▀▀▀▄   
+   █     █▄   ▄▀ █ █  █    █   ▀▄▄▄▄▀    
+  ▀      ▀███▀   █  █ █   ▀              
+                 █   ██                  
 `
 
 const initialTips = `Recent activity
 1m ago    Initialized project
 8m ago    Updated memory
 2d ago    Added new skills
-... /resume for more
 
 What's new
 /agents to create subagents
@@ -79,7 +84,6 @@ What's new
 ctrl+c to background or exit
 `
 
-// Message struct for async SDK responses
 type responseMsg struct {
 	text string
 	err  error
@@ -94,7 +98,7 @@ type model struct {
 	err       error
 	width     int
 	height    int
-	loading   bool // Is the agent thinking?
+	loading   bool
 }
 
 func initialModel() model {
@@ -111,10 +115,10 @@ func initialModel() model {
 	s.Spinner = spinner.Dot
 	s.Style = lipgloss.NewStyle().Foreground(primaryColor)
 
-	// Create a beautiful, split-pane splash screen
-	leftBox := boxStyle.Render(fmt.Sprintf("%s\n\nWelcome back, Developer!", logoStyle.Render(splashLogo)))
+	// Create a beautiful splash screen
+	leftBox := welcomeBoxStyle.Render(fmt.Sprintf("%s\n\nWelcome back, Developer!", logoStyle.Render(splashLogo)))
 	rightBox := infoBoxStyle.Render(initialTips)
-	welcomeScreen := lipgloss.JoinHorizontal(lipgloss.Top, leftBox, "  ", rightBox)
+	welcomeScreen := lipgloss.JoinHorizontal(lipgloss.Top, leftBox, rightBox)
 
 	return model{
 		textInput: ti,
@@ -145,30 +149,20 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		case tea.KeyEnter:
 			if m.loading {
-				// Don't accept input while loading
 				return m, nil
 			}
 
 			input := m.textInput.Value()
 			if input != "" {
-				// Record the user's input
 				m.messages = append(m.messages, promptStyle.Render("> ")+input)
-
-				// Clear the input field and set loading state
 				m.textInput.SetValue("")
 				m.loading = true
-
-				// Update viewport content and scroll to bottom
 				m.updateViewport()
-
-				// Launch the async command to call the SDK
 				cmds = append(cmds, m.callSDK(input))
 			}
 		case tea.KeyUp, tea.KeyDown, tea.KeyPgUp, tea.KeyPgDown:
-			// Pass navigation keys directly to the viewport so the user can scroll
 			m.viewport, vpCmd = m.viewport.Update(msg)
-			cmds = append(cmds, vpCmd)
-			return m, tea.Batch(cmds...)
+			return m, vpCmd
 		}
 
 	case responseMsg:
@@ -188,25 +182,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.height = msg.Height
+		// Account for the outer border
+		m.width = msg.Width - 2
+		m.height = msg.Height - 2
 
-		// Update input width
-		m.textInput.Width = msg.Width - 4 // Account for prompt and padding
-
-		// Update viewport dimensions
-		// Height minus input box height (approx 4 lines) minus status bar (1 line)
-		inputHeight := 3
-		m.viewport.Width = msg.Width
-		m.viewport.Height = msg.Height - inputHeight - 1
-
-		statusBarStyle.Width(msg.Width)
+		m.textInput.Width = m.width - 4
+		
+		// Viewport height: Height minus input (1) minus status (1) minus prompt/padding
+		m.viewport.Width = m.width
+		m.viewport.Height = m.height - 3
 
 		m.updateViewport()
-		return m, nil
-
-	case error:
-		m.err = msg
 		return m, nil
 	}
 
@@ -221,14 +207,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
-// callSDK wraps the SDK Chat call in a tea.Cmd so it doesn't block the UI thread.
 func (m model) callSDK(input string) tea.Cmd {
 	return func() tea.Msg {
 		ch, err := m.manager.Chat(context.Background(), input)
 		if err != nil {
 			return responseMsg{err: err}
 		}
-		// Block on the channel, but in a background goroutine managed by Bubble Tea
 		resp := <-ch
 		return responseMsg{text: resp}
 	}
@@ -249,11 +233,10 @@ func (m model) View() string {
 		return "Loading..."
 	}
 
-	// 1. Render Viewport (History)
+	// 1. History
 	vpView := m.viewport.View()
 
-	// 2. Render Input Box
-	// If loading, show the spinner instead of the prompt
+	// 2. Input
 	var inputView string
 	if m.loading {
 		inputView = inputBoxStyle.Render(m.spinner.View() + " Thinking...")
@@ -261,24 +244,25 @@ func (m model) View() string {
 		inputView = inputBoxStyle.Render(m.textInput.View())
 	}
 
-	// 3. Render Status Bar (Properly aligned)
-	leftStatus := "~\\Agents"
-	centerStatus := "local mode (see /docs)"
-	rightStatus := "auto"
-
-	// Calculate spacing
+	// 3. Status
 	w1 := m.width / 3
 	w2 := m.width / 3
 	w3 := m.width - w1 - w2
 	
-	p1 := lipgloss.NewStyle().Width(w1).Align(lipgloss.Left).Render(leftStatus)
-	p2 := lipgloss.NewStyle().Width(w2).Align(lipgloss.Center).Render(centerStatus)
-	p3 := lipgloss.NewStyle().Width(w3).Align(lipgloss.Right).Render(rightStatus)
+	p1 := lipgloss.NewStyle().Width(w1).Align(lipgloss.Left).Render(" ~/Agents")
+	p2 := lipgloss.NewStyle().Width(w2).Align(lipgloss.Center).Render("local mode")
+	p3 := lipgloss.NewStyle().Width(w3).Align(lipgloss.Right).Render("auto ")
 
-	statusView := statusBarStyle.Render(lipgloss.JoinHorizontal(lipgloss.Top, p1, p2, p3))
+	statusView := statusBarStyle.Width(m.width).Render(lipgloss.JoinHorizontal(lipgloss.Top, p1, p2, p3))
 
-	// Combine components
-	return lipgloss.JoinVertical(lipgloss.Left, vpView, inputView, statusView)
+	// Assemble Main Body
+	mainBody := lipgloss.JoinVertical(lipgloss.Left, vpView, inputView)
+	
+	// Apply Outer Border to main body
+	boxedBody := appStyle.Width(m.width).Height(m.height).Render(mainBody)
+
+	// Final layout: Boxed Body + Status Bar (outside border)
+	return lipgloss.JoinVertical(lipgloss.Left, boxedBody, statusView)
 }
 
 func launchInteractiveShell() error {

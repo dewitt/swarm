@@ -11,10 +11,8 @@ Set Width 1500
 Set Height 800
 Set TypingSpeed 75ms
 
-ENV AGENTS_DRY_RUN "true"
-
 Hide
-Type "./bin/agents"
+Type "export AGENTS_DRY_RUN=true && ./bin/agents"
 Enter
 Sleep 1s
 Show
@@ -30,7 +28,7 @@ Sleep 500ms
 Enter
 
 Sleep 1s
-Type "I need to build a new Python LangGraph agent."
+Type "I need to build a new Python ADK agent."
 Sleep 1s
 Enter
 

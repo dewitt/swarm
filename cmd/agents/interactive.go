@@ -243,11 +243,33 @@ func (m *model) handleSlashCommand(input string) {
 			"  /clear       Clears the conversation history.",
 			"  /context     Displays the current files and metadata loaded in memory.",
 			"  /drop [file] Removes a specific file from the active context window.",
+			"  /model       Set the active LLM provider (e.g. /model auto).",
 			"  /exit        Gracefully terminates the session.",
 		)
 		
 		icon := agentMsgStyle.Render("✦ ")
 		m.messages = append(m.messages, lipgloss.JoinHorizontal(lipgloss.Top, icon, helpText))
+	case "/model":
+		if len(parts) < 2 {
+			m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"Usage: /model <name>\nExample: /model gemini-2.5-pro\nCurrent mode is: auto")
+			return
+		}
+		
+		newModelName := parts[1]
+		
+		// In a real CLI, we would want to reload the AgentManager here, 
+		// but since BubbleTea is running, we just persist the preference for the next run.
+		cfg, err := sdk.LoadConfig()
+		if err == nil {
+			cfg.Model = newModelName
+			if err := sdk.SaveConfig(cfg); err != nil {
+				m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Render("Failed to save config: "+err.Error()))
+				return
+			}
+			m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+fmt.Sprintf("Model preference saved as '%s'. It will be used on the next launch.", newModelName))
+		} else {
+			m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Render("Failed to load config: "+err.Error()))
+		}
 	case "/clear":
 		// Clear everything except the welcome screen
 		if len(m.messages) > 0 {

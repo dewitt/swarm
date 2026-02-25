@@ -123,8 +123,15 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 			clientConfig.APIKey = apiKey
 		}
 
+		// Load the user's global config to determine which model to use
+		userCfg, _ := LoadConfig() // Ignore error, it falls back to flash safely
+		modelName := "gemini-2.5-flash"
+		if userCfg != nil && userCfg.Model != "" && userCfg.Model != "auto" {
+			modelName = userCfg.Model
+		}
+
 		var err error
-		m, err = gemini.NewModel(ctx, "gemini-2.5-flash", clientConfig)
+		m, err = gemini.NewModel(ctx, modelName, clientConfig)
 		if err != nil {
 			log.Fatalf("Failed to create model: %v", err)
 		}

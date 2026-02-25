@@ -18,23 +18,23 @@ Sleep 1s
 Show
 
 Sleep 2s
-Type "/help"
+Type "/skills"
 Sleep 500ms
 Enter
 
 Sleep 3s
-Type "/clear"
+Type "I want to build a local python ADK agent."
 Sleep 500ms
-Enter
-
-Sleep 1s
-Type "I need to build a new Python LangGraph agent."
-Sleep 1s
 Enter
 
 Sleep 2s
-Type "Great. Now please deploy it to Google Agent Engine using GitHub Actions."
-Sleep 1s
+Type "Great. Now run the tests for it."
+Sleep 500ms
 Enter
 
-Sleep 3s
+Sleep 2s
+Type "Looks good! Please deploy it to Google Agent Engine via GitOps."
+Sleep 500ms
+Enter
+
+Sleep 5s

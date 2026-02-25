@@ -281,11 +281,15 @@ func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan string
 		if os.Getenv("AGENTS_DRY_RUN") == "true" {
 			// Provide fast, deterministic mock responses for vhs tape recordings
 			if strings.Contains(strings.ToLower(prompt), "build") {
-				out <- "I have scaffolded a Python LangGraph agent for you. I created `agent.yaml`, `requirements.txt`, and `agent.py`."
+				out <- "I have scaffolded a Python ADK agent for you. I created `agent.yaml`, `requirements.txt`, and `agent.py`."
+				return
+			}
+			if strings.Contains(strings.ToLower(prompt), "test") {
+				out <- "I successfully executed `pip install -r requirements.txt` and `python agent.py` using my bash tool. All tests passed!"
 				return
 			}
 			if strings.Contains(strings.ToLower(prompt), "deploy") {
-				out <- "I have generated `.github/workflows/deploy.yml` and pushed it to `main`. Your agent is deploying to Google Agent Engine."
+				out <- "I have generated `.github/workflows/deploy-agent-engine.yml` and pushed it to `main`. Your agent is deploying to Google Agent Engine."
 				return
 			}
 			out <- "This is a deterministic dry-run response."

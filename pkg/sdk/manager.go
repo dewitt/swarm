@@ -153,12 +153,39 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 		log.Fatalf("Failed to create builder agent: %v", err)
 	}
 
+	gitCommit, err := functiontool.New(functiontool.Config{
+		Name:        "git_commit",
+		Description: "Commits the current directory changes to the local Git repository.",
+	}, gitCommitTool)
+	if err != nil {
+		log.Fatalf("Failed to create gitCommit tool: %v", err)
+	}
+
+	gitPush, err := functiontool.New(functiontool.Config{
+		Name:        "git_push",
+		Description: "Pushes local commits to the remote Git repository.",
+	}, gitPushTool)
+	if err != nil {
+		log.Fatalf("Failed to create gitPush tool: %v", err)
+	}
+
+	gitopsAgent, err := llmagent.New(llmagent.Config{
+		Name:        "gitops_agent",
+		Model:       m,
+		Description: "Specialized in crafting CI/CD pipelines, writing GitHub Actions, and executing Git operations for deployment.",
+		Instruction: "You are the GitOps Agent. When asked to deploy an agent, scaffold a standard deployment workflow (e.g., GitHub Actions in .github/workflows/), use write_local_file to save it, then use git_commit and git_push to deploy it.",
+		Tools:       []tool.Tool{writeTool, gitCommit, gitPush},
+	})
+	if err != nil {
+		log.Fatalf("Failed to create gitops agent: %v", err)
+	}
+
 	routerAgent, err := llmagent.New(llmagent.Config{
 		Name:        "router_agent",
 		Model:       m,
-		Instruction: "You are the primary Router Agent for the Agents CLI. Help the user build, test, and deploy AI agents. Keep your answers brief, professional, and use markdown formatting. Use the list_local_files tool if you need to inspect the workspace. If the user wants to build or scaffold a new project, transfer to the builder_agent.",
+		Instruction: "You are the primary Router Agent for the Agents CLI. Help the user build, test, and deploy AI agents. Keep your answers brief, professional, and use markdown formatting. Use the list_local_files tool if you need to inspect the workspace. If the user wants to build or scaffold a new project, transfer to the builder_agent. If the user wants to deploy the agent to production via CI/CD, transfer to the gitops_agent.",
 		Tools:       []tool.Tool{listTool},
-		SubAgents:   []agent.Agent{builderAgent},
+		SubAgents:   []agent.Agent{builderAgent, gitopsAgent},
 	})
 	if err != nil {
 		log.Fatalf("Failed to create agent: %v", err)

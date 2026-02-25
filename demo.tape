@@ -18,13 +18,23 @@ Sleep 1s
 Show
 
 Sleep 2s
-Type "Hello, I want to build a Python ADK agent."
-Sleep 1s
+Type "/help"
+Sleep 500ms
 Enter
 
 Sleep 3s
-Type "Can you generate the agent.yaml for me?"
+Type "/clear"
+Sleep 500ms
+Enter
+
+Sleep 1s
+Type "I need to build a new Python LangGraph agent."
 Sleep 1s
 Enter
 
-Sleep 5s
+Sleep 4s
+Type "Great. Now please deploy it to Google Agent Engine using GitHub Actions."
+Sleep 1s
+Enter
+
+Sleep 6s

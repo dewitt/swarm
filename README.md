@@ -8,13 +8,15 @@ and deploying AI agents via GitOps workflows.
 ## Features
 
 - **World-Class TUI**: Persistent, interactive terminal sessions built on
-  Bubble Tea, featuring rich text, async execution, and multi-pane layouts.
+  Bubble Tea, featuring rich text, async execution, client-side slash commands
+  (`/help`, `/clear`), and multi-pane layouts.
 - **Framework Agnostic**: Natively supports Google ADK, LangGraph, and custom
-  architectures.
-- **GitOps First**: Agent deployment relies strictly on scaffolding GitHub
-  Actions CI/CD pipelines. No proprietary, black-box orchestration.
-- **Agent Swarms**: Natively assumes "One agent alone is never enough" and
-  provides tools for multi-agent workflows.
+  architectures via `agent.yaml` manifests.
+- **GitOps First**: Includes a native GitOps Agent that scaffolds GitHub
+  Actions CI/CD pipelines and pushes code directly from the CLI.
+- **Agent Swarms**: The core SDK is powered by the Google Agent Development
+  Kit (ADK) and orchestrates a swarm of specialized internal agents (Router,
+  Builder, GitOps) to fulfill your requests.
 
 ## Prerequisites
 

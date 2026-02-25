@@ -173,12 +173,21 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 		log.Fatalf("Failed to create gitPush tool: %v", err)
 	}
 
+	bashExecute, err := functiontool.New(functiontool.Config{
+		Name:        "bash_execute",
+		Description: "Executes a shell command using bash. Useful for installing dependencies or testing code.",
+	}, bashExecuteTool)
+	if err != nil {
+		log.Fatalf("Failed to create bashExecute tool: %v", err)
+	}
+
 	// A map to resolve string names from tools.yaml to actual ADK Tool instances
 	toolRegistry := map[string]tool.Tool{
 		"list_local_files": listTool,
 		"write_local_file": writeTool,
 		"git_commit":       gitCommit,
 		"git_push":         gitPush,
+		"bash_execute":     bashExecute,
 	}
 
 	// 2. Dynamically load skills to create sub-agents

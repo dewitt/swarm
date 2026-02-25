@@ -85,6 +85,8 @@ type AgentManager interface {
 	Chat(ctx context.Context, prompt string) (<-chan string, error)
 	// Skills returns a list of all dynamically loaded skills in the workspace.
 	Skills() []*Skill
+	// ListModels returns a list of available AI models from the provider.
+	ListModels(ctx context.Context) ([]string, error)
 }
 
 // AgentManifest represents a parsed agent.yaml configuration.
@@ -101,6 +103,7 @@ type defaultManager struct {
 	userID    string
 	sessionID string
 	skills    []*Skill
+	clientCfg *genai.ClientConfig
 }
 
 // ManagerConfig defines configuration for the AgentManager.
@@ -114,6 +117,8 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 	ctx := context.Background()
 
 	var m model.LLM
+	clientConfig := &genai.ClientConfig{}
+	
 	if len(cfg) > 0 && cfg[0].Model != nil {
 		m = cfg[0].Model
 	} else {
@@ -121,7 +126,6 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 
 		// We create the model using the API key. If it's empty, the client might fail later
 		// but we allow it to initialize so the UI can launch.
-		clientConfig := &genai.ClientConfig{}
 		if apiKey != "" {
 			clientConfig.APIKey = apiKey
 		}
@@ -265,11 +269,35 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 		userID:    "local_user",
 		sessionID: "local_session",
 		skills:    loadedSkills,
+		clientCfg: clientConfig,
 	}
 }
 
 func (m *defaultManager) Skills() []*Skill {
 	return m.skills
+}
+
+func (m *defaultManager) ListModels(ctx context.Context) ([]string, error) {
+	client, err := genai.NewClient(ctx, m.clientCfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create genai client: %w", err)
+	}
+
+	var models []string
+	iter := client.Models.All(ctx)
+	for modelObj, err := range iter {
+		if err != nil {
+			return nil, fmt.Errorf("error fetching models: %w", err)
+		}
+		
+		// Simplify the output by grabbing the clean display name or name
+		name := modelObj.Name
+		if strings.HasPrefix(name, "models/") {
+			name = strings.TrimPrefix(name, "models/")
+		}
+		models = append(models, name)
+	}
+	return models, nil
 }
 
 func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan string, error) {

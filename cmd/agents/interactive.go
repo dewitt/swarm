@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -89,16 +90,36 @@ type responseMsg struct {
 	err  error
 }
 
+type modelsLoadedMsg struct {
+	models []string
+	err    error
+}
+
+type item string
+
+func (i item) Title() string       { return string(i) }
+func (i item) Description() string { return "" }
+func (i item) FilterValue() string { return string(i) }
+
+type uiState int
+
+const (
+	stateChat uiState = iota
+	stateModelList
+)
+
 type model struct {
 	textInput textinput.Model
 	viewport  viewport.Model
 	spinner   spinner.Model
+	listModel list.Model
 	messages  []string
 	manager   sdk.AgentManager
 	err       error
 	width     int
 	height    int
 	loading   bool
+	state     uiState
 }
 
 func initialModel() model {
@@ -115,6 +136,11 @@ func initialModel() model {
 	s.Spinner = spinner.Dot
 	s.Style = lipgloss.NewStyle().Foreground(primaryColor)
 
+	l := list.New([]list.Item{}, list.NewDefaultDelegate(), 0, 0)
+	l.Title = "Select an LLM Provider"
+	l.SetShowStatusBar(false)
+	l.SetFilteringEnabled(true)
+
 	// Create a beautiful splash screen
 	leftBox := welcomeBoxStyle.Render(fmt.Sprintf("%s\n\nWelcome back, Developer!", logoStyle.Render(splashLogo)))
 	rightBox := infoBoxStyle.Render(initialTips)
@@ -124,9 +150,11 @@ func initialModel() model {
 		textInput: ti,
 		viewport:  vp,
 		spinner:   s,
+		listModel: l,
 		messages:  []string{welcomeScreen},
 		manager:   sdk.NewManager(),
 		loading:   false,
+		state:     stateChat,
 	}
 }
 
@@ -141,6 +169,39 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		spCmd tea.Cmd
 		cmds  []tea.Cmd
 	)
+
+	// If we are in the model list state, hijack the keys
+	if m.state == stateModelList {
+		switch msg := msg.(type) {
+		case tea.WindowSizeMsg:
+			// Let it pass through to the main handler below to update sizes
+		case modelsLoadedMsg:
+			// Let it pass through to the main handler below
+		case tea.KeyMsg:
+			if msg.Type == tea.KeyEsc {
+				m.state = stateChat
+				return m, nil
+			}
+			if msg.Type == tea.KeyEnter {
+				if i, ok := m.listModel.SelectedItem().(item); ok {
+					newModelName := string(i)
+					cfg, err := sdk.LoadConfig()
+					if err == nil {
+						cfg.Model = newModelName
+						sdk.SaveConfig(cfg)
+						m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+fmt.Sprintf("Model preference saved as '%s'. It will be used on the next launch.", newModelName))
+					}
+				}
+				m.state = stateChat
+				m.updateViewport()
+				return m, nil
+			}
+			
+			var listCmd tea.Cmd
+			m.listModel, listCmd = m.listModel.Update(msg)
+			return m, listCmd
+		}
+	}
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
@@ -162,7 +223,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if len(parts) > 0 && (parts[0] == "/exit" || parts[0] == "/quit") {
 						return m, tea.Quit
 					}
-					m.handleSlashCommand(input)
+					cmd := m.handleSlashCommand(input)
+					if cmd != nil {
+						cmds = append(cmds, cmd)
+					}
 				} else {
 					m.loading = true
 					cmds = append(cmds, m.callSDK(input))
@@ -184,6 +248,23 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.updateViewport()
 		return m, nil
 
+	case modelsLoadedMsg:
+		m.loading = false
+		if msg.err != nil {
+			m.state = stateChat
+			m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Render("Error fetching models: "+msg.err.Error()))
+			m.updateViewport()
+			return m, nil
+		}
+		
+		var items []list.Item
+		items = append(items, item("auto")) // Add auto as default top choice
+		for _, name := range msg.models {
+			items = append(items, item(name))
+		}
+		m.listModel.SetItems(items)
+		return m, nil
+
 	case spinner.TickMsg:
 		if m.loading {
 			m.spinner, spCmd = m.spinner.Update(msg)
@@ -201,6 +282,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.viewport.Width = m.width
 		m.viewport.Height = m.height - 1
 
+		m.listModel.SetSize(m.width, m.height)
 		m.updateViewport()
 		return m, nil
 	}
@@ -227,10 +309,17 @@ func (m model) callSDK(input string) tea.Cmd {
 	}
 }
 
-func (m *model) handleSlashCommand(input string) {
+func (m model) fetchModels() tea.Cmd {
+	return func() tea.Msg {
+		models, err := m.manager.ListModels(context.Background())
+		return modelsLoadedMsg{models: models, err: err}
+	}
+}
+
+func (m *model) handleSlashCommand(input string) tea.Cmd {
 	parts := strings.Fields(input)
 	if len(parts) == 0 {
-		return
+		return nil
 	}
 	cmd := parts[0]
 
@@ -245,6 +334,7 @@ func (m *model) handleSlashCommand(input string) {
 			"  /drop [file] Removes a specific file from the active context window.",
 			"  /skills      Lists dynamically loaded agent skills.",
 			"  /model       Set the active LLM provider (e.g. /model auto).",
+			"  /models list Open an interactive list of all available models.",
 			"  /exit        Gracefully terminates the session.",
 		)
 		
@@ -254,7 +344,7 @@ func (m *model) handleSlashCommand(input string) {
 		skills := m.manager.Skills()
 		if len(skills) == 0 {
 			m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"No dynamic skills are currently loaded.")
-			return
+			return nil
 		}
 		
 		var lines []string
@@ -266,10 +356,17 @@ func (m *model) handleSlashCommand(input string) {
 		
 		icon := agentMsgStyle.Render("✦ ")
 		m.messages = append(m.messages, lipgloss.JoinHorizontal(lipgloss.Top, icon, lipgloss.JoinVertical(lipgloss.Left, lines...)))
+	case "/models":
+		if len(parts) > 1 && parts[1] == "list" {
+			m.state = stateModelList
+			m.loading = true
+			return tea.Batch(m.fetchModels(), m.spinner.Tick)
+		}
+		m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"Usage: /models list")
 	case "/model":
 		if len(parts) < 2 {
 			m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"Usage: /model <name>\nExample: /model gemini-2.5-pro\nCurrent mode is: auto")
-			return
+			return nil
 		}
 		
 		newModelName := parts[1]
@@ -281,7 +378,7 @@ func (m *model) handleSlashCommand(input string) {
 			cfg.Model = newModelName
 			if err := sdk.SaveConfig(cfg); err != nil {
 				m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Render("Failed to save config: "+err.Error()))
-				return
+				return nil
 			}
 			m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+fmt.Sprintf("Model preference saved as '%s'. It will be used on the next launch.", newModelName))
 		} else {
@@ -299,6 +396,7 @@ func (m *model) handleSlashCommand(input string) {
 	default:
 		m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Render("Unknown command: "+cmd))
 	}
+	return nil
 }
 
 func (m *model) updateViewport() {
@@ -316,15 +414,26 @@ func (m model) View() string {
 		return "Loading..."
 	}
 
-	// 1. History
-	vpView := m.viewport.View()
+	var mainBody string
 
-	// 2. Input
-	var inputView string
-	if m.loading {
-		inputView = inputBoxStyle.Render(m.spinner.View() + " Thinking...")
+	if m.state == stateModelList {
+		if m.loading {
+			mainBody = lipgloss.JoinVertical(lipgloss.Left, m.viewport.View(), inputBoxStyle.Render(m.spinner.View()+" Fetching models..."))
+		} else {
+			mainBody = lipgloss.NewStyle().Padding(1, 2).Render(m.listModel.View())
+		}
 	} else {
-		inputView = inputBoxStyle.Render(m.textInput.View())
+		// 1. History
+		vpView := m.viewport.View()
+
+		// 2. Input
+		var inputView string
+		if m.loading {
+			inputView = inputBoxStyle.Render(m.spinner.View() + " Thinking...")
+		} else {
+			inputView = inputBoxStyle.Render(m.textInput.View())
+		}
+		mainBody = lipgloss.JoinVertical(lipgloss.Left, vpView, inputView)
 	}
 
 	// 3. Status
@@ -334,12 +443,15 @@ func (m model) View() string {
 	
 	p1 := lipgloss.NewStyle().Width(w1).Align(lipgloss.Left).Render(" ~/Agents")
 	p2 := lipgloss.NewStyle().Width(w2).Align(lipgloss.Center).Render("local mode")
-	p3 := lipgloss.NewStyle().Width(w3).Align(lipgloss.Right).Render("auto ")
+	
+	cfg, err := sdk.LoadConfig()
+	activeModel := "auto"
+	if err == nil && cfg.Model != "" {
+		activeModel = cfg.Model
+	}
+	p3 := lipgloss.NewStyle().Width(w3).Align(lipgloss.Right).Render(activeModel + " ")
 
 	statusView := statusBarStyle.Width(m.width).Render(lipgloss.JoinHorizontal(lipgloss.Top, p1, p2, p3))
-
-	// Assemble Main Body
-	mainBody := lipgloss.JoinVertical(lipgloss.Left, vpView, inputView)
 	
 	// Apply Outer Border to main body
 	boxedBody := appStyle.Width(m.width).Height(m.height).Render(mainBody)

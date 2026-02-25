@@ -156,9 +156,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if input != "" {
 				m.messages = append(m.messages, promptStyle.Render("> ")+input)
 				m.textInput.SetValue("")
-				m.loading = true
+
+				if strings.HasPrefix(input, "/") {
+					parts := strings.Fields(input)
+					if len(parts) > 0 && parts[0] == "/exit" {
+						return m, tea.Quit
+					}
+					m.handleSlashCommand(input)
+				} else {
+					m.loading = true
+					cmds = append(cmds, m.callSDK(input))
+				}
 				m.updateViewport()
-				cmds = append(cmds, m.callSDK(input))
 			}
 		case tea.KeyUp, tea.KeyDown, tea.KeyPgUp, tea.KeyPgDown:
 			m.viewport, vpCmd = m.viewport.Update(msg)
@@ -215,6 +224,41 @@ func (m model) callSDK(input string) tea.Cmd {
 		}
 		resp := <-ch
 		return responseMsg{text: resp}
+	}
+}
+
+func (m *model) handleSlashCommand(input string) {
+	parts := strings.Fields(input)
+	if len(parts) == 0 {
+		return
+	}
+	cmd := parts[0]
+
+	switch cmd {
+	case "/help":
+		helpText := lipgloss.JoinVertical(lipgloss.Left,
+			lipgloss.NewStyle().Bold(true).Render("Agents CLI Help Menu"),
+			"",
+			"  /help        Shows this menu.",
+			"  /clear       Clears the conversation history.",
+			"  /context     Displays the current files and metadata loaded in memory.",
+			"  /drop [file] Removes a specific file from the active context window.",
+			"  /exit        Gracefully terminates the session.",
+		)
+		
+		icon := agentMsgStyle.Render("✦ ")
+		m.messages = append(m.messages, lipgloss.JoinHorizontal(lipgloss.Top, icon, helpText))
+	case "/clear":
+		// Clear everything except the welcome screen
+		if len(m.messages) > 0 {
+			m.messages = []string{m.messages[0]}
+		}
+	case "/context":
+		m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"Context management is coming in a future update.")
+	case "/drop":
+		m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"Context management is coming in a future update.")
+	default:
+		m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Render("Unknown command: "+cmd))
 	}
 }
 

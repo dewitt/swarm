@@ -159,7 +159,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 				if strings.HasPrefix(input, "/") {
 					parts := strings.Fields(input)
-					if len(parts) > 0 && parts[0] == "/exit" {
+					if len(parts) > 0 && (parts[0] == "/exit" || parts[0] == "/quit") {
 						return m, tea.Quit
 					}
 					m.handleSlashCommand(input)

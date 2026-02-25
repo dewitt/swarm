@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"google.golang.org/adk/agent"
@@ -41,6 +42,30 @@ func listLocalFiles(ctx tool.Context, args ListFilesArgs) (ListFilesResult, erro
 	return ListFilesResult{Files: files}, nil
 }
 
+type WriteFileArgs struct {
+	Path    string `json:"path"`
+	Content string `json:"content"`
+}
+
+type WriteFileResult struct {
+	Success bool   `json:"success"`
+	Error   string `json:"error,omitempty"`
+}
+
+func writeLocalFile(ctx tool.Context, args WriteFileArgs) (WriteFileResult, error) {
+	// Ensure directory exists
+	if dir := filepath.Dir(args.Path); dir != "." {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return WriteFileResult{Success: false, Error: err.Error()}, nil
+		}
+	}
+	err := os.WriteFile(args.Path, []byte(args.Content), 0644)
+	if err != nil {
+		return WriteFileResult{Success: false, Error: err.Error()}, nil
+	}
+	return WriteFileResult{Success: true}, nil
+}
+
 // AgentManager defines the core capabilities of the embeddable SDK.
 // It is responsible for orchestrating interactions with the LLM and 
 // managing local user-defined agents.
@@ -58,9 +83,10 @@ type AgentManager interface {
 
 // AgentManifest represents a parsed agent.yaml configuration.
 type AgentManifest struct {
-	Name      string `yaml:"name"`
-	Framework string `yaml:"framework"`
-	Language  string `yaml:"language"`
+	Name       string `yaml:"name"`
+	Framework  string `yaml:"framework"`
+	Language   string `yaml:"language"`
+	Entrypoint string `yaml:"entrypoint"`
 }
 
 // defaultManager is the internal implementation of AgentManager.
@@ -108,11 +134,31 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 		log.Fatalf("Failed to create listTool: %v", err)
 	}
 
+	writeTool, err := functiontool.New(functiontool.Config{
+		Name:        "write_local_file",
+		Description: "Writes content to a file at the specified path. Creates directories if necessary.",
+	}, writeLocalFile)
+	if err != nil {
+		log.Fatalf("Failed to create writeTool: %v", err)
+	}
+
+	builderAgent, err := llmagent.New(llmagent.Config{
+		Name:        "builder_agent",
+		Model:       m,
+		Description: "Specialized in scaffolding new agent projects across different frameworks (ADK, LangGraph) and writing boilerplate code.",
+		Instruction: "You are the Builder Agent. Scaffold projects and write initial agent.yaml, requirements.txt, and agent scripts. Use the write_local_file tool to create them.",
+		Tools:       []tool.Tool{writeTool},
+	})
+	if err != nil {
+		log.Fatalf("Failed to create builder agent: %v", err)
+	}
+
 	routerAgent, err := llmagent.New(llmagent.Config{
 		Name:        "router_agent",
 		Model:       m,
-		Instruction: "You are the primary Router Agent for the Agents CLI. Help the user build, test, and deploy AI agents. Keep your answers brief, professional, and use markdown formatting. Use the list_local_files tool if you need to inspect the workspace.",
+		Instruction: "You are the primary Router Agent for the Agents CLI. Help the user build, test, and deploy AI agents. Keep your answers brief, professional, and use markdown formatting. Use the list_local_files tool if you need to inspect the workspace. If the user wants to build or scaffold a new project, transfer to the builder_agent.",
 		Tools:       []tool.Tool{listTool},
+		SubAgents:   []agent.Agent{builderAgent},
 	})
 	if err != nil {
 		log.Fatalf("Failed to create agent: %v", err)
@@ -142,11 +188,6 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 		userID:    "local_user",
 		sessionID: "local_session",
 	}
-}
-
-func (m *defaultManager) Discover(ctx context.Context, dir string) (*AgentManifest, error) {
-	// Stub implementation for Phase 1
-	return nil, nil
 }
 
 func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan string, error) {

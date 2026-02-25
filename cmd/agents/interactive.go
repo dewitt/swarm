@@ -91,15 +91,18 @@ type responseMsg struct {
 }
 
 type modelsLoadedMsg struct {
-	models []string
+	models []sdk.ModelInfo
 	err    error
 }
 
-type item string
+type item struct {
+	name        string
+	description string
+}
 
-func (i item) Title() string       { return string(i) }
-func (i item) Description() string { return "" }
-func (i item) FilterValue() string { return string(i) }
+func (i item) Title() string       { return i.name }
+func (i item) Description() string { return i.description }
+func (i item) FilterValue() string { return i.name }
 
 type uiState int
 
@@ -180,11 +183,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeyMsg:
 			if msg.Type == tea.KeyEsc {
 				m.state = stateChat
-				return m, nil
+				return m, tea.ClearScreen
 			}
 			if msg.Type == tea.KeyEnter && m.listModel.FilterState() != list.Filtering {
 				if i, ok := m.listModel.SelectedItem().(item); ok {
-					newModelName := string(i)
+					newModelName := i.name
 					cfg, err := sdk.LoadConfig()
 					if err == nil {
 						cfg.Model = newModelName
@@ -194,7 +197,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				m.state = stateChat
 				m.updateViewport()
-				return m, nil
+				return m, tea.ClearScreen
 			}
 			
 			var listCmd tea.Cmd
@@ -206,7 +209,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// We can't easily introspect the command, but we know if they pressed 'q' while not filtering.
 				if msg.String() == "q" && m.listModel.FilterState() != list.Filtering {
 					m.state = stateChat
-					return m, nil
+					return m, tea.ClearScreen
 				}
 			}
 			return m, listCmd
@@ -235,7 +238,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 					cmd := m.handleSlashCommand(input)
 					if cmd != nil {
-						cmds = append(cmds, cmd)
+						cmds = append(cmds, cmd, tea.ClearScreen)
 					}
 				} else {
 					m.loading = true
@@ -269,13 +272,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.state = stateChat
 			m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Render("Error fetching models: "+msg.err.Error()))
 			m.updateViewport()
-			return m, nil
+			return m, tea.ClearScreen
 		}
 		
 		var items []list.Item
-		items = append(items, item("auto")) // Add auto as default top choice
-		for _, name := range msg.models {
-			items = append(items, item(name))
+		items = append(items, item{name: "auto", description: "Automatically select the best model"}) // Add auto as default top choice
+		for _, mInfo := range msg.models {
+			desc := mInfo.Description
+			if desc == "" && mInfo.DisplayName != "" {
+				desc = mInfo.DisplayName
+			} else if desc == "" {
+				desc = "Standard generation model"
+			}
+			items = append(items, item{name: mInfo.Name, description: desc})
 		}
 		m.listModel.SetItems(items)
 		return m, nil
@@ -293,11 +302,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		m.textInput.Width = m.width - 4
 		
-		// Viewport height: Inner box minus input height (1)
-		m.viewport.Width = m.width
-		m.viewport.Height = m.height - 1
+		// Viewport height: Inner box minus input height (1) minus borders (2)
+		m.viewport.Width = m.width - 4
+		m.viewport.Height = m.height - 4
 
-		m.listModel.SetSize(m.width, m.height)
+		// List Model: account for outer border (2) and padding (4 horizontal, 2 vertical)
+		m.listModel.SetSize(m.width-6, m.height-4)
 		m.updateViewport()
 		return m, nil
 	}

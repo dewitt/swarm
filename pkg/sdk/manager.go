@@ -86,7 +86,15 @@ type AgentManager interface {
 	// Skills returns a list of all dynamically loaded skills in the workspace.
 	Skills() []*Skill
 	// ListModels returns a list of available AI models from the provider.
-	ListModels(ctx context.Context) ([]string, error)
+	ListModels(ctx context.Context) ([]ModelInfo, error)
+}
+
+// ModelInfo contains metadata about an available AI model.
+type ModelInfo struct {
+	Name        string
+	DisplayName string
+	Description string
+	Version     string
 }
 
 // AgentManifest represents a parsed agent.yaml configuration.
@@ -277,29 +285,34 @@ func (m *defaultManager) Skills() []*Skill {
 	return m.skills
 }
 
-func (m *defaultManager) ListModels(ctx context.Context) ([]string, error) {
+func (m *defaultManager) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	client, err := genai.NewClient(ctx, m.clientCfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create genai client: %w", err)
 	}
 
-	var models []string
+	var models []ModelInfo
 	iter := client.Models.All(ctx)
 	for modelObj, err := range iter {
 		if err != nil {
 			return nil, fmt.Errorf("error fetching models: %w", err)
 		}
-		
+
 		// Simplify the output by grabbing the clean display name or name
 		name := modelObj.Name
 		if strings.HasPrefix(name, "models/") {
 			name = strings.TrimPrefix(name, "models/")
 		}
-		models = append(models, name)
+
+		models = append(models, ModelInfo{
+			Name:        name,
+			DisplayName: modelObj.DisplayName,
+			Description: modelObj.Description,
+			Version:     modelObj.Version,
+		})
 	}
 	return models, nil
 }
-
 func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan string, error) {
 	out := make(chan string)
 

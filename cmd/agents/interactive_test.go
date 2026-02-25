@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/dewitt/agents/pkg/sdk"
+
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -28,9 +30,34 @@ func TestSnapshotUI(t *testing.T) {
 
 	// 3. Render the view
 	rawView := m.View()
-
-	// Print the output so the agent can inspect it in the test logs
-	fmt.Println("=== START TUI SNAPSHOT (80x24) ===")
 	fmt.Println(rawView)
-	fmt.Println("=== END TUI SNAPSHOT ===")
+}
+
+func TestSnapshotModelList(t *testing.T) {
+	m := initialModel()
+
+	// 1. Simulate size
+	newModel, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = newModel.(model)
+
+	// 2. Simulate entering stateModelList and loading fake models
+	m.state = stateModelList
+	modelsMsg := modelsLoadedMsg{
+		models: []sdk.ModelInfo{
+			{Name: "gemini-2.5-flash", DisplayName: "Gemini 2.5 Flash", Description: "Fast and versatile"},
+			{Name: "gemini-2.5-pro", DisplayName: "Gemini 2.5 Pro", Description: "Best performance"},
+			{Name: "gemini-3.1-pro-preview", DisplayName: "Gemini 3.1 Pro Preview", Description: "Experimental"},
+		},
+		err: nil,
+	}
+	
+	newModel, _ = m.Update(modelsMsg)
+	m = newModel.(model)
+
+	// 3. Render
+	rawView := m.View()
+
+	fmt.Println("=== START TUI MODEL LIST SNAPSHOT (80x24) ===")
+	fmt.Println(rawView)
+	fmt.Println("=== END TUI MODEL LIST SNAPSHOT ===")
 }

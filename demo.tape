@@ -6,8 +6,8 @@ Set Margin 20
 Set MarginFill "#6B50FF"
 Set BorderRadius 10
 Set WindowBar Colorful
-Set Width 1200
-Set Height 800
+Set Columns 132
+Set Rows 32
 Set TypingSpeed 75ms
 
 Hide
@@ -26,4 +26,4 @@ Type "Can you generate the agent.yaml for me?"
 Sleep 1s
 Enter
 
-Sleep 3s
+Sleep 5s

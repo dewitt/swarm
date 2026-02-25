@@ -53,6 +53,10 @@ type WriteFileResult struct {
 }
 
 func writeLocalFile(ctx tool.Context, args WriteFileArgs) (WriteFileResult, error) {
+	if os.Getenv("AGENTS_DRY_RUN") == "true" {
+		return WriteFileResult{Success: true, Error: fmt.Sprintf("[DRY RUN] Would have written %d bytes to %s", len(args.Content), args.Path)}, nil
+	}
+
 	// Ensure directory exists
 	if dir := filepath.Dir(args.Path); dir != "." {
 		if err := os.MkdirAll(dir, 0755); err != nil {

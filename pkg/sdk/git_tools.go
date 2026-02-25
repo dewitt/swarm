@@ -3,6 +3,7 @@ package sdk
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"os/exec"
 
 	"google.golang.org/adk/tool"
@@ -37,6 +38,10 @@ type GitCommitResult struct {
 }
 
 func gitCommitTool(ctx tool.Context, args GitCommitArgs) (GitCommitResult, error) {
+	if os.Getenv("AGENTS_DRY_RUN") == "true" {
+		return GitCommitResult{Success: true, Output: fmt.Sprintf("[DRY RUN] Would have committed in %s with message: %s", args.Dir, args.Message)}, nil
+	}
+
 	if args.Dir == "" {
 		args.Dir = "."
 	}
@@ -66,6 +71,10 @@ type GitPushResult struct {
 }
 
 func gitPushTool(ctx tool.Context, args GitPushArgs) (GitPushResult, error) {
+	if os.Getenv("AGENTS_DRY_RUN") == "true" {
+		return GitPushResult{Success: true, Output: fmt.Sprintf("[DRY RUN] Would have pushed in %s", args.Dir)}, nil
+	}
+
 	if args.Dir == "" {
 		args.Dir = "."
 	}

@@ -11,6 +11,8 @@ Set Width 1500
 Set Height 800
 Set TypingSpeed 75ms
 
+ENV AGENTS_DRY_RUN "true"
+
 Hide
 Type "./bin/agents"
 Enter

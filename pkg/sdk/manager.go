@@ -128,7 +128,7 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 
 		// Load the user's global config to determine which model to use
 		userCfg, _ := LoadConfig() // Ignore error, it falls back to flash safely
-		modelName := "gemini-2.5-flash"
+		modelName := "gemini-3.1-pro-preview"
 		if userCfg != nil && userCfg.Model != "" && userCfg.Model != "auto" {
 			modelName = userCfg.Model
 		}

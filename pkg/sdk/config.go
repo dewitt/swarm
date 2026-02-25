@@ -41,7 +41,7 @@ func LoadConfig() (*Config, error) {
 	if err != nil {
 		if os.IsNotExist(err) {
 			// Return a default config if it doesn't exist
-			return &Config{Model: "gemini-2.5-flash"}, nil
+			return &Config{Model: "gemini-3.1-pro-preview"}, nil
 		}
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
@@ -53,7 +53,7 @@ func LoadConfig() (*Config, error) {
 
 	// Fallback to default if somehow blank
 	if cfg.Model == "" {
-		cfg.Model = "gemini-2.5-flash"
+		cfg.Model = "gemini-3.1-pro-preview"
 	}
 
 	return &cfg, nil

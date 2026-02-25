@@ -18,7 +18,7 @@ func TestConfigSaveAndLoad(t *testing.T) {
 	// Test default load
 	cfg, err := sdk.LoadConfig()
 	assert.NoError(t, err)
-	assert.Equal(t, "gemini-2.5-flash", cfg.Model)
+	assert.Equal(t, "gemini-3.1-pro-preview", cfg.Model)
 
 	// Test save
 	cfg.Model = "gemini-2.5-pro"

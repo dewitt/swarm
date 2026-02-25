@@ -16,6 +16,16 @@ func TestSnapshotUI(t *testing.T) {
 	newModel, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	m = newModel.(model)
 
+	// Simulate typing /help
+	for _, r := range "/help" {
+		newModel, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		m = newModel.(model)
+	}
+	
+	// Simulate pressing Enter
+	newModel, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = newModel.(model)
+
 	// 3. Render the view
 	rawView := m.View()
 

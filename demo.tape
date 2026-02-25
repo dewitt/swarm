@@ -6,8 +6,9 @@ Set Margin 20
 Set MarginFill "#6B50FF"
 Set BorderRadius 10
 Set WindowBar Colorful
-Set Columns 132
-Set Rows 32
+Set FontSize 18
+Set Width 1500
+Set Height 800
 Set TypingSpeed 75ms
 
 Hide

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"os/user"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/list"
@@ -230,6 +231,19 @@ type model struct {
 	state     uiState
 }
 
+func getUserName() string {
+	u, err := user.Current()
+	if err == nil {
+		if u.Name != "" {
+			return u.Name
+		}
+		if u.Username != "" {
+			return u.Username
+		}
+	}
+	return "Developer"
+}
+
 func initialModel() model {
 	ti := textinput.New()
 	ti.Placeholder = "Type your message or /help"
@@ -250,7 +264,7 @@ func initialModel() model {
 	l.SetFilteringEnabled(true)
 
 	// Create a beautiful splash screen
-	leftBox := welcomeBoxStyle.Render(fmt.Sprintf("%s\n\nWelcome back, Developer!", renderLogo()))
+	leftBox := welcomeBoxStyle.Render(fmt.Sprintf("%s\n\nWelcome back, %s!", renderLogo(), getUserName()))
 	rightBox := infoBoxStyle.Render(initialTips)
 	welcomeScreen := lipgloss.JoinHorizontal(lipgloss.Top, leftBox, rightBox)
 

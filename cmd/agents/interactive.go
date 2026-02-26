@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"os/user"
 	"strings"
@@ -252,10 +253,12 @@ type model struct {
 	err        error
 	width      int
 	height     int
-	loading    bool
-	quitting   bool
-	planMode   bool
-	state      uiState
+	loading     bool
+	quitting    bool
+	planMode    bool
+	state       uiState
+	cwd         string
+	activeModel string
 }
 
 func getUserName() string {
@@ -307,19 +310,32 @@ func initialModel(planMode bool) model {
 	rightBox := infoBoxStyle.Render(initialTips)
 	welcomeScreen := lipgloss.JoinHorizontal(lipgloss.Top, leftBox, rightBox)
 
+	cwd, _ := os.Getwd()
+	home, _ := os.UserHomeDir()
+	if strings.HasPrefix(cwd, home) {
+		cwd = strings.Replace(cwd, home, "~", 1)
+	}
+
+	activeModel := "auto"
+	if cfg, err := sdk.LoadConfig(); err == nil && cfg.Model != "" {
+		activeModel = cfg.Model
+	}
+
 	return model{
-		textArea:   ta,
-		viewport:   vp,
-		spinner:    s,
-		listModel:  l,
-		messages:   []string{welcomeScreen},
-		history:    []string{},
-		historyIdx: 0,
-		manager:    sdk.NewManager(),
-		loading:    false,
-		quitting:   false,
-		planMode:   planMode,
-		state:      stateChat,
+		textArea:    ta,
+		viewport:    vp,
+		spinner:     s,
+		listModel:   l,
+		messages:    []string{welcomeScreen},
+		history:     []string{},
+		historyIdx:  0,
+		manager:     sdk.NewManager(),
+		loading:     false,
+		quitting:    false,
+		planMode:    planMode,
+		state:       stateChat,
+		cwd:         cwd,
+		activeModel: activeModel,
 	}
 }
 
@@ -381,7 +397,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if err == nil {
 						cfg.Model = newModelName
 						sdk.SaveConfig(cfg)
-						m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+fmt.Sprintf("Model preference saved as '%s'. It will be used on the next launch.", newModelName))
+						m.activeModel = newModelName
+						m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+fmt.Sprintf("Model preference saved as '%s'.", newModelName))
 					}
 				}
 				m.state = stateChat
@@ -703,7 +720,8 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 				m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Render("Failed to save config: "+err.Error()))
 				return nil
 			}
-			m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+fmt.Sprintf("Model preference saved as '%s'. It will be used on the next launch.", newModelName))
+			m.activeModel = newModelName
+			m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+fmt.Sprintf("Model preference saved as '%s'.", newModelName))
 		} else {
 			m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Render("Failed to load config: "+err.Error()))
 		}
@@ -812,19 +830,17 @@ func (m model) View() string {
 	w2 := m.width / 3
 	w3 := m.width - w1 - w2
 	
-	p1 := lipgloss.NewStyle().Width(w1).Align(lipgloss.Left).Render(" ~/Agents")
+	p1 := lipgloss.NewStyle().Width(w1).Align(lipgloss.Left).Render(" " + m.cwd)
+	
 	modeText := "local mode"
-	if m.planMode {
+	if m.state == stateShell {
+		modeText = lipgloss.NewStyle().Foreground(googleYellow).Render("shell mode")
+	} else if m.planMode {
 		modeText = lipgloss.NewStyle().Foreground(googleYellow).Render("plan mode")
 	}
 	p2 := lipgloss.NewStyle().Width(w2).Align(lipgloss.Center).Render(modeText)
 
-	cfg, err := sdk.LoadConfig()
-	activeModel := "auto"
-	if err == nil && cfg.Model != "" {
-		activeModel = cfg.Model
-	}
-	p3 := lipgloss.NewStyle().Width(w3).Align(lipgloss.Right).Render(activeModel + " ")
+	p3 := lipgloss.NewStyle().Width(w3).Align(lipgloss.Right).Render(m.activeModel + " ")
 
 	statusView := statusBarStyle.Width(m.width).Render(lipgloss.JoinHorizontal(lipgloss.Top, p1, p2, p3))
 	

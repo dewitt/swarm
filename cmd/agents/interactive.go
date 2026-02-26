@@ -237,6 +237,7 @@ type uiState int
 const (
 	stateChat uiState = iota
 	stateModelList
+	stateShell
 )
 
 type model struct {
@@ -391,9 +392,43 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			input := m.textArea.Value()
+			trimmedInput := strings.TrimSpace(input)
+
+			if trimmedInput == "!" && m.state != stateShell {
+				m.state = stateShell
+				m.textArea.SetPromptFunc(2, func(lineIdx int) string {
+					if lineIdx == 0 {
+						return lipgloss.NewStyle().Foreground(googleYellow).Bold(true).Render("! ")
+					}
+					return "  "
+				})
+				m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"Entered shell execution mode. Type 'exit' to return to chat.")
+				m.textArea.Reset()
+				m.updateViewport()
+				return m, nil
+			}
+
+			if m.state == stateShell && (trimmedInput == "exit" || trimmedInput == "quit") {
+				m.state = stateChat
+				m.textArea.SetPromptFunc(2, func(lineIdx int) string {
+					if lineIdx == 0 {
+						return promptStyle.Render("> ")
+					}
+					return "  "
+				})
+				m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"Exited shell execution mode.")
+				m.textArea.Reset()
+				m.updateViewport()
+				return m, nil
+			}
+
 			if input != "" {
-				m.messages = append(m.messages, promptStyle.Render("> ")+input)
-				
+				if m.state == stateShell {
+					m.messages = append(m.messages, lipgloss.NewStyle().Foreground(googleYellow).Bold(true).Render("! ")+input)
+				} else {
+					m.messages = append(m.messages, promptStyle.Render("> ")+input)
+				}
+
 				if len(m.history) == 0 || m.history[len(m.history)-1] != input {
 					m.history = append(m.history, input)
 				}
@@ -401,7 +436,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 				m.textArea.Reset()
 
-				if strings.HasPrefix(input, "/") {
+				if m.state == stateShell {
+					m.loading = true
+					cmds = append(cmds, m.runShellCommand(input))
+				} else if strings.HasPrefix(input, "/") {
 					parts := strings.Fields(input)
 					if len(parts) > 0 && (parts[0] == "/exit" || parts[0] == "/quit") {
 						return m, tea.Quit
@@ -412,7 +450,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 				} else if strings.HasPrefix(input, "!") {
 					m.loading = true
-					cmds = append(cmds, m.runShellCommand(strings.TrimPrefix(input, "!")))
+					cmds = append(cmds, m.runShellCommand(strings.TrimSpace(strings.TrimPrefix(input, "!"))))
 				} else {
 					m.loading = true
 					cmds = append(cmds, m.callSDK(input))

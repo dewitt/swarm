@@ -237,7 +237,18 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 
 	// Assuming the binary is run from the project root for now. 
 	// In a real installation, we would search ~/.config/agents/skills or an embedded FS.
-	skillDirs := []string{"skills/builder", "skills/gitops", "skills/adk-skill"}
+	skillDirs := []string{}
+	entries, err := os.ReadDir("skills")
+	if err == nil {
+		for _, entry := range entries {
+			if entry.IsDir() {
+				skillDirs = append(skillDirs, filepath.Join("skills", entry.Name()))
+			}
+		}
+	} else {
+		// Fallback to defaults if directory doesn't exist
+		skillDirs = []string{"skills/builder", "skills/gitops", "skills/adk-skill"}
+	}
 
 	for _, dir := range skillDirs {
 		skill, err := LoadSkill(dir)

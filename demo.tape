@@ -2,6 +2,8 @@ Output docs/assets/demo.gif
 
 Require ./bin/agents
 
+Set WindowBar Colorful
+Set BorderRadius 10
 Set FontSize 18
 Set Width 1500
 Set Height 800

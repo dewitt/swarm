@@ -108,7 +108,8 @@ func renderLogo() string {
 		" ██╔╝  ",
 		"██╔╝   ",
 		"╚═╝    ",
-		"       ",
+  	"       ",
+  	"       ",
 	}, sMainGt, sShadow)
 
 	a := colorize([]string{
@@ -118,6 +119,7 @@ func renderLogo() string {
 		"██╔══██║ ",
 		"██║  ██║ ",
 		"╚═╝  ╚═╝ ",
+  	"         ",
 		"         ",
 	}, sMainA, sShadow)
 
@@ -128,8 +130,9 @@ func renderLogo() string {
 		"██╔══██╗",
 		"██║  ██║",
 		"╚██████║",
-		"    ██╔╝",
-		"╚████╔╝ ",
+		"     ██║",
+		" █████╔╝",
+  	" ╚════╝",
 	}, sMainG, sShadow)
 
 	// Lowercase e
@@ -141,6 +144,7 @@ func renderLogo() string {
 		"██╔════╝",
 		"╚██████╗",
 		" ╚═════╝",
+  	"        ",
 	}, sMainE, sShadow)
 
 	// Lowercase n
@@ -152,6 +156,7 @@ func renderLogo() string {
 		"██║  ██║",
 		"╚═╝  ╚═╝",
 		"        ",
+		"        ",					
 	}, sMainN, sShadow)
 
 	// Lowercase t
@@ -163,6 +168,7 @@ func renderLogo() string {
 		"  ██║  ",
 		"  ╚═╝  ",
 		"       ",
+  	"       ",
 	}, sMainT, sShadow)
 
 	// Lowercase s
@@ -174,10 +180,11 @@ func renderLogo() string {
 		" ╚═══██╗",
 		"██████╔╝",
 		"╚═════╝ ",
+		"        ",
 	}, sMainS, sShadow)
 
 	var sb strings.Builder
-	for i := 0; i < 7; i++ {
+	for i := 0; i < 8; i++ {
 		sb.WriteString(gt[i])
 		sb.WriteString(a[i])
 		sb.WriteString(g[i])
@@ -185,7 +192,7 @@ func renderLogo() string {
 		sb.WriteString(n[i])
 		sb.WriteString(t[i])
 		sb.WriteString(s[i])
-		if i < 6 {
+		if i < 7 {
 			sb.WriteString("\n")
 		}
 	}

@@ -119,7 +119,7 @@ func renderLogo() string {
 	}, sMainA, sShadow)
 
 	g := colorize([]string{
-		"██████╗ ",
+		"███████╗ ",
 		"██╔════╝ ",
 		"██║  ███╗",
 		"██║   ██║",

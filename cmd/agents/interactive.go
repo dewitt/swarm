@@ -687,14 +687,24 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 			m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"No dynamic skills are currently loaded.")
 			return nil
 		}
-		
+
 		var lines []string
 		lines = append(lines, lipgloss.NewStyle().Bold(true).Render("Loaded Skills"))
 		lines = append(lines, "")
-		for _, s := range skills {
-			lines = append(lines, fmt.Sprintf("  - %s: %s", lipgloss.NewStyle().Foreground(primaryColor).Render(s.Manifest.Name), s.Manifest.Description))
+
+		// Use the actual viewport width for text wrapping (minus icon and padding)
+		wrapWidth := m.viewport.Width - 4
+		if wrapWidth < 20 {
+			wrapWidth = 20
 		}
-		
+
+		for _, s := range skills {
+			name := lipgloss.NewStyle().Foreground(primaryColor).Render(s.Manifest.Name)
+			desc := s.Manifest.Description
+			content := fmt.Sprintf("- %s: %s", name, desc)
+			lines = append(lines, lipgloss.NewStyle().Width(wrapWidth).Render(content))
+		}
+
 		icon := agentMsgStyle.Render("✦ ")
 		m.messages = append(m.messages, lipgloss.JoinHorizontal(lipgloss.Top, icon, lipgloss.JoinVertical(lipgloss.Left, lines...)))
 	case "/model":

@@ -8,7 +8,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
-	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -66,8 +66,9 @@ var (
 
 	// Layout padding
 	inputBoxStyle = lipgloss.NewStyle().
-			Padding(0, 1).
-			Height(1)
+			Border(lipgloss.NormalBorder()).
+			BorderForeground(borderColor).
+			Padding(0, 1)
 )
 
 func colorize(lines []string, mainStyle, shadowStyle lipgloss.Style) []string {
@@ -237,17 +238,19 @@ const (
 )
 
 type model struct {
-	textInput textinput.Model
-	viewport  viewport.Model
-	spinner   spinner.Model
-	listModel list.Model
-	messages  []string
-	manager   sdk.AgentManager
-	err       error
-	width     int
-	height    int
-	loading   bool
-	state     uiState
+	textArea   textarea.Model
+	viewport   viewport.Model
+	spinner    spinner.Model
+	listModel  list.Model
+	messages   []string
+	history    []string
+	historyIdx int
+	manager    sdk.AgentManager
+	err        error
+	width      int
+	height     int
+	loading    bool
+	state      uiState
 }
 
 func getUserName() string {
@@ -268,11 +271,19 @@ func getUserName() string {
 }
 
 func initialModel() model {
-	ti := textinput.New()
-	ti.Placeholder = "Type your message or /help"
-	ti.Focus()
-	ti.CharLimit = 500
-	ti.Prompt = promptStyle.Render("> ")
+	ta := textarea.New()
+	ta.Placeholder = "Type your message or /help (Alt+Enter or ^J for newline)"
+	ta.Focus()
+	ta.CharLimit = 2000
+	ta.ShowLineNumbers = false
+	ta.SetWidth(0) // Will be properly set in WindowSizeMsg
+	ta.SetHeight(3)
+	ta.SetPromptFunc(2, func(lineIdx int) string {
+		if lineIdx == 0 {
+			return promptStyle.Render("> ")
+		}
+		return "  "
+	})
 
 	vp := viewport.New(0, 0)
 	vp.YPosition = 0
@@ -292,19 +303,21 @@ func initialModel() model {
 	welcomeScreen := lipgloss.JoinHorizontal(lipgloss.Top, leftBox, rightBox)
 
 	return model{
-		textInput: ti,
-		viewport:  vp,
-		spinner:   s,
-		listModel: l,
-		messages:  []string{welcomeScreen},
-		manager:   sdk.NewManager(),
-		loading:   false,
-		state:     stateChat,
+		textArea:   ta,
+		viewport:   vp,
+		spinner:    s,
+		listModel:  l,
+		messages:   []string{welcomeScreen},
+		history:    []string{},
+		historyIdx: 0,
+		manager:    sdk.NewManager(),
+		loading:    false,
+		state:      stateChat,
 	}
 }
 
 func (m model) Init() tea.Cmd {
-	return tea.Batch(textinput.Blink, m.spinner.Tick)
+	return tea.Batch(textarea.Blink, m.spinner.Tick)
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -363,15 +376,28 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.Type {
 		case tea.KeyCtrlC, tea.KeyEsc:
 			return m, tea.Quit
+		case tea.KeyCtrlJ:
+			m.textArea.InsertString("\n")
+			return m, nil
 		case tea.KeyEnter:
+			if msg.Alt {
+				m.textArea.InsertString("\n")
+				return m, nil
+			}
 			if m.loading {
 				return m, nil
 			}
 
-			input := m.textInput.Value()
+			input := m.textArea.Value()
 			if input != "" {
 				m.messages = append(m.messages, promptStyle.Render("> ")+input)
-				m.textInput.SetValue("")
+				
+				if len(m.history) == 0 || m.history[len(m.history)-1] != input {
+					m.history = append(m.history, input)
+				}
+				m.historyIdx = len(m.history)
+
+				m.textArea.Reset()
 
 				if strings.HasPrefix(input, "/") {
 					parts := strings.Fields(input)
@@ -388,12 +414,35 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				m.updateViewport()
 			}
+			return m, tea.Batch(cmds...)
 		case tea.KeyTab:
 			if !m.loading {
-				m.textInput.SetValue(autocompleteCommand(m.textInput.Value()))
-				m.textInput.SetCursor(len(m.textInput.Value()))
+				m.textArea.SetValue(autocompleteCommand(m.textArea.Value()))
+				m.textArea.CursorEnd()
 			}
-		case tea.KeyUp, tea.KeyDown, tea.KeyPgUp, tea.KeyPgDown:
+		case tea.KeyUp:
+			if m.textArea.Line() == 0 {
+				if len(m.history) > 0 && m.historyIdx > 0 {
+					m.historyIdx--
+					m.textArea.SetValue(m.history[m.historyIdx])
+					m.textArea.CursorEnd()
+				}
+				return m, nil
+			}
+		case tea.KeyDown:
+			if m.textArea.Line() == m.textArea.LineCount()-1 {
+				if len(m.history) > 0 && m.historyIdx < len(m.history) {
+					m.historyIdx++
+					if m.historyIdx == len(m.history) {
+						m.textArea.Reset()
+					} else {
+						m.textArea.SetValue(m.history[m.historyIdx])
+						m.textArea.CursorEnd()
+					}
+				}
+				return m, nil
+			}
+		case tea.KeyPgUp, tea.KeyPgDown:
 			m.viewport, vpCmd = m.viewport.Update(msg)
 			return m, vpCmd
 		}
@@ -442,11 +491,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width - 2
 		m.height = msg.Height - 3
 
-		m.textInput.Width = m.width - 4
+		m.textArea.SetWidth(m.width - 4)
 		
-		// Viewport height: Inner box minus input height (1) minus borders (2)
+		// Viewport height: Inner box minus input height and borders
 		m.viewport.Width = m.width - 4
-		m.viewport.Height = m.height - 4
+		m.viewport.Height = m.height - m.textArea.Height() - 2
 
 		// List Model: account for outer border (2) and padding (4 horizontal, 2 vertical)
 		m.listModel.SetSize(m.width-6, m.height-4)
@@ -454,7 +503,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	m.textInput, tiCmd = m.textInput.Update(msg)
+	m.textArea, tiCmd = m.textArea.Update(msg)
 	cmds = append(cmds, tiCmd)
 
 	if m.loading {
@@ -622,9 +671,10 @@ func (m model) View() string {
 		// 2. Input
 		var inputView string
 		if m.loading {
-			inputView = inputBoxStyle.Render(m.spinner.View() + " Thinking...")
+			thinking := lipgloss.NewStyle().Height(m.textArea.Height()).Render(m.spinner.View() + " Thinking...")
+			inputView = inputBoxStyle.Render(thinking)
 		} else {
-			inputView = inputBoxStyle.Render(m.textInput.View())
+			inputView = inputBoxStyle.Render(m.textArea.View())
 		}
 		mainBody = lipgloss.JoinVertical(lipgloss.Left, vpView, inputView)
 	}

@@ -30,9 +30,9 @@ var (
 	tipColor       = lipgloss.Color("#666666")
 	agentColor     = googleGreen
 	errorColor     = googleRed
-	borderColor    = lipgloss.Color("#333333")
-	statusBg       = lipgloss.Color("#1A1A1A")
-	statusFg       = lipgloss.Color("#888888")
+	borderColor    = lipgloss.AdaptiveColor{Light: "#D9D9D9", Dark: "#333333"}
+	statusBg       = lipgloss.AdaptiveColor{Light: "#EBEBEB", Dark: "#1A1A1A"}
+	statusFg       = lipgloss.AdaptiveColor{Light: "#555555", Dark: "#888888"}
 
 	// Styles
 	appStyle = lipgloss.NewStyle().

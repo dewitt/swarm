@@ -547,6 +547,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.loading {
 			m.spinner, spCmd = m.spinner.Update(msg)
 			cmds = append(cmds, spCmd)
+			m.updateViewport()
 		}
 
 	case tea.WindowSizeMsg:
@@ -746,6 +747,10 @@ func (m *model) updateViewport() {
 		s.WriteString(msg)
 		s.WriteString("\n\n")
 	}
+	if m.loading {
+		s.WriteString(agentMsgStyle.Render("✦ ") + m.spinner.View() + " Thinking...")
+		s.WriteString("\n\n")
+	}
 	m.viewport.SetContent(s.String())
 	m.viewport.GotoBottom()
 }
@@ -768,13 +773,7 @@ func (m model) View() string {
 		vpView := m.viewport.View()
 
 		// 2. Input
-		var inputView string
-		if m.loading {
-			thinking := lipgloss.NewStyle().Height(m.textArea.Height()).Render(m.spinner.View() + " Thinking...")
-			inputView = inputBoxStyle.Render(thinking)
-		} else {
-			inputView = inputBoxStyle.Render(m.textArea.View())
-		}
+		inputView := inputBoxStyle.Render(m.textArea.View())
 		mainBody = lipgloss.JoinVertical(lipgloss.Left, vpView, inputView)
 	}
 

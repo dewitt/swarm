@@ -705,6 +705,8 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 		if len(m.messages) > 0 {
 			m.messages = []string{m.messages[0]}
 		}
+		m.manager.Reset()
+		m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"Screen and conversation history cleared. Context window reset.")
 	case "/context":
 		m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"Context management is coming in a future update.")
 	case "/drop":

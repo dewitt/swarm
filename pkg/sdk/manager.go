@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -97,16 +98,17 @@ func writeLocalFile(ctx tool.Context, args WriteFileArgs) (WriteFileResult, erro
 type AgentManager interface {
 	// Discover checks the current directory for an agent.yaml manifest.
 	Discover(ctx context.Context, dir string) (*AgentManifest, error)
-	
+
 	// Chat sends a natural language prompt to the internal Router Agent.
 	// It returns a channel that streams the response back to the caller.
 	Chat(ctx context.Context, prompt string) (<-chan string, error)
+	// Reset drops the current conversation history by generating a new session ID.
+	Reset()
 	// Skills returns a list of all dynamically loaded skills in the workspace.
 	Skills() []*Skill
 	// ListModels returns a list of available AI models from the provider.
 	ListModels(ctx context.Context) ([]ModelInfo, error)
 }
-
 // ModelInfo contains metadata about an available AI model.
 type ModelInfo struct {
 	Name        string
@@ -324,6 +326,10 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 
 func (m *defaultManager) Skills() []*Skill {
 	return m.skills
+}
+
+func (m *defaultManager) Reset() {
+	m.sessionID = fmt.Sprintf("session_%d", rand.Int63())
 }
 
 func (m *defaultManager) ListModels(ctx context.Context) ([]ModelInfo, error) {

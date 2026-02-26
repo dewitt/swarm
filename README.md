@@ -1,7 +1,7 @@
 # Agents CLI
 
 A clean CLI and embeddable SDK for managing, building, and deploying AI agents
-via GitOps workflows.
+into native ecosystems.
 
 ![Agents CLI Demo](docs/assets/demo.gif)
 
@@ -10,8 +10,8 @@ via GitOps workflows.
 - **Terminal UI**: Persistent, interactive terminal sessions built on Bubble Tea, featuring rich text, async execution, client-side slash commands (`/help`, `/model list`, `/skills`), and multi-pane layouts.
 - **Dynamic Skills Architecture**: Completely decoupled capabilities adhering to the open `agentskills.io` standard (`SKILL.md`). Easily write, share, and dynamically load new skills without recompiling.
 - **Framework Agnostic**: Natively supports Google ADK, LangGraph, and custom architectures via `agent.yaml` manifests.
-- **GitOps First**: Includes a native GitOps Agent that scaffolds GitHub Actions CI/CD pipelines and pushes code directly from the CLI.
-- **Agent Swarms**: The core SDK is powered by the Google Agent Development Kit (ADK) and orchestrates a swarm of specialized internal agents (Router, Builder, GitOps) to fulfill your requests.
+- **Native CI/CD Integration**: Seamlessly scaffolds standard CI/CD pipelines (like GitHub Actions) and integrates directly with your native ecosystem.
+- **Agent Swarms**: The core SDK is powered by the Google Agent Development Kit (ADK) and orchestrates a swarm of specialized internal agents (Router, Builder, Deployment) to fulfill your requests.
 
 ## Prerequisites
 

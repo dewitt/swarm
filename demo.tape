@@ -2,10 +2,6 @@ Output docs/assets/demo.gif
 
 Require ./bin/agents
 
-Set Margin 20
-Set MarginFill "#6B50FF"
-Set BorderRadius 10
-Set WindowBar Colorful
 Set FontSize 18
 Set Width 1500
 Set Height 800
@@ -43,7 +39,7 @@ Sleep 500ms
 Enter
 
 Sleep 2s
-Type "Looks good! Please deploy it to Google Agent Engine via GitOps."
+Type "Looks good! Please deploy it to Google Agent Engine."
 Sleep 500ms
 Enter
 

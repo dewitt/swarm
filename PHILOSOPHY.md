@@ -41,9 +41,9 @@ to `main`?") or creative opinions (e.g., "Do you like this UI layout?").
 - Agents must utilize headless testing, unit tests, and snapshot testing to
   verify their own work autonomously.
 
-## 4. GitOps is the Source of Truth
+## 4. Native Ecosystems are the Source of Truth
 
-We reject proprietary, black-box deployment engines.
+We believe in playing well with the customer's existing ecosystem rather than imposing proprietary deployment engines.
 
 - Version control (Git) is the absolute source of truth for both code and
   infrastructure.

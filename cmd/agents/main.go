@@ -10,11 +10,10 @@ import (
 var rootCmd = &cobra.Command{
 	Use:   "agents",
 	Short: "A sophisticated CLI for managing, building, and deploying AI agents.",
-	Long: `agents is an advanced, framework-agnostic command-line interface. 
-It helps developers quickly scaffold, test, and deploy AI agents via GitOps workflows.
+	Long: `agents is an advanced, framework-agnostic command-line interface.
+It helps developers quickly scaffold, test, and deploy AI agents into native ecosystems.
 When run without arguments, it launches a persistent, interactive terminal session.`,
-	Run: func(cmd *cobra.Command, args []string) {
-		// Launch the interactive Bubble Tea shell
+	Run: func(cmd *cobra.Command, args []string) {		// Launch the interactive Bubble Tea shell
 		if err := launchInteractiveShell(); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)

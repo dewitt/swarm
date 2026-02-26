@@ -9,7 +9,7 @@ constraint guide, and communication protocol.
 ## Project Vision
 
 The `agents` project is a Go-based CLI and embeddable SDK for managing,
-building, and deploying AI agents. It prioritizes GitOps workflows, dynamic
+building, and deploying AI agents. It prioritizes native ecosystem integrations, dynamic
 extensibility (Skills), and is built on the philosophy that "one agent alone
 is never enough."
 
@@ -28,8 +28,8 @@ following rules:
 1. **Google ADK First:** The internal business logic of the CLI is powered by
    the Google Agent Development Kit (ADK) for Go. Ensure you are familiar with
    its interfaces (`LlmAgent`, `Tool`, `Launcher`).
-1. **GitOps Native:** Deployments and environment changes should be
-   implemented as Git operations (committing CI/CD files) rather than
+1. **Native CI/CD Integration:** Deployments and environment changes should be
+   implemented via standard CI/CD files (e.g., committing GitHub Actions) rather than
    proprietary API calls whenever possible.
 1. **No Hardcoding:** If a feature involves a specific cloud provider or an
    external framework (like LangChain), it should be built as a dynamically

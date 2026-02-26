@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"os/exec"
 	"os/user"
 	"strings"
 
@@ -212,8 +213,9 @@ ctrl+c to background or exit
 `
 
 type responseMsg struct {
-	text string
-	err  error
+	text    string
+	err     error
+	isShell bool
 }
 
 type modelsLoadedMsg struct {
@@ -408,6 +410,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if cmd != nil {
 						cmds = append(cmds, cmd, tea.ClearScreen)
 					}
+				} else if strings.HasPrefix(input, "!") {
+					m.loading = true
+					cmds = append(cmds, m.runShellCommand(strings.TrimPrefix(input, "!")))
 				} else {
 					m.loading = true
 					cmds = append(cmds, m.callSDK(input))
@@ -451,6 +456,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.loading = false
 		if msg.err != nil {
 			m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Render("Error: "+msg.err.Error()))
+		} else if msg.isShell {
+			// Style for shell output - slightly indented and perhaps a different color
+			shellStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#AAAAAA")).PaddingLeft(2)
+			m.messages = append(m.messages, shellStyle.Render(msg.text))
 		} else {
 			m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+msg.text)
 		}
@@ -525,6 +534,17 @@ func (m model) callSDK(input string) tea.Cmd {
 	}
 }
 
+func (m model) runShellCommand(command string) tea.Cmd {
+	return func() tea.Msg {
+		cmd := exec.Command("bash", "-c", command)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			return responseMsg{text: string(out), err: err, isShell: true}
+		}
+		return responseMsg{text: string(out), isShell: true}
+	}
+}
+
 func (m model) fetchModels() tea.Cmd {
 	return func() tea.Msg {
 		models, err := m.manager.ListModels(context.Background())
@@ -551,6 +571,7 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 			"  /skills      Lists dynamically loaded agent skills.",
 			"  /model       Set the active LLM provider (e.g. /model auto).",
 			"  /model list  Open an interactive list of all available models.",
+			"  ! [command]  Execute a shell command directly.",
 			"  /exit        Gracefully terminates the session.",
 		)
 		

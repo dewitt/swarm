@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"google.golang.org/adk/agent"
@@ -242,10 +243,19 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 	}
 
 	// 3. Create the Router Agent
+	routerInstruction := "You are the primary Router Agent for the Agents CLI. Help the user build, test, and deploy AI agents. Keep your answers brief, professional, and use markdown formatting. Use the list_local_files tool if you need to inspect the workspace. If file contents are provided in the prompt (e.g., via @filename references), use that information to satisfy the user's request. Transfer to sub-agents (like builder_agent or gitops_agent) based on the user's intent."
+
+	// Look for local instruction files in the current directory
+	for _, name := range []string{"GEMINI.md", "AGENTS.md", "CLAUDE.md"} {
+		if b, err := os.ReadFile(name); err == nil {
+			routerInstruction += "\n\n" + fmt.Sprintf("Additional instructions from %s:\n%s", name, string(b))
+		}
+	}
+
 	routerAgent, err := llmagent.New(llmagent.Config{
 		Name:        "router_agent",
 		Model:       m,
-		Instruction: "You are the primary Router Agent for the Agents CLI. Help the user build, test, and deploy AI agents. Keep your answers brief, professional, and use markdown formatting. Use the list_local_files tool if you need to inspect the workspace. Transfer to sub-agents (like builder_agent or gitops_agent) based on the user's intent.",
+		Instruction: routerInstruction,
 		Tools:       []tool.Tool{listTool},
 		SubAgents:   subAgents,
 	})
@@ -318,6 +328,24 @@ func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan string
 
 	go func() {
 		defer close(out)
+
+		// Context referencing (@file)
+		re := regexp.MustCompile(`@(\S+)`)
+		matches := re.FindAllStringSubmatch(prompt, -1)
+		if len(matches) > 0 {
+			var contextDocs []string
+			for _, match := range matches {
+				path := match[1]
+				// Trim trailing punctuation if it's there (common in conversational text)
+				path = strings.TrimRight(path, ".,!?;")
+				if b, err := os.ReadFile(path); err == nil {
+					contextDocs = append(contextDocs, fmt.Sprintf("File @%s:\n%s", path, string(b)))
+				}
+			}
+			if len(contextDocs) > 0 {
+				prompt = strings.Join(contextDocs, "\n\n") + "\n\nUser Prompt:\n" + prompt
+			}
+		}
 
 		if os.Getenv("AGENTS_DRY_RUN") == "true" {
 			// Provide fast, deterministic mock responses for vhs tape recordings

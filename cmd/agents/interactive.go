@@ -394,22 +394,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			input := m.textArea.Value()
 			trimmedInput := strings.TrimSpace(input)
 
-			if trimmedInput == "!" && m.state != stateShell {
-				m.state = stateShell
-				m.textArea.SetPromptFunc(2, func(lineIdx int) string {
-					if lineIdx == 0 {
-						return lipgloss.NewStyle().Foreground(googleYellow).Bold(true).Render("! ")
-					}
-					return "  "
-				})
-				m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"Entered shell execution mode. Type 'exit' to return to chat.")
-				m.textArea.Reset()
-				m.updateViewport()
-				return m, nil
-			}
-
 			if m.state == stateShell && (trimmedInput == "exit" || trimmedInput == "quit") {
 				m.state = stateChat
+				m.textArea.Placeholder = "Type your message or /help (Alt+Enter or ^J for newline)"
 				m.textArea.SetPromptFunc(2, func(lineIdx int) string {
 					if lineIdx == 0 {
 						return promptStyle.Render("> ")
@@ -552,6 +539,30 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	m.textArea, tiCmd = m.textArea.Update(msg)
 	cmds = append(cmds, tiCmd)
+
+	// Check for automatic shell mode toggling
+	val := m.textArea.Value()
+	if m.state == stateChat && strings.HasPrefix(val, "!") {
+		m.state = stateShell
+		m.textArea.SetValue(strings.TrimPrefix(val, "!"))
+		m.textArea.Placeholder = "Type your shell command"
+		m.textArea.SetPromptFunc(2, func(lineIdx int) string {
+			if lineIdx == 0 {
+				return lipgloss.NewStyle().Foreground(googleYellow).Bold(true).Render("! ")
+			}
+			return "  "
+		})
+	} else if m.state == stateShell && strings.HasPrefix(val, "!") {
+		m.state = stateChat
+		m.textArea.SetValue(strings.TrimPrefix(val, "!"))
+		m.textArea.Placeholder = "Type your message or /help (Alt+Enter or ^J for newline)"
+		m.textArea.SetPromptFunc(2, func(lineIdx int) string {
+			if lineIdx == 0 {
+				return promptStyle.Render("> ")
+			}
+			return "  "
+		})
+	}
 
 	if m.loading {
 		m.spinner, spCmd = m.spinner.Update(msg)

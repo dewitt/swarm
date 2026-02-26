@@ -108,6 +108,7 @@ func renderLogo() string {
 		" ██╔╝  ",
 		"██╔╝   ",
 		"╚═╝    ",
+		"       ",
 	}, sMainGt, sShadow)
 
 	a := colorize([]string{
@@ -117,36 +118,40 @@ func renderLogo() string {
 		"██╔══██║ ",
 		"██║  ██║ ",
 		"╚═╝  ╚═╝ ",
+		"         ",
 	}, sMainA, sShadow)
 
 	// Lowercase g
 	g := colorize([]string{
-		"       ",
-		" █████╗",
+		"        ",
+		" █████╗ ",
 		"██╔══██╗",
 		"██║  ██║",
 		"╚██████║",
-		" ╚═════╝",
+		" ╚████╔╝",
+		"  ╚═══╝ ",
 	}, sMainG, sShadow)
 
 	// Lowercase e
 	e := colorize([]string{
-		"       ",
+		"        ",
 		" █████╗ ",
 		"██╔══██╗",
 		"███████║",
-		"██╔════╝",
-		"╚██████╗",
+		"╚█████╔╝",
+		" ╚════╝ ",
+		"        ",
 	}, sMainE, sShadow)
 
 	// Lowercase n
 	n := colorize([]string{
-		"       ",
+		"        ",
 		"██████╗ ",
 		"██╔══██╗",
 		"██║  ██║",
 		"██║  ██║",
 		"╚═╝  ╚═╝",
+		"        ",
 	}, sMainN, sShadow)
 
 	// Lowercase t
@@ -157,20 +162,22 @@ func renderLogo() string {
 		"  ██║  ",
 		"  ██║  ",
 		"  ╚═╝  ",
+		"       ",
 	}, sMainT, sShadow)
 
 	// Lowercase s
 	s := colorize([]string{
-		"       ",
-		" █████╗",
+		"        ",
+		" ██████╗",
 		"██╔════╝",
 		"╚█████╗ ",
 		" ╚═══██╗",
 		"██████╔╝",
+		"╚═════╝ ",
 	}, sMainS, sShadow)
 
 	var sb strings.Builder
-	for i := 0; i < 6; i++ {
+	for i := 0; i < 7; i++ {
 		sb.WriteString(gt[i])
 		sb.WriteString(a[i])
 		sb.WriteString(g[i])
@@ -178,7 +185,7 @@ func renderLogo() string {
 		sb.WriteString(n[i])
 		sb.WriteString(t[i])
 		sb.WriteString(s[i])
-		if i < 5 {
+		if i < 6 {
 			sb.WriteString("\n")
 		}
 	}

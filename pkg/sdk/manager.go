@@ -43,6 +43,23 @@ func listLocalFiles(ctx tool.Context, args ListFilesArgs) (ListFilesResult, erro
 	return ListFilesResult{Files: files}, nil
 }
 
+type ReadFileArgs struct {
+	Path string `json:"path"`
+}
+
+type ReadFileResult struct {
+	Content string `json:"content"`
+	Error   string `json:"error,omitempty"`
+}
+
+func readLocalFile(ctx tool.Context, args ReadFileArgs) (ReadFileResult, error) {
+	b, err := os.ReadFile(args.Path)
+	if err != nil {
+		return ReadFileResult{Error: err.Error()}, nil
+	}
+	return ReadFileResult{Content: string(b)}, nil
+}
+
 type WriteFileArgs struct {
 	Path    string `json:"path"`
 	Content string `json:"content"`
@@ -162,6 +179,14 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 		log.Fatalf("Failed to create listTool: %v", err)
 	}
 
+	readTool, err := functiontool.New(functiontool.Config{
+		Name:        "read_local_file",
+		Description: "Reads the contents of a local file.",
+	}, readLocalFile)
+	if err != nil {
+		log.Fatalf("Failed to create readTool: %v", err)
+	}
+
 	writeTool, err := functiontool.New(functiontool.Config{
 		Name:        "write_local_file",
 		Description: "Writes content to a file at the specified path. Creates directories if necessary.",
@@ -197,6 +222,7 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 	// A map to resolve string names from tools.yaml to actual ADK Tool instances
 	toolRegistry := map[string]tool.Tool{
 		"list_local_files": listTool,
+		"read_local_file":  readTool,
 		"write_local_file": writeTool,
 		"git_commit":       gitCommit,
 		"git_push":         gitPush,
@@ -243,7 +269,7 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 	}
 
 	// 3. Create the Router Agent
-	routerInstruction := "You are the primary Router Agent for the Agents CLI. Help the user build, test, and deploy AI agents. Keep your answers brief, professional, and use markdown formatting. Use the list_local_files tool if you need to inspect the workspace. If file contents are provided in the prompt (e.g., via @filename references), use that information to satisfy the user's request. Transfer to sub-agents (like builder_agent or gitops_agent) based on the user's intent."
+	routerInstruction := "You are the primary Router Agent for the Agents CLI. Help the user build, test, and deploy AI agents. Keep your answers brief, professional, and use markdown formatting. Use the list_local_files and read_local_file tools if you need to investigate the workspace. If file contents are provided in the prompt (e.g., via @filename references), use that information to satisfy the user's request. Transfer to sub-agents (like builder_agent or gitops_agent) based on the user's intent."
 
 	// Load global memory
 	if memory, err := LoadMemory(); err == nil && memory != "" {
@@ -261,7 +287,7 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 		Name:        "router_agent",
 		Model:       m,
 		Instruction: routerInstruction,
-		Tools:       []tool.Tool{listTool},
+		Tools:       []tool.Tool{listTool, readTool},
 		SubAgents:   subAgents,
 	})
 	if err != nil {

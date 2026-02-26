@@ -253,6 +253,7 @@ type model struct {
 	width      int
 	height     int
 	loading    bool
+	quitting   bool
 	state      uiState
 }
 
@@ -315,6 +316,7 @@ func initialModel() model {
 		historyIdx: 0,
 		manager:    sdk.NewManager(),
 		loading:    false,
+		quitting:   false,
 		state:      stateChat,
 	}
 }
@@ -330,6 +332,29 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		spCmd tea.Cmd
 		cmds  []tea.Cmd
 	)
+
+	// Global intercept for double Ctrl+C to quit
+	if keyMsg, ok := msg.(tea.KeyMsg); ok {
+		if keyMsg.Type == tea.KeyCtrlC {
+			if m.quitting {
+				return m, tea.Quit
+			}
+			m.quitting = true
+			m.textArea.Reset()
+			m.textArea.Placeholder = "Press ^C again to quit."
+			return m, nil
+		}
+
+		// Reset quitting state on any other keypress
+		if m.quitting {
+			m.quitting = false
+			if m.state == stateShell {
+				m.textArea.Placeholder = "Type your shell command"
+			} else {
+				m.textArea.Placeholder = "Type your message or /help (Alt+Enter or ^J for newline)"
+			}
+		}
+	}
 
 	// If we are in the model list state, hijack the keys
 	if m.state == stateModelList {
@@ -377,7 +402,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.Type {
-		case tea.KeyCtrlC, tea.KeyEsc:
+		case tea.KeyEsc:
 			return m, tea.Quit
 		case tea.KeyCtrlJ:
 			m.textArea.InsertString("\n")

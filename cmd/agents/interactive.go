@@ -830,20 +830,27 @@ func (m model) View() string {
 	w2 := m.width / 3
 	w3 := m.width - w1 - w2
 	
-	p1 := lipgloss.NewStyle().Width(w1).Align(lipgloss.Left).Render(" " + m.cwd)
-	
+	baseStyle := statusBarStyle.Copy()
+
+	p1Style := baseStyle.Copy().Width(w1).Align(lipgloss.Left)
+	p2Style := baseStyle.Copy().Width(w2).Align(lipgloss.Center)
+	p3Style := baseStyle.Copy().Width(w3).Align(lipgloss.Right)
+
+	p1 := p1Style.Render(" " + m.cwd)
+
 	modeText := "local mode"
 	if m.state == stateShell {
-		modeText = lipgloss.NewStyle().Foreground(googleYellow).Render("shell mode")
+		modeText = "shell mode"
+		p2Style = p2Style.Foreground(googleYellow)
 	} else if m.planMode {
-		modeText = lipgloss.NewStyle().Foreground(googleYellow).Render("plan mode")
+		modeText = "plan mode"
+		p2Style = p2Style.Foreground(googleYellow)
 	}
-	p2 := lipgloss.NewStyle().Width(w2).Align(lipgloss.Center).Render(modeText)
+	p2 := p2Style.Render(modeText)
 
-	p3 := lipgloss.NewStyle().Width(w3).Align(lipgloss.Right).Render(m.activeModel + " ")
+	p3 := p3Style.Render(m.activeModel + " ")
 
-	statusView := statusBarStyle.Width(m.width).Render(lipgloss.JoinHorizontal(lipgloss.Top, p1, p2, p3))
-	
+	statusView := lipgloss.JoinHorizontal(lipgloss.Top, p1, p2, p3)	
 	// Apply Outer Border to main body
 	boxedBody := appStyle.Width(m.width).Height(m.height).Render(mainBody)
 

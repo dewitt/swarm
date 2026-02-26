@@ -235,7 +235,11 @@ func getUserName() string {
 	u, err := user.Current()
 	if err == nil {
 		if u.Name != "" {
-			return u.Name
+			// Return only the first name for a less formal greeting
+			parts := strings.Fields(u.Name)
+			if len(parts) > 0 {
+				return parts[0]
+			}
 		}
 		if u.Username != "" {
 			return u.Username

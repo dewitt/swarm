@@ -650,10 +650,11 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 			"  /skills      Lists dynamically loaded agent skills.",
 			"  /model       Set the active LLM provider (e.g. /model auto).",
 			"  /model list  Open an interactive list of all available models.",
+			"  /remember    Saves a global preference (e.g. /remember I use tabs).",
 			"  ! [command]  Execute a shell command directly.",
 			"  /exit        Gracefully terminates the session.",
 		)
-		
+
 		icon := agentMsgStyle.Render("✦ ")
 		m.messages = append(m.messages, lipgloss.JoinHorizontal(lipgloss.Top, icon, helpText))
 	case "/skills":
@@ -708,6 +709,17 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 		m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"Context management is coming in a future update.")
 	case "/drop":
 		m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"Context management is coming in a future update.")
+	case "/remember":
+		if len(parts) < 2 {
+			m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"Usage: /remember <fact or preference>")
+			return nil
+		}
+		fact := strings.Join(parts[1:], " ")
+		if err := sdk.SaveMemory(fact); err != nil {
+			m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Render("Failed to save memory: "+err.Error()))
+		} else {
+			m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"Got it. I'll remember that for all future sessions.")
+		}
 	default:
 		m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Render("Unknown command: "+cmd))
 	}
@@ -727,6 +739,7 @@ func autocompleteCommand(input string) string {
 		"/skills",
 		"/model",
 		"/model list",
+		"/remember",
 		"/exit",
 		"/quit",
 	}

@@ -245,6 +245,11 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 	// 3. Create the Router Agent
 	routerInstruction := "You are the primary Router Agent for the Agents CLI. Help the user build, test, and deploy AI agents. Keep your answers brief, professional, and use markdown formatting. Use the list_local_files tool if you need to inspect the workspace. If file contents are provided in the prompt (e.g., via @filename references), use that information to satisfy the user's request. Transfer to sub-agents (like builder_agent or gitops_agent) based on the user's intent."
 
+	// Load global memory
+	if memory, err := LoadMemory(); err == nil && memory != "" {
+		routerInstruction += "\n\nUser Global Preferences & Memory:\n" + memory
+	}
+
 	// Look for local instruction files in the current directory
 	for _, name := range []string{"GEMINI.md", "AGENTS.md", "CLAUDE.md"} {
 		if b, err := os.ReadFile(name); err == nil {

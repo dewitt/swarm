@@ -7,17 +7,23 @@ aligns closest to these ideals.
 ## 1. Defer to the Frontier (Thin Software, Fat Models)
 
 Foundational, frontier LLMs are improving at a rate faster than traditional
-software built to orchestrate them possibly can.
+software built to orchestrate them possibly can. Therefore, our absolute
+highest priority is to write as little custom code as possible.
 
-Therefore, our primary goal is to **delegate and defer as much logic as
-possible to the models (and the agents that drive them).**
+When designing a new feature, you **must** attempt to resolve it in this
+strict order of precedence:
 
-- **Avoid Hardcoding:** Do not write thousands of lines of Go code to parse a
-  specific API or manage a proprietary framework if an LLM can achieve the
-  same result by reading a markdown file.
-- **Thin Capabilities:** Core capabilities must be as thin and easy to update
-  as possible. This is why we use dynamic **Skills** (plain-text instructions
-  and simple tool manifests) instead of monolithic binary plugins.
+1. **Delegate to the Model:** Can the raw frontier LLM solve this inherently
+   just by asking it nicely? If yes, stop here.
+2. **Delegate to Dynamic Skills:** If the model needs specialized context or a
+   workflow, can it be provided via a plain-text, dynamically loaded Markdown
+   Skill? If yes, build a Skill.
+3. **Delegate to the Framework (ADK):** If programmatic logic or orchestration
+   is truly required, does the Google Agent Development Kit (ADK) provide a
+   native primitive for it? If yes, use the ADK.
+4. **Write Custom Code (Last Resort):** Only write custom Go code in this CLI
+   if it is strictly for terminal UI presentation or if all the above options
+   have been entirely exhausted.
 
 ## 2. One Agent Alone is Never Enough
 

@@ -18,6 +18,11 @@ is never enough."
 When writing or modifying code in this repository, you **must** adhere to the
 following rules:
 
+1. **The Delegation Hierarchy:** We write as little custom code as possible.
+   When implementing a feature, you must evaluate solutions in this strict
+   order: 1) Can the raw Model do it? 2) Can a dynamic Markdown Skill do it? 3) Does
+   the Google ADK provide it natively? 4) Only if all else fails, write custom
+   Go code for it.
 1. **Separation of Concerns:** The CLI (Presentation Layer) and the SDK
    (Business Logic) must be strictly decoupled. The CLI is merely a consumer
    of the SDK. Do not leak terminal UI logic (e.g., Bubbletea components, ANSI

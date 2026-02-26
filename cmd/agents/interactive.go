@@ -341,7 +341,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.quitting = true
 			m.textArea.Reset()
-			m.textArea.Placeholder = "Press ^C again to quit."
+			if m.state == stateShell {
+				m.textArea.Placeholder = "Press ^C again to quit, or ! to exit shell mode."
+			} else {
+				m.textArea.Placeholder = "Press ^C again to quit."
+			}
 			return m, nil
 		}
 

@@ -69,86 +69,109 @@ var (
 			Height(1)
 )
 
-func renderLogo() string {
-	c1 := lipgloss.NewStyle().Foreground(googleBlue).Bold(true)
-	c2 := lipgloss.NewStyle().Foreground(googleRed).Bold(true)
-	c3 := lipgloss.NewStyle().Foreground(googleYellow).Bold(true)
-	c4 := lipgloss.NewStyle().Foreground(googleBlue).Bold(true)
-	c5 := lipgloss.NewStyle().Foreground(googleGreen).Bold(true)
-	c6 := lipgloss.NewStyle().Foreground(googleRed).Bold(true)
+func colorize(lines []string, mainStyle, shadowStyle lipgloss.Style) []string {
+	var res []string
+	for _, line := range lines {
+		var sb strings.Builder
+		for _, r := range line {
+			if r == '█' {
+				sb.WriteString(mainStyle.Render(string(r)))
+			} else if r != ' ' {
+				sb.WriteString(shadowStyle.Render(string(r)))
+			} else {
+				sb.WriteRune(r)
+			}
+		}
+		res = append(res, sb.String())
+	}
+	return res
+}
 
-	gt := []string{
+func renderLogo() string {
+	shadowColor := lipgloss.Color("#888888") // Grey
+	gtColor := lipgloss.Color("#555555")     // Off-black
+
+	sMainGt := lipgloss.NewStyle().Foreground(gtColor).Bold(true)
+	sMainA := lipgloss.NewStyle().Foreground(googleBlue).Bold(true)
+	sMainG := lipgloss.NewStyle().Foreground(googleRed).Bold(true)
+	sMainE := lipgloss.NewStyle().Foreground(googleYellow).Bold(true)
+	sMainN := lipgloss.NewStyle().Foreground(googleBlue).Bold(true)
+	sMainT := lipgloss.NewStyle().Foreground(googleGreen).Bold(true)
+	sMainS := lipgloss.NewStyle().Foreground(googleRed).Bold(true)
+	sShadow := lipgloss.NewStyle().Foreground(shadowColor).Bold(true)
+
+	gt := colorize([]string{
 		"██╗    ",
 		"╚██╗   ",
 		" ╚██╗  ",
 		" ██╔╝  ",
 		"██╔╝   ",
 		"╚═╝    ",
-	}
+	}, sMainGt, sShadow)
 
-	a := []string{
+	a := colorize([]string{
 		" █████╗  ",
 		"██╔══██╗ ",
 		"███████║ ",
 		"██╔══██║ ",
 		"██║  ██║ ",
 		"╚═╝  ╚═╝ ",
-	}
+	}, sMainA, sShadow)
 
-	g := []string{
+	g := colorize([]string{
 		"██████╗ ",
 		"██╔════╝ ",
 		"██║  ███╗",
 		"██║   ██║",
 		"╚██████╔╝",
 		" ╚═════╝ ",
-	}
+	}, sMainG, sShadow)
 
-	e := []string{
+	e := colorize([]string{
 		"███████╗",
 		"██╔════╝",
 		"█████╗  ",
 		"██╔══╝  ",
 		"███████╗",
 		"╚══════╝",
-	}
+	}, sMainE, sShadow)
 
-	n := []string{
+	n := colorize([]string{
 		"███╗   ██╗",
 		"████╗  ██║",
 		"██╔██╗ ██║",
 		"██║╚██╗██║",
 		"██║ ╚████║",
 		"╚═╝  ╚═══╝",
-	}
+	}, sMainN, sShadow)
 
-	t := []string{
+	t := colorize([]string{
 		"████████╗",
 		"╚══██╔══╝",
 		"   ██║   ",
 		"   ██║   ",
 		"   ██║   ",
 		"   ╚═╝   ",
-	}
+	}, sMainT, sShadow)
 
-	s := []string{
+	s := colorize([]string{
 		"███████╗",
 		"██╔════╝",
 		"███████╗",
 		"╚════██║",
 		"███████║",
 		"╚══════╝",
-	}
+	}, sMainS, sShadow)
 
 	var sb strings.Builder
 	for i := 0; i < 6; i++ {
-		sb.WriteString(c1.Render(gt[i]))
-		sb.WriteString(c1.Render(a[i]))
-		sb.WriteString(c2.Render(g[i]))
-		sb.WriteString(c3.Render(e[i]))
-		sb.WriteString(c4.Render(n[i]))
-		sb.WriteString(c5.Render(t[i]))
-		sb.WriteString(c6.Render(s[i]))
+		sb.WriteString(gt[i])
+		sb.WriteString(a[i])
+		sb.WriteString(g[i])
+		sb.WriteString(e[i])
+		sb.WriteString(n[i])
+		sb.WriteString(t[i])
+		sb.WriteString(s[i])
 		if i < 5 {
 			sb.WriteString("\n")
 		}

@@ -11,6 +11,7 @@ import (
 )
 
 var promptFlag string
+var planFlag bool
 
 var rootCmd = &cobra.Command{
 	Use:   "agents",
@@ -39,6 +40,10 @@ When run without arguments, it launches a persistent, interactive terminal sessi
 				}
 			}
 
+			if planFlag {
+				fullPrompt = "[SYSTEM: You are in PLAN MODE. You must strictly act as a read-only architectural advisor. Under NO circumstances should you use tools to write files, execute bash commands, or alter git state. Only use tools to read and list files.]\n\nUser: " + fullPrompt
+			}
+
 			manager := sdk.NewManager()
 			ch, err := manager.Chat(context.Background(), fullPrompt)
 			if err != nil {
@@ -50,7 +55,7 @@ When run without arguments, it launches a persistent, interactive terminal sessi
 		}
 
 		// Launch the interactive Bubble Tea shell
-		if err := launchInteractiveShell(); err != nil {
+		if err := launchInteractiveShell(planFlag); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
@@ -59,6 +64,7 @@ When run without arguments, it launches a persistent, interactive terminal sessi
 
 func init() {
 	rootCmd.Flags().StringVarP(&promptFlag, "prompt", "p", "", "Run a single-shot prompt and exit")
+	rootCmd.Flags().BoolVar(&planFlag, "plan", false, "Start the agent in read-only plan mode")
 }
 
 func main() {

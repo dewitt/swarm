@@ -254,6 +254,7 @@ type model struct {
 	height     int
 	loading    bool
 	quitting   bool
+	planMode   bool
 	state      uiState
 }
 
@@ -274,7 +275,7 @@ func getUserName() string {
 	return "Developer"
 }
 
-func initialModel() model {
+func initialModel(planMode bool) model {
 	ta := textarea.New()
 	ta.Placeholder = "Type your message or /help (Alt+Enter or ^J for newline)"
 	ta.Focus()
@@ -317,6 +318,7 @@ func initialModel() model {
 		manager:    sdk.NewManager(),
 		loading:    false,
 		quitting:   false,
+		planMode:   planMode,
 		state:      stateChat,
 	}
 }
@@ -603,6 +605,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) callSDK(input string) tea.Cmd {
+	if m.planMode {
+		input = "[SYSTEM: You are in PLAN MODE. You must strictly act as a read-only architectural advisor. Under NO circumstances should you use tools to write files, execute bash commands, or alter git state. Only use tools to read and list files.]\n\nUser: " + input
+	}
 	return func() tea.Msg {
 		ch, err := m.manager.Chat(context.Background(), input)
 		if err != nil {
@@ -651,6 +656,8 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 			"  /model       Set the active LLM provider (e.g. /model auto).",
 			"  /model list  Open an interactive list of all available models.",
 			"  /remember    Saves a global preference (e.g. /remember I use tabs).",
+			"  /plan        Enter read-only plan mode to brainstorm safely.",
+			"  /act         Exit plan mode and allow the agent to execute actions.",
 			"  ! [command]  Execute a shell command directly.",
 			"  /exit        Gracefully terminates the session.",
 		)
@@ -707,6 +714,12 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 		}
 		m.manager.Reset()
 		m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"Screen and conversation history cleared. Context window reset.")
+	case "/plan":
+		m.planMode = true
+		m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"Plan Mode enabled. I will only read files and brainstorm. I will not modify files or execute shell commands.")
+	case "/act":
+		m.planMode = false
+		m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"Act Mode enabled. I am fully capable of writing files and executing commands.")
 	case "/context":
 		m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"Context management is coming in a future update.")
 	case "/drop":
@@ -742,6 +755,8 @@ func autocompleteCommand(input string) string {
 		"/model",
 		"/model list",
 		"/remember",
+		"/plan",
+		"/act",
 		"/exit",
 		"/quit",
 	}
@@ -798,8 +813,12 @@ func (m model) View() string {
 	w3 := m.width - w1 - w2
 	
 	p1 := lipgloss.NewStyle().Width(w1).Align(lipgloss.Left).Render(" ~/Agents")
-	p2 := lipgloss.NewStyle().Width(w2).Align(lipgloss.Center).Render("local mode")
-	
+	modeText := "local mode"
+	if m.planMode {
+		modeText = lipgloss.NewStyle().Foreground(googleYellow).Render("plan mode")
+	}
+	p2 := lipgloss.NewStyle().Width(w2).Align(lipgloss.Center).Render(modeText)
+
 	cfg, err := sdk.LoadConfig()
 	activeModel := "auto"
 	if err == nil && cfg.Model != "" {
@@ -816,8 +835,8 @@ func (m model) View() string {
 	return lipgloss.JoinVertical(lipgloss.Left, boxedBody, statusView)
 }
 
-func launchInteractiveShell() error {
-	p := tea.NewProgram(initialModel(), tea.WithAltScreen())
+func launchInteractiveShell(planMode bool) error {
+	p := tea.NewProgram(initialModel(planMode), tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		return fmt.Errorf("could not start interactive shell: %w", err)
 	}

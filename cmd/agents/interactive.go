@@ -17,11 +17,16 @@ import (
 
 var (
 	// Brand Colors
-	primaryColor   = lipgloss.Color("#FF7F50") // Coral
+	googleBlue   = lipgloss.Color("#4285F4")
+	googleRed    = lipgloss.Color("#EA4335")
+	googleYellow = lipgloss.Color("#FBBC05")
+	googleGreen  = lipgloss.Color("#34A853")
+
+	primaryColor   = googleBlue
 	secondaryColor = lipgloss.Color("#4169E1") // Royal Blue
-	tipColor       = lipgloss.Color("#666666") 
-	agentColor     = lipgloss.Color("#00FA9A")
-	errorColor     = lipgloss.Color("#FF4500") // Orange Red
+	tipColor       = lipgloss.Color("#666666")
+	agentColor     = googleGreen
+	errorColor     = googleRed
 	borderColor    = lipgloss.Color("#333333")
 	statusBg       = lipgloss.Color("#1A1A1A")
 	statusFg       = lipgloss.Color("#888888")
@@ -32,7 +37,6 @@ var (
 			BorderForeground(borderColor)
 
 	logoStyle = lipgloss.NewStyle().
-			Foreground(primaryColor).
 			Bold(true)
 
 	welcomeBoxStyle = lipgloss.NewStyle().
@@ -47,11 +51,11 @@ var (
 			Padding(1, 2)
 
 	promptStyle = lipgloss.NewStyle().
-			Foreground(primaryColor).
+			Foreground(googleBlue).
 			Bold(true)
 
 	agentMsgStyle = lipgloss.NewStyle().
-			Foreground(agentColor).
+			Foreground(googleGreen).
 			Bold(true)
 
 	statusBarStyle = lipgloss.NewStyle().
@@ -65,14 +69,24 @@ var (
 			Height(1)
 )
 
-const splashLogo = `
- █████╗  ██████╗ ███████╗███╗   ██╗████████╗███████╗
-██╔══██╗██╔════╝ ██╔════╝████╗  ██║╚══██╔══╝██╔════╝
-███████║██║  ███╗█████╗  ██╔██╗ ██║   ██║   ███████╗
-██╔══██║██║   ██║██╔══╝  ██║╚██╗██║   ██║   ╚════██║
-██║  ██║╚██████╔╝███████╗██║ ╚████║   ██║   ███████║
-╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚═══╝   ╚═╝   ╚══════╝
-`
+func renderLogo() string {
+	c1 := lipgloss.NewStyle().Foreground(googleBlue).Bold(true)
+	c2 := lipgloss.NewStyle().Foreground(googleRed).Bold(true)
+	c3 := lipgloss.NewStyle().Foreground(googleYellow).Bold(true)
+	c4 := lipgloss.NewStyle().Foreground(googleBlue).Bold(true)
+	c5 := lipgloss.NewStyle().Foreground(googleGreen).Bold(true)
+	c6 := lipgloss.NewStyle().Foreground(googleRed).Bold(true)
+
+	return fmt.Sprintf("%s%s%s%s%s%s%s",
+		c1.Render("> "),
+		c1.Render("A"),
+		c2.Render("g"),
+		c3.Render("e"),
+		c4.Render("n"),
+		c5.Render("t"),
+		c6.Render("s"),
+	)
+}
 
 const initialTips = `Recent activity
 1m ago    Initialized project
@@ -145,7 +159,7 @@ func initialModel() model {
 	l.SetFilteringEnabled(true)
 
 	// Create a beautiful splash screen
-	leftBox := welcomeBoxStyle.Render(fmt.Sprintf("%s\n\nWelcome back, Developer!", logoStyle.Render(splashLogo)))
+	leftBox := welcomeBoxStyle.Render(fmt.Sprintf("%s\n\nWelcome back, Developer!", renderLogo()))
 	rightBox := infoBoxStyle.Render(initialTips)
 	welcomeScreen := lipgloss.JoinHorizontal(lipgloss.Top, leftBox, rightBox)
 

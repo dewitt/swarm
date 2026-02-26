@@ -1,13 +1,13 @@
 # Agents CLI
 
-A highly polished, world-class CLI and embeddable SDK for managing, building,
-and deploying AI agents via GitOps workflows.
+A clean CLI and embeddable SDK for managing, building, and deploying AI agents
+via GitOps workflows.
 
 ![Agents CLI Demo](docs/assets/demo.gif)
 
 ## Features
 
-- **World-Class TUI**: Persistent, interactive terminal sessions built on Bubble Tea, featuring rich text, async execution, client-side slash commands (`/help`, `/model list`, `/skills`), and multi-pane layouts.
+- **Terminal UI**: Persistent, interactive terminal sessions built on Bubble Tea, featuring rich text, async execution, client-side slash commands (`/help`, `/model list`, `/skills`), and multi-pane layouts.
 - **Dynamic Skills Architecture**: Completely decoupled capabilities adhering to the open `agentskills.io` standard (`SKILL.md`). Easily write, share, and dynamically load new skills without recompiling.
 - **Framework Agnostic**: Natively supports Google ADK, LangGraph, and custom architectures via `agent.yaml` manifests.
 - **GitOps First**: Includes a native GitOps Agent that scaffolds GitHub Actions CI/CD pipelines and pushes code directly from the CLI.

@@ -67,3 +67,10 @@ as the AI it commands.
 - The UI must be highly interactive, visually beautiful (rich text, colors,
   ephemeral spinners), and completely hide the mechanical complexity of the
   underlying LLM calls.
+
+## 6. Architectural Separation of Concerns
+
+We strictly enforce the boundary between the presentation layer and the underlying intelligence.
+
+- **UI vs. SDK:** The terminal UI (`cmd/agents/`) must remain a "dumb" client. It handles rendering, input capture, and local configuration logic, but it MUST NOT contain LLM prompting logic, system instructions, or tool implementations. All intelligence, session management, and orchestration belong exclusively in the embeddable `pkg/sdk/` backend.
+- **Modular Feature Partitioning:** New capabilities should be as self-contained as possible. Instead of creating monolithic "god classes," favor registering new, scoped tools, or building independent sub-agents that communicate via standard interfaces. 

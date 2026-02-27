@@ -437,6 +437,19 @@ func getUserName() string {
 	return "Developer"
 }
 
+func getAgentBadge(author string) string {
+	if author == "router_agent" || author == "agent" {
+		return lipgloss.NewStyle().Foreground(googleBlue).Render("❖ Router")
+	} else if author == "builder_agent" {
+		return lipgloss.NewStyle().Foreground(googleYellow).Render("⚒ Builder")
+	} else if author == "gitops_agent" {
+		return lipgloss.NewStyle().Foreground(googleRed).Render("🚀 GitOps")
+	} else if author == "codebase-investigator" || author == "codebase_investigator" {
+		return lipgloss.NewStyle().Foreground(googleGreen).Render("🔍 Investigator")
+	}
+	return lipgloss.NewStyle().Foreground(agentColor).Render("✦ " + author)
+}
+
 func getHistoryFile() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -808,13 +821,27 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// In the future this is where we'd stream text chunks.
 		// For now ADK mostly returns the whole block at the end.
-		out := msg.text
+		
+		text := msg.text
+		author := "agent"
+		
+		// Extract the [author] prefix if it exists
+		authorStart := strings.Index(text, "[")
+		authorEnd := strings.Index(text, "] ")
+		if authorStart == 0 && authorEnd > 0 {
+			author = text[1:authorEnd]
+			text = text[authorEnd+2:]
+		}
+
+		out := text
 		if m.renderer != nil {
-			if rOut, err := m.renderer.Render(msg.text); err == nil {
+			if rOut, err := m.renderer.Render(text); err == nil {
 				out = rOut
 			}
 		}
-		m.messages = append(m.messages, agentMsgStyle.Render("✦\n")+strings.TrimSpace(out))
+		
+		badge := getAgentBadge(author)
+		m.messages = append(m.messages, badge+"\n"+strings.TrimSpace(out))
 		m.updateViewport()
 		return m, listenForStream(msg.ch)
 

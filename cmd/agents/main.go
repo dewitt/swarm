@@ -12,6 +12,7 @@ import (
 
 var promptFlag string
 var planFlag bool
+var resumeFlag bool
 
 var configCmd = &cobra.Command{
 	Use:   "config",
@@ -75,7 +76,7 @@ When run without arguments, it launches a persistent, interactive terminal sessi
 		}
 
 		// Launch the interactive Bubble Tea shell
-		if err := launchInteractiveShell(planFlag); err != nil {
+		if err := launchInteractiveShell(planFlag, resumeFlag); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
@@ -85,6 +86,7 @@ When run without arguments, it launches a persistent, interactive terminal sessi
 func init() {
 	rootCmd.Flags().StringVarP(&promptFlag, "prompt", "p", "", "Run a single-shot prompt and exit")
 	rootCmd.Flags().BoolVar(&planFlag, "plan", false, "Start the agent in read-only plan mode")
+	rootCmd.Flags().BoolVar(&resumeFlag, "resume", false, "Resume the last interactive session")
 	rootCmd.AddCommand(configCmd)
 }
 

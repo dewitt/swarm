@@ -18,7 +18,7 @@ debt that should be addressed as the project evolves.
   global user preferences (like API keys or preferred text editor) to a
   generic `~/.config/agents/config.yaml` file.
 
-- [ ] **Advanced Session Management**: Implement the ability to persist,
+- [x] **Advanced Session Management**: Implement the ability to persist,
   suspend, and resume interactive TUI sessions. This includes the ability to
   `/rewind` the conversation history to undo mistakes or branch conversations.
 

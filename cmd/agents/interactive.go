@@ -493,7 +493,7 @@ func saveHistory(history []string) {
 	}
 }
 
-func initialModel(planMode bool) model {
+func initialModel(planMode bool, resume bool) model {
 	ta := textarea.New()
 	ta.Placeholder = "Type your message or /help (Alt+Enter or ^J for newline)"
 	ta.Focus()
@@ -555,7 +555,7 @@ func initialModel(planMode bool) model {
 		messages:    []string{welcomeScreen},
 		history:     loadedHist,
 		historyIdx:  len(loadedHist),
-		manager:     sdk.NewManager(),
+		manager:     sdk.NewManager(sdk.ManagerConfig{ResumeLastSession: resume}),
 		loading:     false,
 		quitting:    false,
 		planMode:    planMode,
@@ -821,10 +821,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// In the future this is where we'd stream text chunks.
 		// For now ADK mostly returns the whole block at the end.
-		
+
 		text := msg.text
 		author := "agent"
-		
+
 		// Extract the [author] prefix if it exists
 		authorStart := strings.Index(text, "[")
 		authorEnd := strings.Index(text, "] ")
@@ -839,7 +839,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				out = rOut
 			}
 		}
-		
+
 		badge := getAgentBadge(author)
 		m.messages = append(m.messages, badge+"\n"+strings.TrimSpace(out))
 		m.updateViewport()
@@ -1038,6 +1038,7 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 			"  /model list  Open an interactive list of all available models.",
 			"  /config      Prints the current global configuration.",
 			"  /remember    Saves a global preference (e.g. /remember I use tabs).",
+			"  /rewind [n]  Rewinds the conversation history by n turns (default 1).",
 			"  /plan        Enter read-only plan mode to brainstorm safely.",
 			"  /act         Exit plan mode and allow the agent to execute actions.",
 			"  ! [command]  Execute a shell command directly.",
@@ -1078,7 +1079,7 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 			}
 			return nil
 		}
-		
+
 		skills := m.manager.Skills()
 		if len(skills) == 0 {
 			m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"No dynamic skills are currently loaded.")
@@ -1139,6 +1140,17 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 		}
 		m.manager.Reset()
 		m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"Screen and conversation history cleared. Context window reset.")
+	case "/rewind":
+		n := 1
+		if len(parts) > 1 {
+			fmt.Sscanf(parts[1], "%d", &n)
+		}
+		if err := m.manager.Rewind(n); err != nil {
+			m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Render("Failed to rewind: "+err.Error()))
+		} else {
+			// Wipe the local messages to reflect the rewound state (or just append a notice)
+			m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+fmt.Sprintf("Rewound the conversation history by %d turn(s).", n))
+		}
 	case "/plan":
 		m.planMode = true
 		m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"Plan Mode enabled. I will only read files and brainstorm. I will not modify files or execute shell commands.")
@@ -1154,11 +1166,11 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 			lines = append(lines, lipgloss.NewStyle().Bold(true).Render("Global Configuration"))
 			lines = append(lines, "")
 			lines = append(lines, fmt.Sprintf("  - Active Model: %s", lipgloss.NewStyle().Foreground(primaryColor).Render(cfg.Model)))
-			
+
 			configPath, _ := sdk.DefaultConfigPath()
 			lines = append(lines, "")
 			lines = append(lines, fmt.Sprintf("Configuration stored at: %s", lipgloss.NewStyle().Foreground(lipgloss.Color("#888888")).Render(configPath)))
-			
+
 			icon := agentMsgStyle.Render("✦ ")
 			m.messages = append(m.messages, lipgloss.JoinHorizontal(lipgloss.Top, icon, lipgloss.JoinVertical(lipgloss.Left, lines...)))
 		}
@@ -1258,16 +1270,16 @@ func (m model) View() string {
 		var acView string
 		if m.acActive && len(m.acMatches) > 0 {
 			var lines []string
-			
+
 			// Account for borders (2), padding (2), and spacing (2) to calculate max width
 			maxMatchWidth := m.width - 6
-			
+
 			for i, match := range m.acMatches {
 				displayMatch := strings.ReplaceAll(match, "\n", " ")
 				if len(displayMatch) > maxMatchWidth && maxMatchWidth > 3 {
 					displayMatch = displayMatch[:maxMatchWidth-3] + "..."
 				}
-				
+
 				if i == m.acIndex {
 					lines = append(lines, lipgloss.NewStyle().Background(borderColor).Render(" "+displayMatch+" "))
 				} else {
@@ -1339,8 +1351,8 @@ func (m model) View() string {
 	return lipgloss.JoinVertical(lipgloss.Left, boxedBody, statusView)
 }
 
-func launchInteractiveShell(planMode bool) error {
-	p := tea.NewProgram(initialModel(planMode), tea.WithAltScreen())
+func launchInteractiveShell(planMode bool, resume bool) error {
+	p := tea.NewProgram(initialModel(planMode, resume), tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		return fmt.Errorf("could not start interactive shell: %w", err)
 	}

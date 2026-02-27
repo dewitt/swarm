@@ -168,6 +168,8 @@ type AgentManager interface {
 	Reset()
 	// Reload dynamically reloads skills, configuration, and agent prompts without losing session state.
 	Reload() error
+	// Rewind removes the last n turns from the conversation history.
+	Rewind(n int) error
 	// Skills returns a list of all dynamically loaded skills in the workspace.
 	Skills() []*Skill
 	// ListModels returns a list of available AI models from the provider.
@@ -211,6 +213,8 @@ type defaultManager struct {
 type ManagerConfig struct {
 	// Model overrides the default Gemini model. Useful for testing.
 	Model model.LLM
+	// ResumeLastSession instructs the manager to load the most recently updated session.
+	ResumeLastSession bool
 }
 
 // NewManager creates a new instance of the core SDK AgentManager.
@@ -334,9 +338,31 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 		log.Fatalf("Failed to auto-migrate database: %v", err)
 	}
 
-	// Use a fixed session ID for the initial REPL, allowing history to persist across reboots.
-	// /clear will generate a new session ID to drop context.
-	sessionID := "default_interactive_session"
+	sessionID := ""
+	if len(cfg) > 0 && cfg[0].ResumeLastSession {
+		resp, err := sessionSvc.List(ctx, &session.ListRequest{
+			AppName: "agents-cli",
+			UserID:  "local_user",
+		})
+		if err == nil && len(resp.Sessions) > 0 {
+			// Find the most recently updated session
+			var lastSession session.Session
+			var lastTime int64
+			for _, s := range resp.Sessions {
+				if s.LastUpdateTime().UnixNano() > lastTime {
+					lastTime = s.LastUpdateTime().UnixNano()
+					lastSession = s
+				}
+			}
+			if lastSession != nil {
+				sessionID = lastSession.ID()
+			}
+		}
+	}
+
+	if sessionID == "" {
+		sessionID = fmt.Sprintf("session_%d", rand.Int63())
+	}
 
 	// Create the session record if it doesn't already exist
 	_, _ = sessionSvc.Create(ctx, &session.CreateRequest{
@@ -629,4 +655,44 @@ func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan string
 	}()
 
 	return out, nil
+}
+
+func (m *defaultManager) Rewind(n int) error {
+	if n <= 0 {
+		return nil
+	}
+
+	home, _ := os.UserHomeDir()
+	dbPath := filepath.Join(home, ".config", "agents", "sessions.db")
+	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to open database: %w", err)
+	}
+
+	// Find the Nth most recent user event for this session
+	var events []struct {
+		Timestamp string
+	}
+
+	err = db.Table("events").
+		Select("timestamp").
+		Where("session_id = ? AND author = ?", m.sessionID, "user").
+		Order("timestamp DESC").
+		Limit(n).
+		Find(&events).Error
+
+	if err != nil {
+		return fmt.Errorf("database error: %w", err)
+	}
+
+	if len(events) < n {
+		// Not enough user events, just delete all events for this session
+		return db.Table("events").Where("session_id = ?", m.sessionID).Delete(nil).Error
+	}
+
+	// Delete all events >= the timestamp of the Nth user event
+	targetTime := events[len(events)-1].Timestamp
+	return db.Table("events").Where("session_id = ? AND timestamp >= ?", m.sessionID, targetTime).Delete(nil).Error
 }

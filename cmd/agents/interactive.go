@@ -1203,7 +1203,7 @@ func (m model) View() string {
 			maxMatchWidth := m.width - 6
 			
 			for i, match := range m.acMatches {
-				displayMatch := match
+				displayMatch := strings.ReplaceAll(match, "\n", " ")
 				if len(displayMatch) > maxMatchWidth && maxMatchWidth > 3 {
 					displayMatch = displayMatch[:maxMatchWidth-3] + "..."
 				}

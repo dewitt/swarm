@@ -211,31 +211,34 @@ type ManagerConfig struct {
 func NewManager(cfg ...ManagerConfig) AgentManager {
 	ctx := context.Background()
 
-	var m model.LLM
+	var flashModel model.LLM
+	var proModel model.LLM
 	clientConfig := &genai.ClientConfig{}
 
 	if len(cfg) > 0 && cfg[0].Model != nil {
-		m = cfg[0].Model
+		flashModel = cfg[0].Model
+		proModel = cfg[0].Model
 	} else {
 		apiKey := os.Getenv("GOOGLE_API_KEY")
-
-		// We create the model using the API key. If it's empty, the client might fail later
-		// but we allow it to initialize so the UI can launch.
 		if apiKey != "" {
 			clientConfig.APIKey = apiKey
 		}
 
-		// Load the user's global config to determine which model to use
-		userCfg, _ := LoadConfig() // Ignore error, it falls back to flash safely
-		modelName := "gemini-3.1-pro-preview"
+		// Load user preferences for the 'pro' model
+		userCfg, _ := LoadConfig()
+		proModelName := "gemini-3.1-pro-preview"
 		if userCfg != nil && userCfg.Model != "" && userCfg.Model != "auto" {
-			modelName = userCfg.Model
+			proModelName = userCfg.Model
 		}
 
 		var err error
-		m, err = gemini.NewModel(ctx, modelName, clientConfig)
+		flashModel, err = gemini.NewModel(ctx, "gemini-2.5-flash", clientConfig)
 		if err != nil {
-			log.Fatalf("Failed to create model: %v", err)
+			log.Fatalf("Failed to create flash model: %v", err)
+		}
+		proModel, err = gemini.NewModel(ctx, proModelName, clientConfig)
+		if err != nil {
+			log.Fatalf("Failed to create pro model: %v", err)
 		}
 	}
 
@@ -344,9 +347,16 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 			}
 		}
 
+		// Choose the model for the skill sub-agent. Default to the thorough 'proModel'
+		// unless the skill explicitly requests 'flash'.
+		targetModel := proModel
+		if skill.Manifest.Model == "flash" {
+			targetModel = flashModel
+		}
+
 		skillAgent, err := llmagent.New(llmagent.Config{
 			Name:        skill.Manifest.Name,
-			Model:       m,
+			Model:       targetModel,
 			Description: skill.Manifest.Description,
 			Instruction: skill.Instructions,
 			Tools:       skillTools,
@@ -358,7 +368,7 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 	}
 
 	// 3. Create the Router Agent
-	routerInstruction := "You are the primary Router Agent for the Agents CLI. Help the user build, test, and deploy AI agents. Keep your answers brief, professional, and use markdown formatting. Use the list_local_files, read_local_file, and grep_search tools if you need to investigate the workspace. If file contents are provided in the prompt (e.g., via @filename references), use that information to satisfy the user's request. Transfer to sub-agents (like builder_agent or gitops_agent) based on the user's intent."
+	routerInstruction := "You are the primary Router Agent for the Agents CLI. Help the user build, test, and deploy AI agents. Keep your answers brief, professional, and use markdown formatting. Use the list_local_files, read_local_file, and grep_search tools if you need to investigate the workspace. If file contents are provided in the prompt (e.g., via @filename references), use that information to satisfy the user's request. You MUST transfer control to specialized sub-agents (like builder_agent, codebase-investigator, or gitops_agent) for any substantial technical work, file modifications, or complex investigations."
 
 	// Load global memory
 	if memory, err := LoadMemory(); err == nil && memory != "" {
@@ -374,7 +384,7 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 
 	routerAgent, err := llmagent.New(llmagent.Config{
 		Name:        "router_agent",
-		Model:       m,
+		Model:       flashModel, // Router is always fast
 		Instruction: routerInstruction,
 		Tools:       []tool.Tool{listTool, readTool, grepTool},
 		SubAgents:   subAgents,
@@ -547,18 +557,21 @@ func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan string
 		if os.Getenv("AGENTS_DRY_RUN") == "true" {
 			// Provide fast, deterministic mock responses for vhs tape recordings
 			if strings.Contains(strings.ToLower(prompt), "build") {
-				out <- "I have scaffolded a Python ADK agent for you. I created `agent.yaml`, `requirements.txt`, and `agent.py`."
+				out <- "[AGENT_HANDOFF] builder_agent"
+				out <- "[builder_agent] I have scaffolded a Python ADK agent for you. I created `agent.yaml`, `requirements.txt`, and `agent.py`."
 				return
 			}
 			if strings.Contains(strings.ToLower(prompt), "test") {
-				out <- "I successfully executed `pip install -r requirements.txt` and `python agent.py` using my bash tool. All tests passed!"
+				out <- "[TOOL_CALL] bash_execute"
+				out <- "[router_agent] I successfully executed `pip install -r requirements.txt` and `python agent.py` using my bash tool. All tests passed!"
 				return
 			}
 			if strings.Contains(strings.ToLower(prompt), "deploy") {
-				out <- "I have generated `.github/workflows/deploy-agent-engine.yml` and pushed it to `main`. Your agent is deploying to Google Agent Engine."
+				out <- "[AGENT_HANDOFF] gitops_agent"
+				out <- "[gitops_agent] I have generated `.github/workflows/deploy-agent-engine.yml` and pushed it to `main`. Your agent is deploying to Google Agent Engine."
 				return
 			}
-			out <- "This is a deterministic dry-run response."
+			out <- "[router_agent] This is a deterministic dry-run response."
 			return
 		}
 
@@ -568,6 +581,10 @@ func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan string
 			if err != nil {
 				out <- fmt.Sprintf("Error: %v", err)
 				return
+			}
+
+			if event.Actions.TransferToAgent != "" {
+				out <- fmt.Sprintf("[AGENT_HANDOFF] %s", event.Actions.TransferToAgent)
 			}
 
 			if event.Content != nil {
@@ -583,6 +600,14 @@ func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan string
 			// Once we implement true streaming in the CLI, we can send partial chunks.
 			if !event.Partial && event.IsFinalResponse() {
 				var fullResponse strings.Builder
+				
+				// Prefix with the author name if it's not the default router
+				author := event.Author
+				if author == "" {
+					author = "agent"
+				}
+				fullResponse.WriteString(fmt.Sprintf("[%s] ", author))
+
 				if event.Content != nil {
 					for _, part := range event.Content.Parts {
 						if part.Text != "" {

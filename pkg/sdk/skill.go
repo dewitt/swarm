@@ -14,6 +14,7 @@ type SkillManifest struct {
 	Name        string   `yaml:"name"`
 	Description string   `yaml:"description"`
 	Tools       []string `yaml:"tools"`
+	Model       string   `yaml:"model"` // Optional: "flash" or "pro"
 }
 
 // Skill represents a dynamically loaded set of capabilities following the open agentskills.io standard.

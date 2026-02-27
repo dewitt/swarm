@@ -291,7 +291,7 @@ type model struct {
 	activeModel string
 	renderer    *glamour.TermRenderer
 
-	toolStatus string
+	statusMsg string
 
 	// Autocomplete state
 	workspaceFiles []string
@@ -797,7 +797,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case streamMsg:
 		if strings.HasPrefix(msg.text, "[TOOL_CALL] ") {
-			m.toolStatus = strings.TrimPrefix(msg.text, "[TOOL_CALL] ")
+			m.statusMsg = "Running " + strings.TrimPrefix(msg.text, "[TOOL_CALL] ") + "..."
+			m.updateViewport()
+			return m, listenForStream(msg.ch)
+		}
+		if strings.HasPrefix(msg.text, "[AGENT_HANDOFF] ") {
+			m.statusMsg = "Handoff to " + strings.TrimPrefix(msg.text, "[AGENT_HANDOFF] ") + "..."
 			m.updateViewport()
 			return m, listenForStream(msg.ch)
 		}
@@ -815,13 +820,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case streamDoneMsg:
 		m.loading = false
-		m.toolStatus = ""
+		m.statusMsg = ""
 		m.updateViewport()
 		return m, nil
 
 	case streamErrMsg:
 		m.loading = false
-		m.toolStatus = ""
+		m.statusMsg = ""
 		m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Render("Error: "+msg.err.Error()))
 		m.updateViewport()
 		return m, nil
@@ -1170,8 +1175,8 @@ func (m *model) updateViewport() {
 	}
 	if m.loading {
 		status := "Thinking..."
-		if m.toolStatus != "" {
-			status = "Running " + m.toolStatus + "..."
+		if m.statusMsg != "" {
+			status = m.statusMsg
 		}
 		s.WriteString(agentMsgStyle.Render("✦ ") + m.spinner.View() + " " + status)
 		s.WriteString("\n\n")

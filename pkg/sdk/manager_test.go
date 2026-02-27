@@ -50,7 +50,8 @@ func TestNewManager(t *testing.T) {
 	}
 
 	response := <-ch
-	if response != "Hello from the mock agent!" {
-		t.Fatalf("expected response 'Hello from the mock agent!', got '%s'", response)
+	expected := "[router_agent] Hello from the mock agent!"
+	if response != expected {
+		t.Fatalf("expected response '%s', got '%s'", expected, response)
 	}
 }

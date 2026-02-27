@@ -14,14 +14,16 @@ design, ensuring the tool remains user-centric, frictionless, and powerful.
 1. **[Swarm Collaboration on System Design](./03-swarm-design-collaboration.md)**
    - **Focus:** Native multi-agent orchestration, specialized roles, and
      transparent collaboration.
+1. **[Autonomous Swarm-based Skill Refinement](./04-swarm-skill-refinement.md)**
+   - **Focus:** Self-updating skills, deep web research, human-in-the-loop
+     validation, and GitOps branching strategies.
 
 ______________________________________________________________________
 
 ## Brainstorming: Future CUJs
 
-To ensure the CLI remains competitive with advanced tools like Gemini
-CLI, Claude Code, or Codex, we should explore the following user
-journeys:
+To ensure the CLI remains competitive with advanced tools like Gemini CLI,
+Claude Code, or Codex, we should explore the following user journeys:
 
 ### 4. Cross-Repository API Refactoring
 

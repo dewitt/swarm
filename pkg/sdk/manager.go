@@ -145,6 +145,11 @@ func writeLocalFile(ctx tool.Context, args WriteFileArgs) (WriteFileResult, erro
 //
 // By keeping this in the sdk package, we ensure the business logic 
 // can be compiled via cgo/wasm and consumed by clients other than our CLI.
+type SessionInfo struct {
+	ID        string
+	UpdatedAt string
+}
+
 type AgentManager interface {
 	// Discover checks the current directory for an agent.yaml manifest.
 	Discover(ctx context.Context, dir string) (*AgentManifest, error)
@@ -158,6 +163,8 @@ type AgentManager interface {
 	Skills() []*Skill
 	// ListModels returns a list of available AI models from the provider.
 	ListModels(ctx context.Context) ([]ModelInfo, error)
+	// ListSessions returns metadata about the persisted chat sessions.
+	ListSessions(ctx context.Context) ([]SessionInfo, error)
 }
 // ModelInfo contains metadata about an available AI model.
 type ModelInfo struct {
@@ -178,6 +185,7 @@ type AgentManifest struct {
 // defaultManager is the internal implementation of AgentManager.
 type defaultManager struct {
 	run       *runner.Runner
+	sessionSvc session.Service
 	userID    string
 	sessionID string
 	skills    []*Skill
@@ -403,11 +411,12 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 	}
 
 	return &defaultManager{
-		run:       r,
-		userID:    "local_user",
-		sessionID: sessionID,
-		skills:    loadedSkills,
-		clientCfg: clientConfig,
+		run:        r,
+		sessionSvc: sessionSvc,
+		userID:     "local_user",
+		sessionID:  sessionID,
+		skills:     loadedSkills,
+		clientCfg:  clientConfig,
 	}
 }
 
@@ -447,6 +456,25 @@ func (m *defaultManager) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	}
 	return models, nil
 }
+func (m *defaultManager) ListSessions(ctx context.Context) ([]SessionInfo, error) {
+	resp, err := m.sessionSvc.List(ctx, &session.ListRequest{
+		AppName: "agents-cli",
+		UserID:  m.userID,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	var infos []SessionInfo
+	for _, s := range resp.Sessions {
+		infos = append(infos, SessionInfo{
+			ID:        s.ID(),
+			UpdatedAt: s.LastUpdateTime().Format("2006-01-02 15:04:05"),
+		})
+	}
+	return infos, nil
+}
+
 func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan string, error) {
 	out := make(chan string)
 

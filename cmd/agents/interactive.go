@@ -670,6 +670,7 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 			"  /context     Displays the current files and metadata loaded in memory.",
 			"  /drop [file] Removes a specific file from the active context window.",
 			"  /skills      Lists dynamically loaded agent skills.",
+			"  /sessions    Lists all persisted interactive sessions in the SQLite database.",
 			"  /model       Set the active LLM provider (e.g. /model auto).",
 			"  /model list  Open an interactive list of all available models.",
 			"  /remember    Saves a global preference (e.g. /remember I use tabs).",
@@ -681,6 +682,29 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 
 		icon := agentMsgStyle.Render("✦ ")
 		m.messages = append(m.messages, lipgloss.JoinHorizontal(lipgloss.Top, icon, helpText))
+	case "/sessions":
+		sessions, err := m.manager.ListSessions(context.Background())
+		if err != nil {
+			m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Render("Failed to list sessions: "+err.Error()))
+			return nil
+		}
+		if len(sessions) == 0 {
+			m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"No sessions found in the database.")
+			return nil
+		}
+
+		var lines []string
+		lines = append(lines, lipgloss.NewStyle().Bold(true).Render(fmt.Sprintf("Stored Sessions (%d)", len(sessions))))
+		lines = append(lines, "")
+
+		for _, s := range sessions {
+			id := lipgloss.NewStyle().Foreground(primaryColor).Render(s.ID)
+			content := fmt.Sprintf("- %s (Last Updated: %s)", id, s.UpdatedAt)
+			lines = append(lines, content)
+		}
+
+		icon := agentMsgStyle.Render("✦ ")
+		m.messages = append(m.messages, lipgloss.JoinHorizontal(lipgloss.Top, icon, lipgloss.JoinVertical(lipgloss.Left, lines...)))
 	case "/skills":
 		skills := m.manager.Skills()
 		if len(skills) == 0 {
@@ -780,6 +804,7 @@ func autocompleteCommand(input string) string {
 		"/context",
 		"/drop",
 		"/skills",
+		"/sessions",
 		"/model",
 		"/model list",
 		"/remember",

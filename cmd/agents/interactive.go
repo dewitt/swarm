@@ -1198,11 +1198,20 @@ func (m model) View() string {
 		var acView string
 		if m.acActive && len(m.acMatches) > 0 {
 			var lines []string
+			
+			// Account for borders (2), padding (2), and spacing (2) to calculate max width
+			maxMatchWidth := m.width - 6
+			
 			for i, match := range m.acMatches {
+				displayMatch := match
+				if len(displayMatch) > maxMatchWidth && maxMatchWidth > 3 {
+					displayMatch = displayMatch[:maxMatchWidth-3] + "..."
+				}
+				
 				if i == m.acIndex {
-					lines = append(lines, lipgloss.NewStyle().Background(borderColor).Render(" "+match+" "))
+					lines = append(lines, lipgloss.NewStyle().Background(borderColor).Render(" "+displayMatch+" "))
 				} else {
-					lines = append(lines, lipgloss.NewStyle().Render(" "+match+" "))
+					lines = append(lines, lipgloss.NewStyle().Render(" "+displayMatch+" "))
 				}
 			}
 			if m.acHasMore {

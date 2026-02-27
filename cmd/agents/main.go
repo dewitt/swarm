@@ -13,6 +13,26 @@ import (
 var promptFlag string
 var planFlag bool
 
+var configCmd = &cobra.Command{
+	Use:   "config",
+	Short: "Prints the current global configuration",
+	Run: func(cmd *cobra.Command, args []string) {
+		cfg, err := sdk.LoadConfig()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error loading configuration: %v\n", err)
+			os.Exit(1)
+		}
+		
+		fmt.Println("Global Configuration:")
+		fmt.Printf("  Model: %s\n", cfg.Model)
+		
+		path, err := sdk.DefaultConfigPath()
+		if err == nil {
+			fmt.Printf("\nStored at: %s\n", path)
+		}
+	},
+}
+
 var rootCmd = &cobra.Command{
 	Use:   "agents",
 	Short: "A sophisticated CLI for managing, building, and deploying AI agents.",
@@ -65,6 +85,7 @@ When run without arguments, it launches a persistent, interactive terminal sessi
 func init() {
 	rootCmd.Flags().StringVarP(&promptFlag, "prompt", "p", "", "Run a single-shot prompt and exit")
 	rootCmd.Flags().BoolVar(&planFlag, "plan", false, "Start the agent in read-only plan mode")
+	rootCmd.AddCommand(configCmd)
 }
 
 func main() {

@@ -14,7 +14,7 @@ debt that should be addressed as the project evolves.
 
 ## Feature Backlog
 
-- [ ] **Global Configuration**: Implement the `agents config` command to save
+- [x] **Global Configuration**: Implement the `agents config` command to save
   global user preferences (like API keys or preferred text editor) to a
   generic `~/.config/agents/config.yaml` file.
 

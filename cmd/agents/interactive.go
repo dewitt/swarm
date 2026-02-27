@@ -1035,6 +1035,7 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 			"  /sessions    Lists all persisted interactive sessions in the SQLite database.",
 			"  /model       Set the active LLM provider (e.g. /model auto).",
 			"  /model list  Open an interactive list of all available models.",
+			"  /config      Prints the current global configuration.",
 			"  /remember    Saves a global preference (e.g. /remember I use tabs).",
 			"  /plan        Enter read-only plan mode to brainstorm safely.",
 			"  /act         Exit plan mode and allow the agent to execute actions.",
@@ -1134,6 +1135,23 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 	case "/act":
 		m.planMode = false
 		m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"Act Mode enabled. I am fully capable of writing files and executing commands.")
+	case "/config":
+		cfg, err := sdk.LoadConfig()
+		if err != nil {
+			m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Render("Failed to load config: "+err.Error()))
+		} else {
+			var lines []string
+			lines = append(lines, lipgloss.NewStyle().Bold(true).Render("Global Configuration"))
+			lines = append(lines, "")
+			lines = append(lines, fmt.Sprintf("  - Active Model: %s", lipgloss.NewStyle().Foreground(primaryColor).Render(cfg.Model)))
+			
+			configPath, _ := sdk.DefaultConfigPath()
+			lines = append(lines, "")
+			lines = append(lines, fmt.Sprintf("Configuration stored at: %s", lipgloss.NewStyle().Foreground(lipgloss.Color("#888888")).Render(configPath)))
+			
+			icon := agentMsgStyle.Render("✦ ")
+			m.messages = append(m.messages, lipgloss.JoinHorizontal(lipgloss.Top, icon, lipgloss.JoinVertical(lipgloss.Left, lines...)))
+		}
 	case "/context":
 		if len(parts) == 1 {
 			// List context

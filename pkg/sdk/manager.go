@@ -17,9 +17,11 @@ import (
 	"google.golang.org/adk/model/gemini"
 	"google.golang.org/adk/runner"
 	"google.golang.org/adk/session"
+	"google.golang.org/adk/session/database"
 	"google.golang.org/adk/tool"
 	"google.golang.org/adk/tool/functiontool"
 	"google.golang.org/genai"
+	"gorm.io/driver/sqlite"
 )
 
 type ListFilesArgs struct {
@@ -364,15 +366,32 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 		log.Fatalf("Failed to create agent: %v", err)
 	}
 
-	sessionSvc := session.InMemoryService()
-	_, err = sessionSvc.Create(ctx, &session.CreateRequest{
+	// Use persistent SQLite database for sessions
+	home, _ := os.UserHomeDir()
+	dbDir := filepath.Join(home, ".config", "agents")
+	os.MkdirAll(dbDir, 0755)
+	dbPath := filepath.Join(dbDir, "sessions.db")
+
+	sessionSvc, err := database.NewSessionService(sqlite.Open(dbPath))
+	if err != nil {
+		log.Fatalf("Failed to initialize database session service: %v", err)
+	}
+
+	// Ensure the database schema is up-to-date
+	if err := database.AutoMigrate(sessionSvc); err != nil {
+		log.Fatalf("Failed to auto-migrate database: %v", err)
+	}
+
+	// Use a fixed session ID for the initial REPL, allowing history to persist across reboots.
+	// /clear will generate a new session ID to drop context.
+	sessionID := "default_interactive_session"
+	
+	// Create the session record if it doesn't already exist
+	_, _ = sessionSvc.Create(ctx, &session.CreateRequest{
 		AppName:   "agents-cli",
 		UserID:    "local_user",
-		SessionID: "local_session",
+		SessionID: sessionID,
 	})
-	if err != nil {
-		log.Fatalf("Failed to create session: %v", err)
-	}
 
 	r, err := runner.New(runner.Config{
 		AppName:        "agents-cli",
@@ -386,7 +405,7 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 	return &defaultManager{
 		run:       r,
 		userID:    "local_user",
-		sessionID: "local_session",
+		sessionID: sessionID,
 		skills:    loadedSkills,
 		clientCfg: clientConfig,
 	}

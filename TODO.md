@@ -10,3 +10,6 @@ This document tracks recurring tasks, pending migrations, and known technical de
 
 - [ ] **Context Management**: Implement the backend logic for the `/context` and `/drop` slash commands to allow users to manually load and evict files from the agent's memory window.
 - [ ] **Global Configuration**: Implement the `agents config` command to save global user preferences (like API keys or preferred text editor) to a generic `~/.config/agents/config.yaml` file.
+
+- [ ] **Advanced Session Management**: Implement the ability to persist, suspend, and resume interactive TUI sessions. This includes the ability to `/rewind` the conversation history to undo mistakes or branch conversations.
+- [ ] **Third-Party Tool Orchestration**: Develop Skills/Sub-agents that wrap external AI CLIs (e.g., `gemini-cli`, `claude-code`) via `bash_execute` so the Agents CLI can act as a master orchestrator for other complex systems.

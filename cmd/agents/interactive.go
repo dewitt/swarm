@@ -2,10 +2,12 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"os/user"
+	"path/filepath"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/list"
@@ -113,8 +115,8 @@ func renderLogo() string {
 		" ██╔╝  ",
 		"██╔╝   ",
 		"╚═╝    ",
-  	"       ",
-  	"       ",
+		"       ",
+		"       ",
 	}, sMainGt, sShadow)
 
 	a := colorize([]string{
@@ -124,7 +126,7 @@ func renderLogo() string {
 		"██╔══██║ ",
 		"██║  ██║ ",
 		"╚═╝  ╚═╝ ",
-  	"         ",
+		"         ",
 		"         ",
 	}, sMainA, sShadow)
 
@@ -137,7 +139,7 @@ func renderLogo() string {
 		"╚██████║",
 		"     ██║",
 		" █████╔╝",
-  	" ╚════╝",
+		" ╚════╝",
 	}, sMainG, sShadow)
 
 	// Lowercase e
@@ -149,7 +151,7 @@ func renderLogo() string {
 		"██╔════╝",
 		"╚██████╗",
 		" ╚═════╝",
-  	"        ",
+		"        ",
 	}, sMainE, sShadow)
 
 	// Lowercase n
@@ -161,7 +163,7 @@ func renderLogo() string {
 		"██║  ██║",
 		"╚═╝  ╚═╝",
 		"        ",
-		"        ",					
+		"        ",
 	}, sMainN, sShadow)
 
 	// Lowercase t
@@ -173,7 +175,7 @@ func renderLogo() string {
 		"  ██║  ",
 		"  ╚═╝  ",
 		"       ",
-  	"       ",
+		"       ",
 	}, sMainT, sShadow)
 
 	// Lowercase s
@@ -259,17 +261,17 @@ func getWorkspaceFiles() []string {
 }
 
 type model struct {
-	textArea   textarea.Model
-	viewport   viewport.Model
-	spinner    spinner.Model
-	listModel  list.Model
-	messages   []string
-	history    []string
-	historyIdx int
-	manager    sdk.AgentManager
-	err        error
-	width      int
-	height     int
+	textArea    textarea.Model
+	viewport    viewport.Model
+	spinner     spinner.Model
+	listModel   list.Model
+	messages    []string
+	history     []string
+	historyIdx  int
+	manager     sdk.AgentManager
+	err         error
+	width       int
+	height      int
 	loading     bool
 	quitting    bool
 	planMode    bool
@@ -277,7 +279,7 @@ type model struct {
 	cwd         string
 	activeModel string
 	renderer    *glamour.TermRenderer
-	
+
 	// Autocomplete state
 	workspaceFiles []string
 	acMatches      []string
@@ -290,7 +292,7 @@ func updateAutocomplete(m *model) {
 		m.workspaceFiles = getWorkspaceFiles()
 	}
 	val := m.textArea.Value()
-	
+
 	// find the last word
 	lastSpace := strings.LastIndexAny(val, " \n")
 	var lastWord string
@@ -346,6 +348,49 @@ func getUserName() string {
 	return "Developer"
 }
 
+func getHistoryFile() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(home, ".config", "agents", "history.json")
+}
+
+func loadHistory() []string {
+	file := getHistoryFile()
+	if file == "" {
+		return []string{}
+	}
+	b, err := os.ReadFile(file)
+	if err != nil {
+		return []string{}
+	}
+	var history []string
+	if err := json.Unmarshal(b, &history); err != nil {
+		return []string{}
+	}
+	return history
+}
+
+func saveHistory(history []string) {
+	file := getHistoryFile()
+	if file == "" {
+		return
+	}
+	dir := filepath.Dir(file)
+	os.MkdirAll(dir, 0755)
+
+	// Keep only the last 1000 items to prevent the file from growing indefinitely
+	if len(history) > 1000 {
+		history = history[len(history)-1000:]
+	}
+
+	b, err := json.MarshalIndent(history, "", "  ")
+	if err == nil {
+		os.WriteFile(file, b, 0644)
+	}
+}
+
 func initialModel(planMode bool) model {
 	ta := textarea.New()
 	ta.Placeholder = "Type your message or /help (Alt+Enter or ^J for newline)"
@@ -398,14 +443,16 @@ func initialModel(planMode bool) model {
 		glamour.WithWordWrap(0), // Will be updated on WindowSizeMsg
 	)
 
+	loadedHist := loadHistory()
+
 	return model{
 		textArea:    ta,
 		viewport:    vp,
 		spinner:     s,
 		listModel:   l,
 		messages:    []string{welcomeScreen},
-		history:     []string{},
-		historyIdx:  0,
+		history:     loadedHist,
+		historyIdx:  len(loadedHist),
 		manager:     sdk.NewManager(),
 		loading:     false,
 		quitting:    false,
@@ -483,10 +530,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.updateViewport()
 				return m, tea.ClearScreen
 			}
-			
+
 			var listCmd tea.Cmd
 			m.listModel, listCmd = m.listModel.Update(msg)
-			
+
 			// Intercept the quit command that the list component returns on 'q' or 'ctrl+c'
 			if listCmd != nil {
 				// If the list tells us to quit, just return to the chat state instead of exiting the app.
@@ -553,6 +600,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 				if len(m.history) == 0 || m.history[len(m.history)-1] != input {
 					m.history = append(m.history, input)
+					saveHistory(m.history)
 				}
 				m.historyIdx = len(m.history)
 
@@ -666,7 +714,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.updateViewport()
 			return m, tea.ClearScreen
 		}
-		
+
 		var items []list.Item
 		items = append(items, item{name: "auto", description: "Automatically select the best model"}) // Add auto as default top choice
 		for _, mInfo := range msg.models {
@@ -694,7 +742,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height - 3
 
 		m.textArea.SetWidth(m.width - 4)
-		
+
 		// Viewport height: Inner box minus input height and borders
 		m.viewport.Width = m.width - 4
 		m.viewport.Height = m.height - m.textArea.Height() - 2
@@ -719,7 +767,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	m.textArea, tiCmd = m.textArea.Update(msg)
 	cmds = append(cmds, tiCmd)
-	
+
 	if m.state == stateChat {
 		updateAutocomplete(&m)
 	}
@@ -871,16 +919,16 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 			m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"Usage: /model <name> OR /model list\nCurrent mode is: auto")
 			return nil
 		}
-		
+
 		if parts[1] == "list" {
 			m.state = stateModelList
 			m.loading = true
 			return tea.Batch(m.fetchModels(), m.spinner.Tick)
 		}
-		
+
 		newModelName := parts[1]
-		
-		// In a real CLI, we would want to reload the AgentManager here, 
+
+		// In a real CLI, we would want to reload the AgentManager here,
 		// but since BubbleTea is running, we just persist the preference for the next run.
 		cfg, err := sdk.LoadConfig()
 		if err == nil {
@@ -915,7 +963,7 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 				m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"No files are currently pinned to the context window.")
 				return nil
 			}
-			
+
 			var lines []string
 			lines = append(lines, lipgloss.NewStyle().Bold(true).Render(fmt.Sprintf("Pinned Context Files (%d)", len(files))))
 			lines = append(lines, "")
@@ -1043,7 +1091,7 @@ func (m model) View() string {
 
 		// 2. Input
 		inputView := inputBoxStyle.Render(m.textArea.View())
-		
+
 		if acView != "" {
 			// Adjust viewport height to account for autocomplete overlay
 			acHeight := lipgloss.Height(acView)
@@ -1061,7 +1109,7 @@ func (m model) View() string {
 	w1 := m.width / 3
 	w2 := m.width / 3
 	w3 := m.width - w1 - w2
-	
+
 	baseStyle := statusBarStyle.Copy()
 
 	p1Style := baseStyle.Copy().Width(w1).Align(lipgloss.Left)
@@ -1082,7 +1130,7 @@ func (m model) View() string {
 
 	p3 := p3Style.Render(m.activeModel + " ")
 
-	statusView := lipgloss.JoinHorizontal(lipgloss.Top, p1, p2, p3)	
+	statusView := lipgloss.JoinHorizontal(lipgloss.Top, p1, p2, p3)
 	// Apply Outer Border to main body
 	boxedBody := appStyle.Width(m.width).Height(m.height).Render(mainBody)
 

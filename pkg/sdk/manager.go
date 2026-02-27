@@ -22,6 +22,8 @@ import (
 	"google.golang.org/adk/tool/functiontool"
 	"google.golang.org/genai"
 	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 type ListFilesArgs struct {
@@ -380,7 +382,9 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 	os.MkdirAll(dbDir, 0755)
 	dbPath := filepath.Join(dbDir, "sessions.db")
 
-	sessionSvc, err := database.NewSessionService(sqlite.Open(dbPath))
+	sessionSvc, err := database.NewSessionService(sqlite.Open(dbPath), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
 	if err != nil {
 		log.Fatalf("Failed to initialize database session service: %v", err)
 	}

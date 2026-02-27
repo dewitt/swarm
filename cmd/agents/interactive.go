@@ -1292,7 +1292,16 @@ func (m model) View() string {
 	}
 	p2 := p2Style.Render(modeText)
 
-	p3 := p3Style.Render(m.activeModel + " ")
+	ctxCount := 0
+	if m.manager != nil {
+		ctxCount = len(m.manager.ListContext())
+	}
+	ctxStr := ""
+	if ctxCount > 0 {
+		ctxStr = fmt.Sprintf(" [%d pinned] ", ctxCount)
+	}
+
+	p3 := p3Style.Render(ctxStr + m.activeModel + " ")
 
 	statusView := lipgloss.JoinHorizontal(lipgloss.Top, p1, p2, p3)
 	// Apply Outer Border to main body

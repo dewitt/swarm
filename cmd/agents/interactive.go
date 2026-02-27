@@ -773,9 +773,48 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 		m.planMode = false
 		m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"Act Mode enabled. I am fully capable of writing files and executing commands.")
 	case "/context":
-		m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"Context management is coming in a future update.")
+		if len(parts) == 1 {
+			// List context
+			files := m.manager.ListContext()
+			if len(files) == 0 {
+				m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"No files are currently pinned to the context window.")
+				return nil
+			}
+			
+			var lines []string
+			lines = append(lines, lipgloss.NewStyle().Bold(true).Render(fmt.Sprintf("Pinned Context Files (%d)", len(files))))
+			lines = append(lines, "")
+			for _, file := range files {
+				lines = append(lines, "  - "+lipgloss.NewStyle().Foreground(primaryColor).Render(file))
+			}
+			icon := agentMsgStyle.Render("✦ ")
+			m.messages = append(m.messages, lipgloss.JoinHorizontal(lipgloss.Top, icon, lipgloss.JoinVertical(lipgloss.Left, lines...)))
+		} else if parts[1] == "add" {
+			if len(parts) < 3 {
+				m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"Usage: /context add <file_path>")
+				return nil
+			}
+			filePath := parts[2]
+			if err := m.manager.AddContext(filePath); err != nil {
+				m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Render("Error pinning file: "+err.Error()))
+			} else {
+				m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+fmt.Sprintf("Pinned `%s` to the active context window.", filePath))
+			}
+		} else {
+			m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"Usage: /context OR /context add <file_path>")
+		}
 	case "/drop":
-		m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"Context management is coming in a future update.")
+		if len(parts) < 2 {
+			m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"Usage: /drop <file_path> OR /drop all")
+			return nil
+		}
+		filePath := parts[1]
+		m.manager.DropContext(filePath)
+		if filePath == "all" {
+			m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"Cleared all pinned files from the context window.")
+		} else {
+			m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+fmt.Sprintf("Dropped `%s` from the context window.", filePath))
+		}
 	case "/remember":
 		if len(parts) < 2 {
 			m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"Usage: /remember <fact or preference>")

@@ -156,6 +156,11 @@ type AgentManager interface {
 	// Discover checks the current directory for an agent.yaml manifest.
 	Discover(ctx context.Context, dir string) (*AgentManifest, error)
 
+	// Context Management
+	AddContext(path string) error
+	DropContext(path string)
+	ListContext() []string
+
 	// Chat sends a natural language prompt to the internal Router Agent.
 	// It returns a channel that streams the response back to the caller.
 	Chat(ctx context.Context, prompt string) (<-chan string, error)
@@ -186,12 +191,13 @@ type AgentManifest struct {
 
 // defaultManager is the internal implementation of AgentManager.
 type defaultManager struct {
-	run       *runner.Runner
-	sessionSvc session.Service
-	userID    string
-	sessionID string
-	skills    []*Skill
-	clientCfg *genai.ClientConfig
+	run          *runner.Runner
+	sessionSvc   session.Service
+	userID       string
+	sessionID    string
+	skills       []*Skill
+	clientCfg    *genai.ClientConfig
+	pinnedContext map[string]string
 }
 
 // ManagerConfig defines configuration for the AgentManager.
@@ -415,17 +421,43 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 	}
 
 	return &defaultManager{
-		run:        r,
-		sessionSvc: sessionSvc,
-		userID:     "local_user",
-		sessionID:  sessionID,
-		skills:     loadedSkills,
-		clientCfg:  clientConfig,
+		run:          r,
+		sessionSvc:   sessionSvc,
+		userID:       "local_user",
+		sessionID:    sessionID,
+		skills:       loadedSkills,
+		clientCfg:    clientConfig,
+		pinnedContext: make(map[string]string),
 	}
 }
 
 func (m *defaultManager) Skills() []*Skill {
 	return m.skills
+}
+
+func (m *defaultManager) AddContext(path string) error {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("failed to read file %s: %w", path, err)
+	}
+	m.pinnedContext[path] = string(b)
+	return nil
+}
+
+func (m *defaultManager) DropContext(path string) {
+	if path == "all" {
+		m.pinnedContext = make(map[string]string)
+	} else {
+		delete(m.pinnedContext, path)
+	}
+}
+
+func (m *defaultManager) ListContext() []string {
+	var paths []string
+	for path := range m.pinnedContext {
+		paths = append(paths, path)
+	}
+	return paths
 }
 
 func (m *defaultManager) Reset() {
@@ -488,8 +520,10 @@ func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan string
 		// Context referencing (@file)
 		re := regexp.MustCompile(`@(\S+)`)
 		matches := re.FindAllStringSubmatch(prompt, -1)
+		
+		var contextDocs []string
+
 		if len(matches) > 0 {
-			var contextDocs []string
 			for _, match := range matches {
 				path := match[1]
 				// Trim trailing punctuation if it's there (common in conversational text)
@@ -498,9 +532,15 @@ func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan string
 					contextDocs = append(contextDocs, fmt.Sprintf("File @%s:\n%s", path, string(b)))
 				}
 			}
-			if len(contextDocs) > 0 {
-				prompt = strings.Join(contextDocs, "\n\n") + "\n\nUser Prompt:\n" + prompt
-			}
+		}
+
+		// Inject pinned Context Management files
+		for path, content := range m.pinnedContext {
+			contextDocs = append(contextDocs, fmt.Sprintf("Pinned File %s:\n%s", path, content))
+		}
+
+		if len(contextDocs) > 0 {
+			prompt = strings.Join(contextDocs, "\n\n") + "\n\nUser Prompt:\n" + prompt
 		}
 
 		if os.Getenv("AGENTS_DRY_RUN") == "true" {

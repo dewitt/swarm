@@ -13,7 +13,9 @@ import (
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/sahilm/fuzzy"
 
 	"github.com/dewitt/agents/pkg/sdk"
 )
@@ -241,6 +243,21 @@ const (
 	stateShell
 )
 
+func getWorkspaceFiles() []string {
+	var items []string
+	out, err := exec.Command("git", "ls-files").Output()
+	if err == nil {
+		lines := strings.Split(string(out), "\n")
+		for _, l := range lines {
+			l = strings.TrimSpace(l)
+			if l != "" {
+				items = append(items, l)
+			}
+		}
+	}
+	return items
+}
+
 type model struct {
 	textArea   textarea.Model
 	viewport   viewport.Model
@@ -259,6 +276,57 @@ type model struct {
 	state       uiState
 	cwd         string
 	activeModel string
+	renderer    *glamour.TermRenderer
+	
+	// Autocomplete state
+	workspaceFiles []string
+	acMatches      []string
+	acIndex        int
+	acActive       bool
+}
+
+func updateAutocomplete(m *model) {
+	if m.workspaceFiles == nil {
+		m.workspaceFiles = getWorkspaceFiles()
+	}
+	val := m.textArea.Value()
+	
+	// find the last word
+	lastSpace := strings.LastIndexAny(val, " \n")
+	var lastWord string
+	if lastSpace == -1 {
+		lastWord = val
+	} else {
+		lastWord = val[lastSpace+1:]
+	}
+
+	if strings.HasPrefix(lastWord, "@") {
+		m.acActive = true
+		query := lastWord[1:]
+		if query == "" {
+			m.acMatches = m.workspaceFiles
+		} else {
+			matches := fuzzy.Find(query, m.workspaceFiles)
+			var mstrs []string
+			for _, match := range matches {
+				mstrs = append(mstrs, match.Str)
+			}
+			m.acMatches = mstrs
+		}
+		if len(m.acMatches) > 5 {
+			m.acMatches = m.acMatches[:5]
+		}
+		if len(m.acMatches) == 0 {
+			m.acActive = false
+			m.acIndex = 0
+		} else if m.acIndex >= len(m.acMatches) {
+			m.acIndex = 0
+		}
+	} else {
+		m.acActive = false
+		m.acMatches = nil
+		m.acIndex = 0
+	}
 }
 
 func getUserName() string {
@@ -321,6 +389,15 @@ func initialModel(planMode bool) model {
 		activeModel = cfg.Model
 	}
 
+	style := "dark"
+	if !lipgloss.HasDarkBackground() {
+		style = "light"
+	}
+	renderer, _ := glamour.NewTermRenderer(
+		glamour.WithStandardStyle(style),
+		glamour.WithWordWrap(0), // Will be updated on WindowSizeMsg
+	)
+
 	return model{
 		textArea:    ta,
 		viewport:    vp,
@@ -336,6 +413,7 @@ func initialModel(planMode bool) model {
 		state:       stateChat,
 		cwd:         cwd,
 		activeModel: activeModel,
+		renderer:    renderer,
 	}
 }
 
@@ -439,6 +517,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 
+			if m.acActive && len(m.acMatches) > 0 {
+				val := m.textArea.Value()
+				lastSpace := strings.LastIndexAny(val, " \n")
+				m.textArea.SetValue(val[:lastSpace+1] + "@" + m.acMatches[m.acIndex] + " ")
+				m.textArea.CursorEnd()
+				m.acActive = false
+				// Continue to submit
+			}
+
 			input := m.textArea.Value()
 			trimmedInput := strings.TrimSpace(input)
 
@@ -494,11 +581,28 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, tea.Batch(cmds...)
 		case tea.KeyTab:
+			if m.acActive && len(m.acMatches) > 0 {
+				val := m.textArea.Value()
+				lastSpace := strings.LastIndexAny(val, " \n")
+				m.textArea.SetValue(val[:lastSpace+1] + "@" + m.acMatches[m.acIndex] + " ")
+				m.textArea.CursorEnd()
+				m.acActive = false
+				return m, nil
+			}
 			if !m.loading {
 				m.textArea.SetValue(autocompleteCommand(m.textArea.Value()))
 				m.textArea.CursorEnd()
 			}
 		case tea.KeyUp:
+			if m.acActive {
+				if len(m.acMatches) > 0 {
+					m.acIndex--
+					if m.acIndex < 0 {
+						m.acIndex = len(m.acMatches) - 1
+					}
+				}
+				return m, nil
+			}
 			if m.textArea.Line() == 0 {
 				if len(m.history) > 0 && m.historyIdx > 0 {
 					m.historyIdx--
@@ -508,6 +612,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 		case tea.KeyDown:
+			if m.acActive {
+				if len(m.acMatches) > 0 {
+					m.acIndex++
+					if m.acIndex >= len(m.acMatches) {
+						m.acIndex = 0
+					}
+				}
+				return m, nil
+			}
 			if m.textArea.Line() == m.textArea.LineCount()-1 {
 				if len(m.history) > 0 && m.historyIdx < len(m.history) {
 					m.historyIdx++
@@ -534,7 +647,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			shellStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#AAAAAA")).PaddingLeft(2)
 			m.messages = append(m.messages, shellStyle.Render(msg.text))
 		} else {
-			m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+msg.text)
+			out := msg.text
+			if m.renderer != nil {
+				if rOut, err := m.renderer.Render(msg.text); err == nil {
+					out = rOut
+				}
+			}
+			m.messages = append(m.messages, agentMsgStyle.Render("✦\n")+strings.TrimSpace(out))
 		}
 		m.updateViewport()
 		return m, nil
@@ -580,6 +699,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.viewport.Width = m.width - 4
 		m.viewport.Height = m.height - m.textArea.Height() - 2
 
+		// Update glamour word wrap
+		if m.renderer != nil {
+			style := "dark"
+			if !lipgloss.HasDarkBackground() {
+				style = "light"
+			}
+			m.renderer, _ = glamour.NewTermRenderer(
+				glamour.WithStandardStyle(style),
+				glamour.WithWordWrap(m.viewport.Width-4),
+			)
+		}
+
 		// List Model: account for outer border (2) and padding (4 horizontal, 2 vertical)
 		m.listModel.SetSize(m.width-6, m.height-4)
 		m.updateViewport()
@@ -588,6 +719,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	m.textArea, tiCmd = m.textArea.Update(msg)
 	cmds = append(cmds, tiCmd)
+	
+	if m.state == stateChat {
+		updateAutocomplete(&m)
+	}
 
 	// Check for automatic shell mode toggling
 	val := m.textArea.Value()
@@ -891,12 +1026,35 @@ func (m model) View() string {
 			mainBody = lipgloss.NewStyle().Padding(1, 2).Render(m.listModel.View())
 		}
 	} else {
-		// 1. History
-		vpView := m.viewport.View()
+		// 1.5. Autocomplete overlay
+		var acView string
+		if m.acActive && len(m.acMatches) > 0 {
+			var lines []string
+			for i, match := range m.acMatches {
+				if i == m.acIndex {
+					lines = append(lines, lipgloss.NewStyle().Background(borderColor).Render(" "+match+" "))
+				} else {
+					lines = append(lines, lipgloss.NewStyle().Render(" "+match+" "))
+				}
+			}
+			acBox := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(borderColor).Render(strings.Join(lines, "\n"))
+			acView = acBox
+		}
 
 		// 2. Input
 		inputView := inputBoxStyle.Render(m.textArea.View())
-		mainBody = lipgloss.JoinVertical(lipgloss.Left, vpView, inputView)
+		
+		if acView != "" {
+			// Adjust viewport height to account for autocomplete overlay
+			acHeight := lipgloss.Height(acView)
+			m.viewport.Height = m.height - m.textArea.Height() - 2 - acHeight
+			vpView := m.viewport.View()
+			mainBody = lipgloss.JoinVertical(lipgloss.Left, vpView, lipgloss.NewStyle().PaddingLeft(1).Render(acView), inputView)
+		} else {
+			m.viewport.Height = m.height - m.textArea.Height() - 2
+			vpView := m.viewport.View()
+			mainBody = lipgloss.JoinVertical(lipgloss.Left, vpView, inputView)
+		}
 	}
 
 	// 3. Status

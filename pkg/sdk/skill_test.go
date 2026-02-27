@@ -46,7 +46,7 @@ func TestLoadSkill_MissingSkillMd(t *testing.T) {
 	skill, err := sdk.LoadSkill(skillDir)
 	assert.Error(t, err)
 	assert.Nil(t, skill)
-	assert.Contains(t, err.Error(), "failed to read SKILL.md")
+	assert.Contains(t, err.Error(), "could not find SKILL.md")
 }
 
 func TestLoadSkill_NoFrontmatter(t *testing.T) {

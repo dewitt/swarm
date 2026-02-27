@@ -11,7 +11,7 @@ import (
 
 func TestSnapshotUI(t *testing.T) {
 	// 1. Instantiate the model
-	m := initialModel()
+	m := initialModel(false)
 
 	// 2. Simulate a terminal window size (e.g., 80x24 standard terminal)
 	// This is critical because the View() function relies on m.width and m.height
@@ -34,7 +34,7 @@ func TestSnapshotUI(t *testing.T) {
 }
 
 func TestSnapshotModelList(t *testing.T) {
-	m := initialModel()
+	m := initialModel(false)
 
 	// 1. Simulate size
 	newModel, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
@@ -60,4 +60,18 @@ func TestSnapshotModelList(t *testing.T) {
 	fmt.Println("=== START TUI MODEL LIST SNAPSHOT (80x24) ===")
 	fmt.Println(rawView)
 	fmt.Println("=== END TUI MODEL LIST SNAPSHOT ===")
+}
+
+func TestSnapshotFileAutocomplete(t *testing.T) {
+	m := initialModel(false)
+	newModel, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = newModel.(model)
+
+	newModel, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'@'}})
+	m = newModel.(model)
+
+	rawView := m.View()
+	fmt.Println("=== START TUI FILE AUTOCOMPLETE SNAPSHOT (80x24) ===")
+	fmt.Println(rawView)
+	fmt.Println("=== END TUI FILE AUTOCOMPLETE SNAPSHOT ===")
 }

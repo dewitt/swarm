@@ -74,3 +74,10 @@ We strictly enforce the boundary between the presentation layer and the underlyi
 
 - **UI vs. SDK:** The terminal UI (`cmd/agents/`) must remain a "dumb" client. It handles rendering, input capture, and local configuration logic, but it MUST NOT contain LLM prompting logic, system instructions, or tool implementations. All intelligence, session management, and orchestration belong exclusively in the embeddable `pkg/sdk/` backend.
 - **Modular Feature Partitioning:** New capabilities should be as self-contained as possible. Instead of creating monolithic "god classes," favor registering new, scoped tools, or building independent sub-agents that communicate via standard interfaces. 
+
+## 7. UX Familiarity and Innovation
+
+We believe in minimizing friction for developers transitioning between different tools in the ecosystem.
+
+- **Follow Market Leaders:** When implementing standard features (like slash commands, file referencing, or context management), we default to the UX patterns established by market leaders (e.g., Cursor, Claude Code, Gemini CLI, Codex). If a user knows how to use Claude Code, they should instinctively know how to use the `agents` CLI.
+- **Innovate with Conviction:** We only break from established UX norms when no standard exists, or when we have deep conviction that our novel approach represents a significant leap forward and is poised to become the new industry standard. We do not invent new paradigms just to be different.

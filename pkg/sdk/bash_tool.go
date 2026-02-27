@@ -43,7 +43,7 @@ func bashExecuteTool(ctx tool.Context, args BashExecuteArgs) (BashExecuteResult,
 	cmd.Stderr = &stderr
 
 	err := cmd.Run()
-	
+
 	exitCode := 0
 	if err != nil {
 		if exitError, ok := err.(*exec.ExitError); ok {

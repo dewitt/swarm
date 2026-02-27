@@ -62,7 +62,7 @@ func TestLoadSkill_NoFrontmatter(t *testing.T) {
 	skill, err := sdk.LoadSkill(skillDir)
 	assert.NoError(t, err)
 	assert.NotNil(t, skill)
-	
+
 	// Should fallback to the directory name
 	assert.Equal(t, "simple-skill", skill.Manifest.Name)
 	assert.Equal(t, skillContent, skill.Instructions)

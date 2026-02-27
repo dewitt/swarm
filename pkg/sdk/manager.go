@@ -94,22 +94,22 @@ func grepSearch(ctx tool.Context, args GrepSearchArgs) (GrepSearchResult, error)
 
 	cmd := exec.Command("bash", "-c", script)
 	out, err := cmd.CombinedOutput()
-	
+
 	// grep returns exit code 1 if no matches found, which isn't a failure for our tool.
 	if err != nil && cmd.ProcessState.ExitCode() != 1 {
 		return GrepSearchResult{Error: err.Error() + ": " + string(out)}, nil
 	}
-	
+
 	if len(out) == 0 {
 		return GrepSearchResult{Output: "No matches found."}, nil
 	}
-	
+
 	// Truncate output to prevent massive context bloat
 	strOut := string(out)
 	if len(strOut) > 10000 {
 		strOut = strOut[:10000] + "\n...[TRUNCATED: output too large]..."
 	}
-	
+
 	return GrepSearchResult{Output: strOut}, nil
 }
 
@@ -142,10 +142,10 @@ func writeLocalFile(ctx tool.Context, args WriteFileArgs) (WriteFileResult, erro
 }
 
 // AgentManager defines the core capabilities of the embeddable SDK.
-// It is responsible for orchestrating interactions with the LLM and 
+// It is responsible for orchestrating interactions with the LLM and
 // managing local user-defined agents.
 //
-// By keeping this in the sdk package, we ensure the business logic 
+// By keeping this in the sdk package, we ensure the business logic
 // can be compiled via cgo/wasm and consumed by clients other than our CLI.
 type SessionInfo struct {
 	ID        string
@@ -173,6 +173,7 @@ type AgentManager interface {
 	// ListSessions returns metadata about the persisted chat sessions.
 	ListSessions(ctx context.Context) ([]SessionInfo, error)
 }
+
 // ModelInfo contains metadata about an available AI model.
 type ModelInfo struct {
 	Name        string
@@ -191,12 +192,12 @@ type AgentManifest struct {
 
 // defaultManager is the internal implementation of AgentManager.
 type defaultManager struct {
-	run          *runner.Runner
-	sessionSvc   session.Service
-	userID       string
-	sessionID    string
-	skills       []*Skill
-	clientCfg    *genai.ClientConfig
+	run           *runner.Runner
+	sessionSvc    session.Service
+	userID        string
+	sessionID     string
+	skills        []*Skill
+	clientCfg     *genai.ClientConfig
 	pinnedContext map[string]string
 }
 
@@ -212,7 +213,7 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 
 	var m model.LLM
 	clientConfig := &genai.ClientConfig{}
-	
+
 	if len(cfg) > 0 && cfg[0].Model != nil {
 		m = cfg[0].Model
 	} else {
@@ -310,7 +311,7 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 	var subAgents []agent.Agent
 	var loadedSkills []*Skill
 
-	// Assuming the binary is run from the project root for now. 
+	// Assuming the binary is run from the project root for now.
 	// In a real installation, we would search ~/.config/agents/skills or an embedded FS.
 	skillDirs := []string{}
 	entries, err := os.ReadDir("skills")
@@ -403,7 +404,7 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 	// Use a fixed session ID for the initial REPL, allowing history to persist across reboots.
 	// /clear will generate a new session ID to drop context.
 	sessionID := "default_interactive_session"
-	
+
 	// Create the session record if it doesn't already exist
 	_, _ = sessionSvc.Create(ctx, &session.CreateRequest{
 		AppName:   "agents-cli",
@@ -421,12 +422,12 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 	}
 
 	return &defaultManager{
-		run:          r,
-		sessionSvc:   sessionSvc,
-		userID:       "local_user",
-		sessionID:    sessionID,
-		skills:       loadedSkills,
-		clientCfg:    clientConfig,
+		run:           r,
+		sessionSvc:    sessionSvc,
+		userID:        "local_user",
+		sessionID:     sessionID,
+		skills:        loadedSkills,
+		clientCfg:     clientConfig,
 		pinnedContext: make(map[string]string),
 	}
 }
@@ -520,7 +521,7 @@ func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan string
 		// Context referencing (@file)
 		re := regexp.MustCompile(`@(\S+)`)
 		matches := re.FindAllStringSubmatch(prompt, -1)
-		
+
 		var contextDocs []string
 
 		if len(matches) > 0 {
@@ -560,15 +561,15 @@ func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan string
 			out <- "This is a deterministic dry-run response."
 			return
 		}
-		
+
 		events := m.run.Run(ctx, m.userID, m.sessionID, genai.NewContentFromText(prompt, genai.Role("user")), agent.RunConfig{})
-		
+
 		for event, err := range events {
 			if err != nil {
 				out <- fmt.Sprintf("Error: %v", err)
 				return
 			}
-			
+
 			// If it's a partial event, ignore it for now since the CLI waits for the final chunk.
 			// Once we implement true streaming in the CLI, we can send partial chunks.
 			if !event.Partial && event.IsFinalResponse() {

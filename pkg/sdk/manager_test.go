@@ -37,13 +37,13 @@ func (m *MockModel) GenerateContent(ctx context.Context, req *model.LLMRequest, 
 func TestNewManager(t *testing.T) {
 	mockLLM := &MockModel{response: "Hello from the mock agent!"}
 	manager := sdk.NewManager(sdk.ManagerConfig{Model: mockLLM})
-	
+
 	if manager == nil {
 		t.Fatal("expected manager to be non-nil")
 	}
 
 	ctx := context.Background()
-	
+
 	ch, err := manager.Chat(ctx, "hello")
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)

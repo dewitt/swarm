@@ -6,8 +6,8 @@ import (
 	"io"
 	"os"
 
-	"github.com/spf13/cobra"
 	"github.com/dewitt/agents/pkg/sdk"
+	"github.com/spf13/cobra"
 )
 
 var promptFlag string

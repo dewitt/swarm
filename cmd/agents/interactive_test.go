@@ -23,7 +23,7 @@ func TestSnapshotUI(t *testing.T) {
 		newModel, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
 		m = newModel.(model)
 	}
-	
+
 	// Simulate pressing Enter
 	newModel, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = newModel.(model)
@@ -50,7 +50,7 @@ func TestSnapshotModelList(t *testing.T) {
 		},
 		err: nil,
 	}
-	
+
 	newModel, _ = m.Update(modelsMsg)
 	m = newModel.(model)
 

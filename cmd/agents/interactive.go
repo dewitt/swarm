@@ -243,6 +243,7 @@ const (
 	stateChat uiState = iota
 	stateModelList
 	stateShell
+	stateHistorySearch
 )
 
 func getWorkspaceFiles() []string {
@@ -265,6 +266,7 @@ type model struct {
 	viewport    viewport.Model
 	spinner     spinner.Model
 	listModel   list.Model
+	historyList list.Model
 	messages    []string
 	history     []string
 	historyIdx  int
@@ -285,6 +287,7 @@ type model struct {
 	acMatches      []string
 	acIndex        int
 	acActive       bool
+	acPrefix       string
 }
 
 func updateAutocomplete(m *model) {
@@ -302,8 +305,14 @@ func updateAutocomplete(m *model) {
 		lastWord = val[lastSpace+1:]
 	}
 
+	slashCommands := []string{
+		"help", "clear", "context", "drop", "skills",
+		"sessions", "model", "remember", "plan", "act", "exit", "quit",
+	}
+
 	if strings.HasPrefix(lastWord, "@") {
 		m.acActive = true
+		m.acPrefix = "@"
 		query := lastWord[1:]
 		if query == "" {
 			m.acMatches = m.workspaceFiles
@@ -324,8 +333,32 @@ func updateAutocomplete(m *model) {
 		} else if m.acIndex >= len(m.acMatches) {
 			m.acIndex = 0
 		}
+	} else if lastSpace == -1 && strings.HasPrefix(lastWord, "/") {
+		m.acActive = true
+		m.acPrefix = "/"
+		query := lastWord[1:]
+		if query == "" {
+			m.acMatches = slashCommands
+		} else {
+			matches := fuzzy.Find(query, slashCommands)
+			var mstrs []string
+			for _, match := range matches {
+				mstrs = append(mstrs, match.Str)
+			}
+			m.acMatches = mstrs
+		}
+		if len(m.acMatches) > 5 {
+			m.acMatches = m.acMatches[:5]
+		}
+		if len(m.acMatches) == 0 {
+			m.acActive = false
+			m.acIndex = 0
+		} else if m.acIndex >= len(m.acMatches) {
+			m.acIndex = 0
+		}
 	} else {
 		m.acActive = false
+		m.acPrefix = ""
 		m.acMatches = nil
 		m.acIndex = 0
 	}
@@ -418,6 +451,11 @@ func initialModel(planMode bool) model {
 	l.SetShowStatusBar(false)
 	l.SetFilteringEnabled(true)
 
+	hl := list.New([]list.Item{}, list.NewDefaultDelegate(), 0, 0)
+	hl.Title = "Search History"
+	hl.SetShowStatusBar(false)
+	hl.SetFilteringEnabled(true)
+
 	// Create a beautiful splash screen
 	leftBox := welcomeBoxStyle.Render(fmt.Sprintf("%s\n\nWelcome back, %s!", renderLogo(), getUserName()))
 	rightBox := infoBoxStyle.Render(initialTips)
@@ -450,6 +488,7 @@ func initialModel(planMode bool) model {
 		viewport:    vp,
 		spinner:     s,
 		listModel:   l,
+		historyList: hl,
 		messages:    []string{welcomeScreen},
 		history:     loadedHist,
 		historyIdx:  len(loadedHist),
@@ -547,6 +586,38 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	if m.state == stateHistorySearch {
+		switch msg := msg.(type) {
+		case tea.WindowSizeMsg:
+			// pass through
+		case tea.KeyMsg:
+			if msg.Type == tea.KeyEsc {
+				m.state = stateChat
+				return m, tea.ClearScreen
+			}
+			if msg.Type == tea.KeyEnter && m.historyList.FilterState() != list.Filtering {
+				if i, ok := m.historyList.SelectedItem().(item); ok {
+					m.textArea.SetValue(i.name)
+					m.textArea.CursorEnd()
+				}
+				m.state = stateChat
+				m.updateViewport()
+				return m, tea.ClearScreen
+			}
+
+			var listCmd tea.Cmd
+			m.historyList, listCmd = m.historyList.Update(msg)
+
+			if listCmd != nil {
+				if msg.String() == "q" && m.historyList.FilterState() != list.Filtering {
+					m.state = stateChat
+					return m, tea.ClearScreen
+				}
+			}
+			return m, listCmd
+		}
+	}
+
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.Type {
@@ -555,6 +626,23 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeyCtrlJ:
 			m.textArea.InsertString("\n")
 			return m, nil
+		case tea.KeyCtrlR:
+			if m.state == stateChat && !m.loading {
+				m.state = stateHistorySearch
+				var items []list.Item
+				// deduplicate history and show newest first
+				seen := make(map[string]bool)
+				for i := len(m.history) - 1; i >= 0; i-- {
+					h := m.history[i]
+					if !seen[h] {
+						items = append(items, item{name: h, description: "History"})
+						seen[h] = true
+					}
+				}
+				m.historyList.SetItems(items)
+				m.historyList.ResetFilter()
+				return m, tea.ClearScreen
+			}
 		case tea.KeyEnter:
 			if msg.Alt {
 				m.textArea.InsertString("\n")
@@ -567,7 +655,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.acActive && len(m.acMatches) > 0 {
 				val := m.textArea.Value()
 				lastSpace := strings.LastIndexAny(val, " \n")
-				m.textArea.SetValue(val[:lastSpace+1] + "@" + m.acMatches[m.acIndex] + " ")
+				m.textArea.SetValue(val[:lastSpace+1] + m.acPrefix + m.acMatches[m.acIndex] + " ")
 				m.textArea.CursorEnd()
 				m.acActive = false
 				// Continue to submit
@@ -632,15 +720,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.acActive && len(m.acMatches) > 0 {
 				val := m.textArea.Value()
 				lastSpace := strings.LastIndexAny(val, " \n")
-				m.textArea.SetValue(val[:lastSpace+1] + "@" + m.acMatches[m.acIndex] + " ")
+				m.textArea.SetValue(val[:lastSpace+1] + m.acPrefix + m.acMatches[m.acIndex] + " ")
 				m.textArea.CursorEnd()
 				m.acActive = false
-				return m, nil
 			}
-			if !m.loading {
-				m.textArea.SetValue(autocompleteCommand(m.textArea.Value()))
-				m.textArea.CursorEnd()
-			}
+			return m, nil
 		case tea.KeyUp:
 			if m.acActive {
 				if len(m.acMatches) > 0 {
@@ -761,6 +845,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// List Model: account for outer border (2) and padding (4 horizontal, 2 vertical)
 		m.listModel.SetSize(m.width-6, m.height-4)
+		m.historyList.SetSize(m.width-6, m.height-4)
 		m.updateViewport()
 		return m, nil
 	}
@@ -1015,37 +1100,6 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 	return nil
 }
 
-func autocompleteCommand(input string) string {
-	if !strings.HasPrefix(input, "/") {
-		return input
-	}
-
-	commands := []string{
-		"/help",
-		"/clear",
-		"/context",
-		"/drop",
-		"/skills",
-		"/sessions",
-		"/model",
-		"/model list",
-		"/remember",
-		"/plan",
-		"/act",
-		"/exit",
-		"/quit",
-	}
-
-	for _, cmd := range commands {
-		if strings.HasPrefix(cmd, input) {
-			// If we matched exactly or typed space after (e.g. "/models " expecting list), don't aggressively replace.
-			// But for simplicity, just return the first match that is longer than what's typed.
-			return cmd
-		}
-	}
-	return input
-}
-
 func (m *model) updateViewport() {
 	var s strings.Builder
 	for _, msg := range m.messages {
@@ -1073,6 +1127,8 @@ func (m model) View() string {
 		} else {
 			mainBody = lipgloss.NewStyle().Padding(1, 2).Render(m.listModel.View())
 		}
+	} else if m.state == stateHistorySearch {
+		mainBody = lipgloss.NewStyle().Padding(1, 2).Render(m.historyList.View())
 	} else {
 		// 1.5. Autocomplete overlay
 		var acView string

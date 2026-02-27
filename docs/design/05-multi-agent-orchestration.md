@@ -14,11 +14,12 @@ This principle applies at two levels:
 ## Internal Architecture: The Core Swarm
 
 The CLI does not rely on a single massive system prompt. Instead, the core Go
-SDK instantiates a swarm of specialized ADK agents:
+SDK instantiates a swarm of specialized ADK agents using a cascading model
+architecture:
 
-- **Router Agent**: The front-door. It converses with the user, maintains
-  session context, and routes specific technical tasks to specialized
-  sub-agents.
+- **Router Agent**: The front-door, powered by `gemini-2.5-flash` for snappy
+  coordination. It converses with the user, maintains session context, and
+  routes specific technical tasks to specialized sub-agents.
 - **Architect Agent**: Responsible for scaffolding project structures and
   writing foundational code based on user requirements.
 - **Debugger Agent**: Invoked when a test fails or a deployment errors out. It
@@ -26,9 +27,14 @@ SDK instantiates a swarm of specialized ADK agents:
 - **GitOps Agent**: Specialized in crafting CI/CD pipelines, writing GitHub
   Actions, and executing Git operations.
 
-When the Router Agent delegates to the Debugger Agent, the terminal UI
-visualizes this handoff, making the multi-agent execution transparent to the
-user.
+Sub-agents (Skills) default to `gemini-3.1-pro-preview` for thorough execution
+but can request specific models via their SkillManifest.
+
+When the Router Agent delegates to a sub-agent, the terminal UI visualizes
+this handoff in real-time (e.g., "Handoff to builder_agent..."). All agent
+responses are identified by their author in the chat log using colorful agent
+badges for clear multi-agent swarm attribution, making the multi-agent
+execution transparent to the user.
 
 ## Target Architecture: Managing User Swarms
 
@@ -52,17 +58,24 @@ scaffold these complex patterns for the user.
 
 ## 4. Third-Party Agent Orchestration
 
-As the ecosystem evolves, monolithic AI tools (like Claude Code, Codex, or Gemini CLI) will become highly capable specialists. The `agents` CLI should not attempt to rewrite these massive, proprietary systems from scratch. 
+As the ecosystem evolves, monolithic AI tools (like Claude Code, Codex, or
+Gemini CLI) will become highly capable specialists. The `agents` CLI should
+not attempt to rewrite these massive, proprietary systems from scratch.
 
-Instead, the `agents` CLI will act as the **Supreme Orchestrator**. 
+Instead, the `agents` CLI will act as the **Supreme Orchestrator**.
 
 ### The Vision
-We will write specialized "Wrapper Agents" (or Skills) that wrap the command-line interfaces of *other* AI coding agents. 
+
+We will write specialized "Wrapper Agents" (or Skills) that wrap the
+command-line interfaces of *other* AI coding agents.
 
 For example, if a user asks for a massive refactoring of a legacy codebase:
-1. The primary **Router Agent** analyzes the request.
-2. It delegates the task to a **Codex Sub-agent**.
-3. The Codex Sub-agent constructs the appropriate bash command (e.g., `codex --apply-patch ...`) and executes it using the `bash_execute` tool.
-4. The Router Agent reviews the resulting diff and reports back to the user.
 
-By treating other AI CLI tools as executable sub-agents, the `agents` CLI becomes the ultimate unified control plane for software development.
+1. The primary **Router Agent** analyzes the request.
+1. It delegates the task to a **Codex Sub-agent**.
+1. The Codex Sub-agent constructs the appropriate bash command (e.g.,
+   `codex --apply-patch ...`) and executes it using the `bash_execute` tool.
+1. The Router Agent reviews the resulting diff and reports back to the user.
+
+By treating other AI CLI tools as executable sub-agents, the `agents` CLI
+becomes the ultimate unified control plane for software development.

@@ -34,3 +34,7 @@ go.work.sum
 3613f360926fae004521197488623465eb0cd751-1920x1035.jpeg
 3613f360926fae004521197488623465eb0cd751-1920x1035.webp
 gemini-screenshot.png
+node_modules/
+*.png
+*.db
+.config/

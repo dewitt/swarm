@@ -9,8 +9,9 @@ into native ecosystems.
 
 - **Terminal UI**: Persistent, interactive terminal sessions built on Bubble
   Tea, featuring rich native markdown rendering (`glamour`), async execution,
-  client-side slash commands (`/help`, `/model list`, `/skills`), and
-  multi-pane layouts.
+  client-side slash commands (`/help`, `/model list`, `/skills`), multi-pane
+  layouts, real-time agent handoff visualization, and flattened multiline
+  history for stable autocomplete.
 - **Direct Shell Execution (`!`)**: Toggle into a dedicated shell mode or run
   single-shot bash commands instantly from within the REPL without breaking
   your flow.
@@ -37,7 +38,9 @@ into native ecosystems.
   (like GitHub Actions) and integrates directly with your native ecosystem.
 - **Agent Swarms**: The core SDK is powered by the Google Agent Development
   Kit (ADK) and orchestrates a swarm of specialized internal agents (Router,
-  Builder, Deployment) to fulfill your requests.
+  Builder, Deployment) using a cascading model architecture (fast models for
+  routing, reasoning models for execution). Agent responses are attributed
+  with colorful badges in the chat log.
 
 ## Prerequisites
 

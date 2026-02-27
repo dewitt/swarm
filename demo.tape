@@ -2,6 +2,7 @@ Output docs/assets/demo.gif
 
 Require ./bin/agents
 
+Set Theme "Catppuccin Latte"
 Set WindowBar Colorful
 Set BorderRadius 10
 Set FontSize 18

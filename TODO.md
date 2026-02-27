@@ -22,7 +22,7 @@ debt that should be addressed as the project evolves.
   suspend, and resume interactive TUI sessions. This includes the ability to
   `/rewind` the conversation history to undo mistakes or branch conversations.
 
-- [ ] **Third-Party Tool Orchestration**: Develop Skills/Sub-agents that wrap
+- [x] **Third-Party Tool Orchestration**: Develop Skills/Sub-agents that wrap
   external AI CLIs (e.g., `gemini-cli`, `claude-code`) via `bash_execute` so
   the Agents CLI can act as a master orchestrator for other complex systems.
 

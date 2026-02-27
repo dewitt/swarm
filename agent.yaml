@@ -1,6 +1,0 @@
-displayName: Pirate Agent
-description: An agent that talks like a pirate.
-runtime:
-  command:
-  - npm
-  - start

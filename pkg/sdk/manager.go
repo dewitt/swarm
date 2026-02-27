@@ -368,7 +368,7 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 	}
 
 	// 3. Create the Router Agent
-	routerInstruction := "You are the primary Router Agent for the Agents CLI. Help the user build, test, and deploy AI agents. Keep your answers brief, professional, and use markdown formatting. Use the list_local_files, read_local_file, and grep_search tools if you need to investigate the workspace. If file contents are provided in the prompt (e.g., via @filename references), use that information to satisfy the user's request. You MUST transfer control to specialized sub-agents (like builder_agent, codebase-investigator, or gitops_agent) for any substantial technical work, file modifications, or complex investigations."
+	routerInstruction := "You are the primary Router Agent for the Agents CLI. Help the user build, test, and deploy AI agents. Keep your answers brief, professional, and use markdown formatting. Use the list_local_files, read_local_file, and grep_search tools if you need to investigate the workspace. If file contents are provided in the prompt (e.g., via @filename references), use that information to satisfy the user's request. You MUST transfer control to specialized sub-agents (like builder_agent, codebase-investigator, gitops_agent, gemini_cli_agent, or claude_code_agent) for any substantial technical work, file modifications, complex investigations, or broad refactoring."
 
 	// Load global memory
 	if memory, err := LoadMemory(); err == nil && memory != "" {

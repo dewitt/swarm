@@ -113,3 +113,17 @@ intended for the local client.
 - **Agent Handoff:** Certain slash commands might exist to force a manual
   handoff to a specific agent (e.g., `/agent builder`) rather than relying on
   the Router Agent's natural language inference.
+
+## Context and Session Management
+
+For long-running investigations, token context windows become a critical constraint. The UI and SDK must work together to provide developers with granular control over what the model remembers.
+
+### Explicit Context Pinning
+Instead of just sending files as part of a one-off prompt (e.g., `@file.go`), users should be able to pin files to the session's active memory using `/context add file.go`. These files will be automatically re-read and injected into every subsequent prompt.
+
+The UI should display these pinned files clearly (e.g., in a dedicated pane or via the `/context` command) so the user always knows what the model "sees."
+
+### Session Rewind and Resumption
+Conversations with agents are non-linear. If an agent hallucinates or goes down the wrong path, a developer shouldn't have to restart their entire 30-minute session.
+- The UI should support a `/rewind` command that drops the last $N$ turns from the conversation history.
+- Sessions should be persisted to disk (`~/.config/agents/sessions/`) so a user can close their laptop, come back the next day, and run `agents --resume` to pick up exactly where they left off.

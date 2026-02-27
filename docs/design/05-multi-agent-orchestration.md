@@ -49,3 +49,20 @@ Support for new multi-agent patterns (e.g., a "Debate" pattern, or a
 "Supervisor-Worker" pattern) can be added to the CLI via Skills. A Skill can
 provide templates and prompts that teach the internal Architect Agent how to
 scaffold these complex patterns for the user.
+
+## 4. Third-Party Agent Orchestration
+
+As the ecosystem evolves, monolithic AI tools (like Claude Code, Codex, or Gemini CLI) will become highly capable specialists. The `agents` CLI should not attempt to rewrite these massive, proprietary systems from scratch. 
+
+Instead, the `agents` CLI will act as the **Supreme Orchestrator**. 
+
+### The Vision
+We will write specialized "Wrapper Agents" (or Skills) that wrap the command-line interfaces of *other* AI coding agents. 
+
+For example, if a user asks for a massive refactoring of a legacy codebase:
+1. The primary **Router Agent** analyzes the request.
+2. It delegates the task to a **Codex Sub-agent**.
+3. The Codex Sub-agent constructs the appropriate bash command (e.g., `codex --apply-patch ...`) and executes it using the `bash_execute` tool.
+4. The Router Agent reviews the resulting diff and reports back to the user.
+
+By treating other AI CLI tools as executable sub-agents, the `agents` CLI becomes the ultimate unified control plane for software development.

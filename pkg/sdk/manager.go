@@ -3,8 +3,10 @@ package sdk
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"math/rand"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -20,6 +22,7 @@ import (
 	"google.golang.org/adk/session/database"
 	"google.golang.org/adk/tool"
 	"google.golang.org/adk/tool/functiontool"
+	"google.golang.org/adk/tool/geminitool"
 	"google.golang.org/genai"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -147,6 +150,40 @@ func writeLocalFile(ctx tool.Context, args WriteFileArgs) (WriteFileResult, erro
 //
 // By keeping this in the sdk package, we ensure the business logic
 // can be compiled via cgo/wasm and consumed by clients other than our CLI.
+
+type WebFetchArgs struct {
+	URL string `json:"url"`
+}
+
+type WebFetchResult struct {
+	Content string `json:"content"`
+	Error   string `json:"error,omitempty"`
+}
+
+func webFetch(ctx tool.Context, args WebFetchArgs) (WebFetchResult, error) {
+	resp, err := http.Get(args.URL)
+	if err != nil {
+		return WebFetchResult{Error: err.Error()}, nil
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return WebFetchResult{Error: fmt.Sprintf("HTTP %d: %s", resp.StatusCode, resp.Status)}, nil
+	}
+
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return WebFetchResult{Error: err.Error()}, nil
+	}
+
+	content := string(b)
+	if len(content) > 20000 {
+		content = content[:20000] + "\n...[TRUNCATED: output too large]..."
+	}
+
+	return WebFetchResult{Content: content}, nil
+}
+
 type SessionInfo struct {
 	ID        string
 	UpdatedAt string
@@ -310,6 +347,14 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 	}
 
 	// A map to resolve string names from tools.yaml to actual ADK Tool instances
+	webFetchTool, err := functiontool.New(functiontool.Config{
+		Name:        "web_fetch",
+		Description: "Fetches and returns the raw text content of a given HTTP/HTTPS URL.",
+	}, webFetch)
+	if err != nil {
+		log.Fatalf("Failed to create webFetch tool: %v", err)
+	}
+
 	toolRegistry := map[string]tool.Tool{
 		"list_local_files": listTool,
 		"read_local_file":  readTool,
@@ -318,6 +363,8 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 		"git_commit":       gitCommit,
 		"git_push":         gitPush,
 		"bash_execute":     bashExecute,
+		"web_fetch":        webFetchTool,
+		"google_search":    geminitool.GoogleSearch{},
 	}
 
 	// Use persistent SQLite database for sessions
@@ -439,7 +486,11 @@ func (m *defaultManager) Reload() error {
 		subAgents = append(subAgents, skillAgent)
 	}
 
-	routerInstruction := "You are the primary Router Agent for the Agents CLI. Help the user build, test, and deploy AI agents. Keep your answers brief, professional, and use markdown formatting. Use the list_local_files, read_local_file, and grep_search tools if you need to investigate the workspace. If file contents are provided in the prompt (e.g., via @filename references), use that information to satisfy the user's request. You MUST transfer control to specialized sub-agents (like builder_agent, codebase-investigator, gitops_agent, gemini_cli_agent, or claude_code_agent) for any substantial technical work, file modifications, complex investigations, or broad refactoring."
+	var subAgentNames []string
+	for _, sa := range subAgents {
+		subAgentNames = append(subAgentNames, sa.Name())
+	}
+	routerInstruction := fmt.Sprintf("You are the primary Router Agent for the Agents CLI. Help the user build, test, and deploy AI agents. Keep your answers brief, professional, and use markdown formatting. Use the list_local_files, read_local_file, and grep_search tools if you need to investigate the workspace. If file contents are provided in the prompt (e.g., via @filename references), use that information to satisfy the user's request. You MUST transfer control to specialized sub-agents (available: %s) for any substantial technical work, file modifications, complex investigations, web research, or broad refactoring.", strings.Join(subAgentNames, ", "))
 
 	if memory, err := LoadMemory(); err == nil && memory != "" {
 		routerInstruction += "\n\nUser Global Preferences & Memory:\n" + memory

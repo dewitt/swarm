@@ -166,6 +166,8 @@ type AgentManager interface {
 	Chat(ctx context.Context, prompt string) (<-chan string, error)
 	// Reset drops the current conversation history by generating a new session ID.
 	Reset()
+	// Reload dynamically reloads skills, configuration, and agent prompts without losing session state.
+	Reload() error
 	// Skills returns a list of all dynamically loaded skills in the workspace.
 	Skills() []*Skill
 	// ListModels returns a list of available AI models from the provider.
@@ -199,6 +201,10 @@ type defaultManager struct {
 	skills        []*Skill
 	clientCfg     *genai.ClientConfig
 	pinnedContext map[string]string
+
+	flashModel   model.LLM
+	proModel     model.LLM
+	toolRegistry map[string]tool.Tool
 }
 
 // ManagerConfig defines configuration for the AgentManager.
@@ -310,89 +316,6 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 		"bash_execute":     bashExecute,
 	}
 
-	// 2. Dynamically load skills to create sub-agents
-	var subAgents []agent.Agent
-	var loadedSkills []*Skill
-
-	// Assuming the binary is run from the project root for now.
-	// In a real installation, we would search ~/.config/agents/skills or an embedded FS.
-	skillDirs := []string{}
-	entries, err := os.ReadDir("skills")
-	if err == nil {
-		for _, entry := range entries {
-			if entry.IsDir() {
-				skillDirs = append(skillDirs, filepath.Join("skills", entry.Name()))
-			}
-		}
-	} else {
-		// Fallback to defaults if directory doesn't exist
-		skillDirs = []string{"skills/builder", "skills/gitops", "skills/adk-skill"}
-	}
-
-	for _, dir := range skillDirs {
-		skill, err := LoadSkill(dir)
-		if err != nil {
-			// If we are in tests or running from a weird directory, just skip loading the skill
-			// instead of fatally crashing, to preserve development flow.
-			continue
-		}
-		loadedSkills = append(loadedSkills, skill)
-
-		var skillTools []tool.Tool
-		for _, toolName := range skill.Manifest.Tools {
-			if t, ok := toolRegistry[toolName]; ok {
-				skillTools = append(skillTools, t)
-			} else {
-				log.Printf("Warning: Skill %s requested unknown tool %s", skill.Manifest.Name, toolName)
-			}
-		}
-
-		// Choose the model for the skill sub-agent. Default to the thorough 'proModel'
-		// unless the skill explicitly requests 'flash'.
-		targetModel := proModel
-		if skill.Manifest.Model == "flash" {
-			targetModel = flashModel
-		}
-
-		skillAgent, err := llmagent.New(llmagent.Config{
-			Name:        skill.Manifest.Name,
-			Model:       targetModel,
-			Description: skill.Manifest.Description,
-			Instruction: skill.Instructions,
-			Tools:       skillTools,
-		})
-		if err != nil {
-			log.Fatalf("Failed to create agent for skill %s: %v", skill.Manifest.Name, err)
-		}
-		subAgents = append(subAgents, skillAgent)
-	}
-
-	// 3. Create the Router Agent
-	routerInstruction := "You are the primary Router Agent for the Agents CLI. Help the user build, test, and deploy AI agents. Keep your answers brief, professional, and use markdown formatting. Use the list_local_files, read_local_file, and grep_search tools if you need to investigate the workspace. If file contents are provided in the prompt (e.g., via @filename references), use that information to satisfy the user's request. You MUST transfer control to specialized sub-agents (like builder_agent, codebase-investigator, gitops_agent, gemini_cli_agent, or claude_code_agent) for any substantial technical work, file modifications, complex investigations, or broad refactoring."
-
-	// Load global memory
-	if memory, err := LoadMemory(); err == nil && memory != "" {
-		routerInstruction += "\n\nUser Global Preferences & Memory:\n" + memory
-	}
-
-	// Look for local instruction files in the current directory
-	for _, name := range []string{"GEMINI.md", "AGENTS.md", "CLAUDE.md"} {
-		if b, err := os.ReadFile(name); err == nil {
-			routerInstruction += "\n\n" + fmt.Sprintf("Additional instructions from %s:\n%s", name, string(b))
-		}
-	}
-
-	routerAgent, err := llmagent.New(llmagent.Config{
-		Name:        "router_agent",
-		Model:       flashModel, // Router is always fast
-		Instruction: routerInstruction,
-		Tools:       []tool.Tool{listTool, readTool, grepTool},
-		SubAgents:   subAgents,
-	})
-	if err != nil {
-		log.Fatalf("Failed to create agent: %v", err)
-	}
-
 	// Use persistent SQLite database for sessions
 	home, _ := os.UserHomeDir()
 	dbDir := filepath.Join(home, ".config", "agents")
@@ -422,24 +345,109 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 		SessionID: sessionID,
 	})
 
-	r, err := runner.New(runner.Config{
-		AppName:        "agents-cli",
-		Agent:          routerAgent,
-		SessionService: sessionSvc,
-	})
-	if err != nil {
-		log.Fatalf("Failed to create runner: %v", err)
-	}
-
-	return &defaultManager{
-		run:           r,
+	m := &defaultManager{
 		sessionSvc:    sessionSvc,
 		userID:        "local_user",
 		sessionID:     sessionID,
-		skills:        loadedSkills,
 		clientCfg:     clientConfig,
 		pinnedContext: make(map[string]string),
+		flashModel:    flashModel,
+		proModel:      proModel,
+		toolRegistry:  toolRegistry,
 	}
+
+	if err := m.Reload(); err != nil {
+		log.Fatalf("Failed to load agents and skills: %v", err)
+	}
+
+	return m
+}
+
+func (m *defaultManager) Reload() error {
+	var subAgents []agent.Agent
+	var loadedSkills []*Skill
+
+	skillDirs := []string{}
+	entries, err := os.ReadDir("skills")
+	if err == nil {
+		for _, entry := range entries {
+			if entry.IsDir() {
+				skillDirs = append(skillDirs, filepath.Join("skills", entry.Name()))
+			}
+		}
+	} else {
+		skillDirs = []string{"skills/builder", "skills/gitops", "skills/adk-skill"}
+	}
+
+	for _, dir := range skillDirs {
+		skill, err := LoadSkill(dir)
+		if err != nil {
+			continue
+		}
+		loadedSkills = append(loadedSkills, skill)
+
+		var skillTools []tool.Tool
+		for _, toolName := range skill.Manifest.Tools {
+			if t, ok := m.toolRegistry[toolName]; ok {
+				skillTools = append(skillTools, t)
+			} else {
+				log.Printf("Warning: Skill %s requested unknown tool %s", skill.Manifest.Name, toolName)
+			}
+		}
+
+		targetModel := m.proModel
+		if skill.Manifest.Model == "flash" {
+			targetModel = m.flashModel
+		}
+
+		skillAgent, err := llmagent.New(llmagent.Config{
+			Name:        skill.Manifest.Name,
+			Model:       targetModel,
+			Description: skill.Manifest.Description,
+			Instruction: skill.Instructions,
+			Tools:       skillTools,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to create agent for skill %s: %v", skill.Manifest.Name, err)
+		}
+		subAgents = append(subAgents, skillAgent)
+	}
+
+	routerInstruction := "You are the primary Router Agent for the Agents CLI. Help the user build, test, and deploy AI agents. Keep your answers brief, professional, and use markdown formatting. Use the list_local_files, read_local_file, and grep_search tools if you need to investigate the workspace. If file contents are provided in the prompt (e.g., via @filename references), use that information to satisfy the user's request. You MUST transfer control to specialized sub-agents (like builder_agent, codebase-investigator, gitops_agent, gemini_cli_agent, or claude_code_agent) for any substantial technical work, file modifications, complex investigations, or broad refactoring."
+
+	if memory, err := LoadMemory(); err == nil && memory != "" {
+		routerInstruction += "\n\nUser Global Preferences & Memory:\n" + memory
+	}
+
+	for _, name := range []string{"GEMINI.md", "AGENTS.md", "CLAUDE.md"} {
+		if b, err := os.ReadFile(name); err == nil {
+			routerInstruction += "\n\n" + fmt.Sprintf("Additional instructions from %s:\n%s", name, string(b))
+		}
+	}
+
+	routerAgent, err := llmagent.New(llmagent.Config{
+		Name:        "router_agent",
+		Model:       m.flashModel,
+		Instruction: routerInstruction,
+		Tools:       []tool.Tool{m.toolRegistry["list_local_files"], m.toolRegistry["read_local_file"], m.toolRegistry["grep_search"]},
+		SubAgents:   subAgents,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create router agent: %v", err)
+	}
+
+	r, err := runner.New(runner.Config{
+		AppName:        "agents-cli",
+		Agent:          routerAgent,
+		SessionService: m.sessionSvc,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create runner: %v", err)
+	}
+
+	m.run = r
+	m.skills = loadedSkills
+	return nil
 }
 
 func (m *defaultManager) Skills() []*Skill {
@@ -600,7 +608,7 @@ func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan string
 			// Once we implement true streaming in the CLI, we can send partial chunks.
 			if !event.Partial && event.IsFinalResponse() {
 				var fullResponse strings.Builder
-				
+
 				// Prefix with the author name if it's not the default router
 				author := event.Author
 				if author == "" {

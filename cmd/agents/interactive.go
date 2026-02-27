@@ -1032,6 +1032,7 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 			"  /context     Displays the current files and metadata loaded in memory.",
 			"  /drop [file] Removes a specific file from the active context window.",
 			"  /skills      Lists dynamically loaded agent skills.",
+			"  /skills reload Dynamically reloads all agent skills.",
 			"  /sessions    Lists all persisted interactive sessions in the SQLite database.",
 			"  /model       Set the active LLM provider (e.g. /model auto).",
 			"  /model list  Open an interactive list of all available models.",
@@ -1069,6 +1070,15 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 		icon := agentMsgStyle.Render("✦ ")
 		m.messages = append(m.messages, lipgloss.JoinHorizontal(lipgloss.Top, icon, lipgloss.JoinVertical(lipgloss.Left, lines...)))
 	case "/skills":
+		if len(parts) > 1 && parts[1] == "reload" {
+			if err := m.manager.Reload(); err != nil {
+				m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Render("Failed to reload skills: "+err.Error()))
+			} else {
+				m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"Skills and agents reloaded successfully.")
+			}
+			return nil
+		}
+		
 		skills := m.manager.Skills()
 		if len(skills) == 0 {
 			m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"No dynamic skills are currently loaded.")

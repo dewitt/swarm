@@ -64,9 +64,10 @@ when the CLI needs a decision.
   - **Selection Menus:** If an agent asks "Which framework would you like?",
     the user should be presented with an arrow-key navigable list (e.g.,
     `> ADK Python`, `> LangGraph`, `> Custom`).
-- **Fuzzy Finding:** When the agent asks for a file context, the CLI can offer
-  an integrated fuzzy-finder (like `fzf`) to let the user select the file
-  instantly.
+- **Fuzzy Finding:** When the agent needs file context, the CLI offers an
+  inline fuzzy-finder overlay. Typing `@` instantly opens a dynamically
+  filtered list of workspace files right above the input prompt, allowing
+  users to select context without losing their train of thought.
 
 ## 5. Context Visibility
 
@@ -116,14 +117,28 @@ intended for the local client.
 
 ## Context and Session Management
 
-For long-running investigations, token context windows become a critical constraint. The UI and SDK must work together to provide developers with granular control over what the model remembers.
+For long-running investigations, token context windows become a critical
+constraint. The UI and SDK must work together to provide developers with
+granular control over what the model remembers.
 
 ### Explicit Context Pinning
-Instead of just sending files as part of a one-off prompt (e.g., `@file.go`), users should be able to pin files to the session's active memory using `/context add file.go`. These files will be automatically re-read and injected into every subsequent prompt.
 
-The UI should display these pinned files clearly (e.g., in a dedicated pane or via the `/context` command) so the user always knows what the model "sees."
+Instead of just sending files as part of a one-off prompt (e.g., `@file.go`),
+users should be able to pin files to the session's active memory using
+`/context add file.go`. These files will be automatically re-read and injected
+into every subsequent prompt.
+
+The UI should display these pinned files clearly (e.g., in a dedicated pane or
+via the `/context` command) so the user always knows what the model "sees."
 
 ### Session Rewind and Resumption
-Conversations with agents are non-linear. If an agent hallucinates or goes down the wrong path, a developer shouldn't have to restart their entire 30-minute session.
-- The UI should support a `/rewind` command that drops the last $N$ turns from the conversation history.
-- Sessions should be persisted to disk (`~/.config/agents/sessions/`) so a user can close their laptop, come back the next day, and run `agents --resume` to pick up exactly where they left off.
+
+Conversations with agents are non-linear. If an agent hallucinates or goes
+down the wrong path, a developer shouldn't have to restart their entire
+30-minute session.
+
+- The UI should support a `/rewind` command that drops the last $N$ turns from
+  the conversation history.
+- Sessions should be persisted to disk (`~/.config/agents/sessions/`) so a
+  user can close their laptop, come back the next day, and run
+  `agents --resume` to pick up exactly where they left off.

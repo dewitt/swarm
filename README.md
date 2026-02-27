@@ -7,16 +7,37 @@ into native ecosystems.
 
 ## Features
 
-- **Terminal UI**: Persistent, interactive terminal sessions built on Bubble Tea, featuring rich text, async execution, client-side slash commands (`/help`, `/model list`, `/skills`), and multi-pane layouts.
-- **Direct Shell Execution (`!`)**: Toggle into a dedicated shell mode or run single-shot bash commands instantly from within the REPL without breaking your flow.
-- **Context Referencing (`@`)**: Seamlessly inject files directly into the LLM's context window by typing `@filename` (e.g., "Explain how @pkg/sdk/manager.go works").
-- **Read-Only Plan Mode**: Use the `/plan` command or `--plan` flag to safely brainstorm architecture with the agent explicitly sandboxed from modifying your filesystem.
-- **Global Memory**: Teach the agent your preferences once using the `/remember` command, and it will persist across all your projects.
-- **UNIX Piping**: Integrate agents directly into your workflows via single-shot prompts and standard input (e.g., `cat error.log | agents -p "What went wrong?"`).
-- **Dynamic Skills Architecture**: Completely decoupled capabilities adhering to the open `agentskills.io` standard (`SKILL.md`). Easily write, share, and dynamically load new skills without recompiling.
-- **Framework Agnostic**: Natively supports Google ADK, LangGraph, and custom architectures via `agent.yaml` manifests.
-- **Native CI/CD Integration**: Seamlessly scaffolds standard CI/CD pipelines (like GitHub Actions) and integrates directly with your native ecosystem.
-- **Agent Swarms**: The core SDK is powered by the Google Agent Development Kit (ADK) and orchestrates a swarm of specialized internal agents (Router, Builder, Deployment) to fulfill your requests.
+- **Terminal UI**: Persistent, interactive terminal sessions built on Bubble
+  Tea, featuring rich native markdown rendering (`glamour`), async execution,
+  client-side slash commands (`/help`, `/model list`, `/skills`), and
+  multi-pane layouts.
+- **Direct Shell Execution (`!`)**: Toggle into a dedicated shell mode or run
+  single-shot bash commands instantly from within the REPL without breaking
+  your flow.
+- **Context Referencing (`@`)**: Seamlessly inject files directly into the
+  LLM's context window by typing `@` to trigger an inline, fuzzy-filtered
+  overlay of your workspace files.
+- **Session Persistence**: Sessions are automatically persisted to a local
+  SQLite database, allowing you to view past activity with `/sessions` and
+  ensuring no context is lost.
+- **Read-Only Plan Mode**: Use the `/plan` command or `--plan` flag to safely
+  brainstorm architecture with the agent explicitly sandboxed from modifying
+  your filesystem.
+- **Global Memory**: Teach the agent your preferences once using the
+  `/remember` command, and it will persist across all your projects.
+- **UNIX Piping**: Integrate agents directly into your workflows via
+  single-shot prompts and standard input (e.g.,
+  `cat error.log | agents -p "What went wrong?"`).
+- **Dynamic Skills Architecture**: Completely decoupled capabilities adhering
+  to the open `agentskills.io` standard (`SKILL.md`). Easily write, share, and
+  dynamically load new skills without recompiling.
+- **Framework Agnostic**: Natively supports Google ADK, LangGraph, and custom
+  architectures via `agent.yaml` manifests.
+- **Native CI/CD Integration**: Seamlessly scaffolds standard CI/CD pipelines
+  (like GitHub Actions) and integrates directly with your native ecosystem.
+- **Agent Swarms**: The core SDK is powered by the Google Agent Development
+  Kit (ADK) and orchestrates a swarm of specialized internal agents (Router,
+  Builder, Deployment) to fulfill your requests.
 
 ## Prerequisites
 

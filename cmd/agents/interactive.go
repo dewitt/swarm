@@ -243,7 +243,6 @@ const (
 	stateChat uiState = iota
 	stateModelList
 	stateShell
-	stateHistorySearch
 )
 
 func getWorkspaceFiles() []string {
@@ -266,7 +265,6 @@ type model struct {
 	viewport    viewport.Model
 	spinner     spinner.Model
 	listModel   list.Model
-	historyList list.Model
 	messages    []string
 	history     []string
 	historyIdx  int
@@ -288,6 +286,8 @@ type model struct {
 	acIndex        int
 	acActive       bool
 	acPrefix       string
+	acMode         string // "file", "command", "history"
+	acHasMore      bool
 }
 
 func updateAutocomplete(m *model) {
@@ -295,6 +295,47 @@ func updateAutocomplete(m *model) {
 		m.workspaceFiles = getWorkspaceFiles()
 	}
 	val := m.textArea.Value()
+	m.acHasMore = false
+
+	if m.acMode == "history" {
+		m.acActive = true
+		m.acPrefix = ""
+		
+		// Deduplicate history
+		var uniqueHist []string
+		seen := make(map[string]bool)
+		for i := len(m.history) - 1; i >= 0; i-- {
+			h := m.history[i]
+			if !seen[h] {
+				uniqueHist = append(uniqueHist, h)
+				seen[h] = true
+			}
+		}
+
+		if val == "" {
+			m.acMatches = uniqueHist
+		} else {
+			matches := fuzzy.Find(val, uniqueHist)
+			var mstrs []string
+			for _, match := range matches {
+				mstrs = append(mstrs, match.Str)
+			}
+			m.acMatches = mstrs
+		}
+		
+		if len(m.acMatches) > 8 {
+			m.acHasMore = true
+			m.acMatches = m.acMatches[:8]
+		}
+		
+		if len(m.acMatches) == 0 {
+			m.acActive = false
+			m.acIndex = 0
+		} else if m.acIndex >= len(m.acMatches) {
+			m.acIndex = 0
+		}
+		return
+	}
 
 	// find the last word
 	lastSpace := strings.LastIndexAny(val, " \n")
@@ -324,8 +365,9 @@ func updateAutocomplete(m *model) {
 			}
 			m.acMatches = mstrs
 		}
-		if len(m.acMatches) > 5 {
-			m.acMatches = m.acMatches[:5]
+		if len(m.acMatches) > 8 {
+			m.acHasMore = true
+			m.acMatches = m.acMatches[:8]
 		}
 		if len(m.acMatches) == 0 {
 			m.acActive = false
@@ -347,8 +389,9 @@ func updateAutocomplete(m *model) {
 			}
 			m.acMatches = mstrs
 		}
-		if len(m.acMatches) > 5 {
-			m.acMatches = m.acMatches[:5]
+		if len(m.acMatches) > 8 {
+			m.acHasMore = true
+			m.acMatches = m.acMatches[:8]
 		}
 		if len(m.acMatches) == 0 {
 			m.acActive = false
@@ -451,11 +494,6 @@ func initialModel(planMode bool) model {
 	l.SetShowStatusBar(false)
 	l.SetFilteringEnabled(true)
 
-	hl := list.New([]list.Item{}, list.NewDefaultDelegate(), 0, 0)
-	hl.Title = "Search History"
-	hl.SetShowStatusBar(false)
-	hl.SetFilteringEnabled(true)
-
 	// Create a beautiful splash screen
 	leftBox := welcomeBoxStyle.Render(fmt.Sprintf("%s\n\nWelcome back, %s!", renderLogo(), getUserName()))
 	rightBox := infoBoxStyle.Render(initialTips)
@@ -488,7 +526,6 @@ func initialModel(planMode bool) model {
 		viewport:    vp,
 		spinner:     s,
 		listModel:   l,
-		historyList: hl,
 		messages:    []string{welcomeScreen},
 		history:     loadedHist,
 		historyIdx:  len(loadedHist),
@@ -586,61 +623,26 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	if m.state == stateHistorySearch {
-		switch msg := msg.(type) {
-		case tea.WindowSizeMsg:
-			// pass through
-		case tea.KeyMsg:
-			if msg.Type == tea.KeyEsc {
-				m.state = stateChat
-				return m, tea.ClearScreen
-			}
-			if msg.Type == tea.KeyEnter && m.historyList.FilterState() != list.Filtering {
-				if i, ok := m.historyList.SelectedItem().(item); ok {
-					m.textArea.SetValue(i.name)
-					m.textArea.CursorEnd()
-				}
-				m.state = stateChat
-				m.updateViewport()
-				return m, tea.ClearScreen
-			}
-
-			var listCmd tea.Cmd
-			m.historyList, listCmd = m.historyList.Update(msg)
-
-			if listCmd != nil {
-				if msg.String() == "q" && m.historyList.FilterState() != list.Filtering {
-					m.state = stateChat
-					return m, tea.ClearScreen
-				}
-			}
-			return m, listCmd
-		}
-	}
-
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.Type {
 		case tea.KeyEsc:
+			if m.acActive {
+				m.acActive = false
+				m.acMode = ""
+				return m, nil
+			}
 			return m, tea.Quit
 		case tea.KeyCtrlJ:
 			m.textArea.InsertString("\n")
 			return m, nil
 		case tea.KeyCtrlR:
 			if m.state == stateChat && !m.loading {
-				m.state = stateHistorySearch
-				var items []list.Item
-				// deduplicate history and show newest first
-				seen := make(map[string]bool)
-				for i := len(m.history) - 1; i >= 0; i-- {
-					h := m.history[i]
-					if !seen[h] {
-						items = append(items, item{name: h, description: "History"})
-						seen[h] = true
-					}
-				}
-				m.historyList.SetItems(items)
-				m.historyList.ResetFilter()
+				m.acActive = true
+				m.acMode = "history"
+				m.acPrefix = ""
+				m.textArea.SetValue("")
+				updateAutocomplete(&m)
 				return m, tea.ClearScreen
 			}
 		case tea.KeyEnter:
@@ -653,11 +655,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			if m.acActive && len(m.acMatches) > 0 {
-				val := m.textArea.Value()
-				lastSpace := strings.LastIndexAny(val, " \n")
-				m.textArea.SetValue(val[:lastSpace+1] + m.acPrefix + m.acMatches[m.acIndex] + " ")
+				if m.acMode == "history" {
+					m.textArea.SetValue(m.acMatches[m.acIndex])
+				} else {
+					val := m.textArea.Value()
+					lastSpace := strings.LastIndexAny(val, " \n")
+					m.textArea.SetValue(val[:lastSpace+1] + m.acPrefix + m.acMatches[m.acIndex] + " ")
+				}
 				m.textArea.CursorEnd()
 				m.acActive = false
+				m.acMode = ""
 				// Continue to submit
 			}
 
@@ -718,11 +725,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Batch(cmds...)
 		case tea.KeyTab:
 			if m.acActive && len(m.acMatches) > 0 {
-				val := m.textArea.Value()
-				lastSpace := strings.LastIndexAny(val, " \n")
-				m.textArea.SetValue(val[:lastSpace+1] + m.acPrefix + m.acMatches[m.acIndex] + " ")
+				if m.acMode == "history" {
+					m.textArea.SetValue(m.acMatches[m.acIndex])
+				} else {
+					val := m.textArea.Value()
+					lastSpace := strings.LastIndexAny(val, " \n")
+					m.textArea.SetValue(val[:lastSpace+1] + m.acPrefix + m.acMatches[m.acIndex] + " ")
+				}
 				m.textArea.CursorEnd()
 				m.acActive = false
+				m.acMode = ""
 			}
 			return m, nil
 		case tea.KeyUp:
@@ -845,7 +857,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// List Model: account for outer border (2) and padding (4 horizontal, 2 vertical)
 		m.listModel.SetSize(m.width-6, m.height-4)
-		m.historyList.SetSize(m.width-6, m.height-4)
 		m.updateViewport()
 		return m, nil
 	}
@@ -1127,8 +1138,6 @@ func (m model) View() string {
 		} else {
 			mainBody = lipgloss.NewStyle().Padding(1, 2).Render(m.listModel.View())
 		}
-	} else if m.state == stateHistorySearch {
-		mainBody = lipgloss.NewStyle().Padding(1, 2).Render(m.historyList.View())
 	} else {
 		// 1.5. Autocomplete overlay
 		var acView string
@@ -1140,6 +1149,9 @@ func (m model) View() string {
 				} else {
 					lines = append(lines, lipgloss.NewStyle().Render(" "+match+" "))
 				}
+			}
+			if m.acHasMore {
+				lines = append(lines, lipgloss.NewStyle().Foreground(lipgloss.Color("#888888")).Render(" ▼ more"))
 			}
 			acBox := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(borderColor).Render(strings.Join(lines, "\n"))
 			acView = acBox

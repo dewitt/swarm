@@ -6,6 +6,7 @@ import (
 	"log"
 	"math/rand"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -59,6 +60,53 @@ func readLocalFile(ctx tool.Context, args ReadFileArgs) (ReadFileResult, error) 
 		return ReadFileResult{Error: err.Error()}, nil
 	}
 	return ReadFileResult{Content: string(b)}, nil
+}
+
+type GrepSearchArgs struct {
+	Pattern string `json:"pattern"`
+	Dir     string `json:"dir"` // Optional, defaults to current directory
+}
+
+type GrepSearchResult struct {
+	Output string `json:"output"`
+	Error  string `json:"error,omitempty"`
+}
+
+func grepSearch(ctx tool.Context, args GrepSearchArgs) (GrepSearchResult, error) {
+	dir := args.Dir
+	if dir == "" {
+		dir = "."
+	}
+
+	// We use 'rg' (ripgrep) if available, falling back to standard grep if not.
+	// We use a bash wrapper to handle the fallback logic.
+	script := fmt.Sprintf(`
+		if command -v rg >/dev/null 2>&1; then
+			rg -n "%s" "%s"
+		else
+			grep -rn "%s" "%s"
+		fi
+	`, args.Pattern, dir, args.Pattern, dir)
+
+	cmd := exec.Command("bash", "-c", script)
+	out, err := cmd.CombinedOutput()
+	
+	// grep returns exit code 1 if no matches found, which isn't a failure for our tool.
+	if err != nil && cmd.ProcessState.ExitCode() != 1 {
+		return GrepSearchResult{Error: err.Error() + ": " + string(out)}, nil
+	}
+	
+	if len(out) == 0 {
+		return GrepSearchResult{Output: "No matches found."}, nil
+	}
+	
+	// Truncate output to prevent massive context bloat
+	strOut := string(out)
+	if len(strOut) > 10000 {
+		strOut = strOut[:10000] + "\n...[TRUNCATED: output too large]..."
+	}
+	
+	return GrepSearchResult{Output: strOut}, nil
 }
 
 type WriteFileArgs struct {
@@ -189,6 +237,14 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 		log.Fatalf("Failed to create readTool: %v", err)
 	}
 
+	grepTool, err := functiontool.New(functiontool.Config{
+		Name:        "grep_search",
+		Description: "Searches for a regex pattern within files in a directory.",
+	}, grepSearch)
+	if err != nil {
+		log.Fatalf("Failed to create grepTool: %v", err)
+	}
+
 	writeTool, err := functiontool.New(functiontool.Config{
 		Name:        "write_local_file",
 		Description: "Writes content to a file at the specified path. Creates directories if necessary.",
@@ -225,6 +281,7 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 	toolRegistry := map[string]tool.Tool{
 		"list_local_files": listTool,
 		"read_local_file":  readTool,
+		"grep_search":      grepTool,
 		"write_local_file": writeTool,
 		"git_commit":       gitCommit,
 		"git_push":         gitPush,
@@ -282,7 +339,7 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 	}
 
 	// 3. Create the Router Agent
-	routerInstruction := "You are the primary Router Agent for the Agents CLI. Help the user build, test, and deploy AI agents. Keep your answers brief, professional, and use markdown formatting. Use the list_local_files and read_local_file tools if you need to investigate the workspace. If file contents are provided in the prompt (e.g., via @filename references), use that information to satisfy the user's request. Transfer to sub-agents (like builder_agent or gitops_agent) based on the user's intent."
+	routerInstruction := "You are the primary Router Agent for the Agents CLI. Help the user build, test, and deploy AI agents. Keep your answers brief, professional, and use markdown formatting. Use the list_local_files, read_local_file, and grep_search tools if you need to investigate the workspace. If file contents are provided in the prompt (e.g., via @filename references), use that information to satisfy the user's request. Transfer to sub-agents (like builder_agent or gitops_agent) based on the user's intent."
 
 	// Load global memory
 	if memory, err := LoadMemory(); err == nil && memory != "" {
@@ -300,7 +357,7 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 		Name:        "router_agent",
 		Model:       m,
 		Instruction: routerInstruction,
-		Tools:       []tool.Tool{listTool, readTool},
+		Tools:       []tool.Tool{listTool, readTool, grepTool},
 		SubAgents:   subAgents,
 	})
 	if err != nil {

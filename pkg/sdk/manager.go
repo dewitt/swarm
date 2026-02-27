@@ -570,6 +570,15 @@ func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan string
 				return
 			}
 
+			if event.Content != nil {
+				for _, part := range event.Content.Parts {
+					if part.FunctionCall != nil {
+						// Send ephemeral tool indication to the frontend
+						out <- fmt.Sprintf("[TOOL_CALL] %s", part.FunctionCall.Name)
+					}
+				}
+			}
+
 			// If it's a partial event, ignore it for now since the CLI waits for the final chunk.
 			// Once we implement true streaming in the CLI, we can send partial chunks.
 			if !event.Partial && event.IsFinalResponse() {

@@ -217,6 +217,17 @@ What's new
 ctrl+c to background or exit
 `
 
+type streamMsg struct {
+	text string
+	ch   <-chan string
+}
+
+type streamDoneMsg struct{}
+
+type streamErrMsg struct {
+	err error
+}
+
 type responseMsg struct {
 	text    string
 	err     error
@@ -280,6 +291,8 @@ type model struct {
 	activeModel string
 	renderer    *glamour.TermRenderer
 
+	toolStatus string
+
 	// Autocomplete state
 	workspaceFiles []string
 	acMatches      []string
@@ -300,7 +313,7 @@ func updateAutocomplete(m *model) {
 	if m.acMode == "history" {
 		m.acActive = true
 		m.acPrefix = ""
-		
+
 		// Deduplicate history
 		var uniqueHist []string
 		seen := make(map[string]bool)
@@ -322,12 +335,12 @@ func updateAutocomplete(m *model) {
 			}
 			m.acMatches = mstrs
 		}
-		
+
 		if len(m.acMatches) > 8 {
 			m.acHasMore = true
 			m.acMatches = m.acMatches[:8]
 		}
-		
+
 		if len(m.acMatches) == 0 {
 			m.acActive = false
 			m.acIndex = 0
@@ -782,6 +795,37 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, vpCmd
 		}
 
+	case streamMsg:
+		if strings.HasPrefix(msg.text, "[TOOL_CALL] ") {
+			m.toolStatus = strings.TrimPrefix(msg.text, "[TOOL_CALL] ")
+			m.updateViewport()
+			return m, listenForStream(msg.ch)
+		}
+		// In the future this is where we'd stream text chunks.
+		// For now ADK mostly returns the whole block at the end.
+		out := msg.text
+		if m.renderer != nil {
+			if rOut, err := m.renderer.Render(msg.text); err == nil {
+				out = rOut
+			}
+		}
+		m.messages = append(m.messages, agentMsgStyle.Render("✦\n")+strings.TrimSpace(out))
+		m.updateViewport()
+		return m, listenForStream(msg.ch)
+
+	case streamDoneMsg:
+		m.loading = false
+		m.toolStatus = ""
+		m.updateViewport()
+		return m, nil
+
+	case streamErrMsg:
+		m.loading = false
+		m.toolStatus = ""
+		m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Render("Error: "+msg.err.Error()))
+		m.updateViewport()
+		return m, nil
+
 	case responseMsg:
 		m.loading = false
 		if msg.err != nil {
@@ -904,13 +948,20 @@ func (m model) callSDK(input string) tea.Cmd {
 	if m.planMode {
 		input = "[SYSTEM: You are in PLAN MODE. You must strictly act as a read-only architectural advisor. Under NO circumstances should you use tools to write files, execute bash commands, or alter git state. Only use tools to read and list files.]\n\nUser: " + input
 	}
+	ch, err := m.manager.Chat(context.Background(), input)
+	if err != nil {
+		return func() tea.Msg { return streamErrMsg{err: err} }
+	}
+	return listenForStream(ch)
+}
+
+func listenForStream(ch <-chan string) tea.Cmd {
 	return func() tea.Msg {
-		ch, err := m.manager.Chat(context.Background(), input)
-		if err != nil {
-			return responseMsg{err: err}
+		msg, ok := <-ch
+		if !ok {
+			return streamDoneMsg{}
 		}
-		resp := <-ch
-		return responseMsg{text: resp}
+		return streamMsg{text: msg, ch: ch}
 	}
 }
 
@@ -1118,7 +1169,11 @@ func (m *model) updateViewport() {
 		s.WriteString("\n\n")
 	}
 	if m.loading {
-		s.WriteString(agentMsgStyle.Render("✦ ") + m.spinner.View() + " Thinking...")
+		status := "Thinking..."
+		if m.toolStatus != "" {
+			status = "Running " + m.toolStatus + "..."
+		}
+		s.WriteString(agentMsgStyle.Render("✦ ") + m.spinner.View() + " " + status)
 		s.WriteString("\n\n")
 	}
 	m.viewport.SetContent(s.String())

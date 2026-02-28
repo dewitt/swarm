@@ -1053,8 +1053,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Update AgentPanel
 			a, cmd := m.ensureAgent(m.activeAgent)
 			agentCmd = cmd
-			a.update("", "Completed tool")
-			// Clear telemetry when tool finishes
+			// Set back to idle to stop spinner, and keep tool name as status
+			a.update("idle", "Completed "+toolName)
 			a.telemetry = nil
 
 			if m.observeMode {
@@ -1835,9 +1835,16 @@ func (m model) renderAgentPanel() string {
 		if fidelity == "high" || fidelity == "medium" {
 			label := " " + stateLabel + " "
 			labelLen := runewidth.StringWidth(label)
+			
+			// Right-align: Put most dashes on the left, and exactly 2 dashes on the right
 			remaining := cardWidth - 2 - labelLen
-			leftDashCount := remaining / 2
-			rightDashCount := remaining - leftDashCount
+			rightDashCount := 2
+			leftDashCount := remaining - rightDashCount
+			if leftDashCount < 1 {
+				leftDashCount = 1
+				rightDashCount = remaining - leftDashCount
+				if rightDashCount < 0 { rightDashCount = 0 }
+			}
 
 			bottomLine := lipgloss.NewStyle().Foreground(color).Render(
 				border.BottomLeft + 

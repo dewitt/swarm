@@ -130,42 +130,42 @@ func renderLogo() string {
 
 	s := colorize([]string{
 		"      ",
-		"      ",
 		"  ___ ",
-		" (__  ",
-		" ___/ ",
+		" (_ -|",
+		" /___/",
+		"      ",
 	}, sMainS, sShadow)
 
 	w := colorize([]string{
 		"        ",
-		"        ",
 		" _ _ _  ",
 		"| | | | ",
-		"|__/_/  ",
+		" \\\\_/_/  ",
+		"        ",
 	}, sMainW, sShadow)
 
 	a := colorize([]string{
 		"      ",
-		"      ",
 		"  __  ",
 		" / _` ",
-		" \__,|",
+		" \\\\__, ",
+		"      ",
 	}, sMainA, sShadow)
 
 	r := colorize([]string{
 		"     ",
-		"     ",
-		"  __ ",
+		"  _  ",
 		" | _|",
 		" |_| ",
+		"     ",
 	}, sMainR, sShadow)
 
 	m := colorize([]string{
-		"         ",
-		"         ",
-		"  _ _ _  ",
-		" | | | | ",
-		" |_| |_| ",
+		"           ",
+		"  _ _ _    ",
+		" | ' ' \\\\  ",
+		" |_|_|_|   ",
+		"           ",
 	}, sMainM, sShadow)
 
 	var sb strings.Builder

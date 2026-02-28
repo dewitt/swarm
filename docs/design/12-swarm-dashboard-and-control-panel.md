@@ -78,6 +78,31 @@ entire 100k line Java codebase to Go."*
   notifications), they are presented with a unified inbox of agent completion
   reports, requests for HITL (Human-In-The-Loop) permissions, and PR links.
 
+## 4. The Separation of Concerns: SDK vs. UI
+
+A foundational principle of the `agents` project is the strict separation
+between the core SDK (`pkg/sdk/`) and the Presentation Layer (`cmd/agents/`).
+This separation must be rigorously maintained as we build out the Swarm
+Dashboard.
+
+The "Engineering Manager" paradigm is a business logic concept, not just a UI
+trick.
+
+- **The SDK Emits Standardized Events:** The core SDK must handle all the
+  complex multi-agent orchestration, dynamic provisioning, and observer
+  summarization. It must expose this state purely through a standardized Event
+  Bus or gRPC/REST interface (e.g., `AgentSpawnedEvent`,
+  `AgentStatusUpdateEvent`, `TelemetryStreamEvent`).
+- **The UI is Just a Consumer:** The TUI (Bubble Tea) is merely *one* possible
+  consumer of this event stream. It listens to the bus and renders the Agent
+  Cards accordingly.
+- **Portability:** By keeping the orchestration and telemetry strictly within
+  the SDK, we ensure that other developers can effortlessly build completely
+  different clients on top of the same swarm logic. A team could build a
+  Next.js web dashboard, a native iOS app, a VS Code extension, or a Slack
+  bot, and all of them would be able to monitor and steer the swarm
+  identically without rewriting any of the core orchestration logic.
+
 ## Architectural Requirements (SDK & UI)
 
 To achieve this, the underlying Go SDK (`pkg/sdk/`) and the Bubble Tea UI

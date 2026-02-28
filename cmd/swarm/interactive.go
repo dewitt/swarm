@@ -44,22 +44,14 @@ var (
 	statusFg       = lipgloss.AdaptiveColor{Light: "#555555", Dark: "#888888"}
 
 	// Styles
-	appStyle = lipgloss.NewStyle().
-			Border(lipgloss.NormalBorder()).
-			BorderForeground(borderColor)
-
 	logoStyle = lipgloss.NewStyle().
 			Bold(true)
 
 	welcomeBoxStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(borderColor).
-			Padding(1, 4)
+			Padding(1, 2)
 
 	infoBoxStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(borderColor).
-			Padding(1, 4)
+			Padding(1, 2)
 
 	promptStyle = lipgloss.NewStyle().
 			Foreground(googleBlue).
@@ -89,7 +81,11 @@ var (
 			Background(statusBg).
 			Height(1)
 
-	// Layout padding
+	viewportStyle = lipgloss.NewStyle().
+			Border(lipgloss.NormalBorder()).
+			BorderForeground(borderColor).
+			Padding(0, 1)
+
 	inputBoxStyle = lipgloss.NewStyle().
 			Border(lipgloss.NormalBorder()).
 			BorderForeground(borderColor).
@@ -772,7 +768,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Intercept the quit command that the list component returns on 'q' or 'ctrl+c'
 			if listCmd != nil {
 				// If the list tells us to quit, just return to the chat state instead of exiting the app.
-				// We can't easily introspect the command, but we know if they pressed 'q' while not filtering.
 				if msg.String() == "q" && m.listModel.FilterState() != list.Filtering {
 					m.state = stateChat
 					return m, tea.ClearScreen
@@ -1055,7 +1050,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Update AgentPanel
 			a, cmd := m.ensureAgent(m.activeAgent)
 			agentCmd = cmd
-			a.update("", "Completed "+toolName)
+			a.update("", "Completed tool")
 			// Clear telemetry when tool finishes
 			a.telemetry = nil
 
@@ -1214,9 +1209,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(cmds...)
 
 	case tea.WindowSizeMsg:
-		// Account for the outer border (2 lines) and the status bar (1 line)
-		m.width = msg.Width - 2
-		m.height = msg.Height - 3
+		m.width = msg.Width
+		m.height = msg.Height
 
 		m.textArea.SetWidth(m.width - 4)
 
@@ -1225,9 +1219,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			agentPanelHeight = lipgloss.Height(m.renderAgentPanel())
 		}
 
-		// Viewport height: Inner box minus input height, borders, and agentPanel
+		// Viewport height: Screen minus (Agent Panel + Input Area + Status Line + Borders)
+		// Borders: 2 for Agent Panel, 2 for Viewport, 2 for Input = 6 lines
+		// Status Line: 1 line
+		// TextArea height: 3 lines
 		m.viewport.Width = m.width - 4
-		m.viewport.Height = m.height - m.textArea.Height() - 3 - agentPanelHeight
+		m.viewport.Height = m.height - m.textArea.Height() - agentPanelHeight - 7
 
 		// Update glamour word wrap
 		if m.renderer != nil {
@@ -1292,33 +1289,19 @@ func (m *model) dequeueAndRun() tea.Cmd {
 
 	// Reset AgentPanel for new task
 	for _, a := range m.agents {
-		a.update("idle", "")
-		a.update("", "Idle")
+		a.update("idle", "Idle")
 	}
 	if r := m.findAgent("Router"); r != nil {
-		r.update("active", "")
-		r.update("", "Processing input…")
+		r.update("active", "Processing input…")
 	}
 
 	nextInput := m.inputQueue[0]
 	m.inputQueue = m.inputQueue[1:]
 
-	if m.state == stateShell {
-		m.loading = true
-		ctx, cancel := context.WithCancel(context.Background())
-		m.cancelChat = cancel
-		return m.runShellCommand(ctx, nextInput)
-	} else if strings.HasPrefix(nextInput, "!") {
-		m.loading = true
-		ctx, cancel := context.WithCancel(context.Background())
-		m.cancelChat = cancel
-		return m.runShellCommand(ctx, strings.TrimSpace(strings.TrimPrefix(nextInput, "!")))
-	} else {
-		m.loading = true
-		ctx, cancel := context.WithCancel(context.Background())
-		m.cancelChat = cancel
-		return m.callSDK(ctx, nextInput)
-	}
+	m.loading = true
+	ctx, cancel := context.WithCancel(context.Background())
+	m.cancelChat = cancel
+	return m.callSDK(ctx, nextInput)
 }
 
 func listenForStream(ch <-chan sdk.ChatEvent) tea.Cmd {
@@ -1523,8 +1506,7 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 		}
 		m.manager.Reset()
 		for _, a := range m.agents {
-			a.update("idle", "")
-			a.update("", "Idle")
+			a.update("idle", "Idle")
 		}
 		m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"Screen and conversation history cleared. Context window reset.")
 	case "/rewind":
@@ -1536,8 +1518,7 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 			m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Render("Failed to rewind: "+err.Error()))
 		} else {
 			for _, a := range m.agents {
-				a.update("idle", "")
-				a.update("", "Idle")
+				a.update("idle", "Idle")
 			}
 			// Wipe the local messages to reflect the rewound state (or just append a notice)
 			m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+fmt.Sprintf("Rewound the conversation history by %d turn(s).", n))
@@ -1635,8 +1616,7 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 }
 
 func (m *model) updateViewport() {
-	// Logic formerly here is now handled dynamically in View() to support
-	// responsive splash screens and viewport content.
+	// Dynamically handled in View()
 }
 
 func (m *model) updateInputStyle() {
@@ -1703,7 +1683,7 @@ func (m model) renderAgentPanel() string {
 			cols = 1
 		}
 	}
-	availableWidth := m.width - 4
+	availableWidth := m.width - 2
 	cardWidth := availableWidth / cols
 
 	// Helper to ensure an icon or spinner is exactly 2 cells wide
@@ -1719,16 +1699,13 @@ func (m model) renderAgentPanel() string {
 	}
 
 	// Helper to render a perfectly aligned line using two fixed-width columns.
-	// This approach is robust across modern and legacy terminals.
 	renderLine := func(prefix string, text string, style lipgloss.Style, width int) string {
 		prefixComp := padPrefix(prefix)
-		
-		contentWidth := width - 3 // 2 cells for prefix, 1 for spacer
+		contentWidth := width - 3
 		if runewidth.StringWidth(text) > contentWidth {
 			text = runewidth.Truncate(text, contentWidth-1, "…")
 		}
 		contentComp := style.Width(contentWidth).Render(text)
-
 		return lipgloss.JoinHorizontal(lipgloss.Left, prefixComp+" ", contentComp)
 	}
 
@@ -1747,7 +1724,6 @@ func (m model) renderAgentPanel() string {
 			color = colorError
 		}
 
-		// Use a style without the bottom border so we can manually render the status-in-border
 		cardStyle := lipgloss.NewStyle().
 			Border(border).
 			BorderForeground(color).
@@ -1776,7 +1752,6 @@ func (m model) renderAgentPanel() string {
 		contentWidth := cardWidth - 4
 		line1 := renderLine(a.icon, a.name, lipgloss.NewStyle().Foreground(color).Bold(true), contentWidth)
 		
-		// Prioritize telemetry if active
 		mainText := a.status
 		if len(a.telemetry) > 0 && a.state == "active" {
 			mainText = a.telemetry[len(a.telemetry)-1]
@@ -1788,31 +1763,18 @@ func (m model) renderAgentPanel() string {
 			cardContent = lipgloss.JoinVertical(lipgloss.Left, line1, line2)
 			cardStyle = cardStyle.Height(2)
 		} else {
-			// Low fidelity
 			cardStyle = lipgloss.NewStyle().Border(border).BorderForeground(color).Width(6).Height(1).Padding(0, 1)
 			cardContent = lipgloss.NewStyle().Width(4).Align(lipgloss.Center).Render(a.icon)
 		}
 
 		renderedCard := cardStyle.Render(cardContent)
 
-		// If high/medium fidelity, append the custom bottom border with status label
 		if fidelity == "high" || fidelity == "medium" {
-			// Construct: └─────────── State ─┘
 			label := " " + stateLabel + " "
 			labelLen := runewidth.StringWidth(label)
-			
-			// Total width of the bottom border line must match cardWidth
-			// minus the corner characters (2)
 			remaining := cardWidth - 2 - labelLen
-			
-			leftDashCount := remaining - 2 // Leave at least 2 dashes on the right
-			if leftDashCount < 1 {
-				leftDashCount = 1
-			}
-			rightDashCount := cardWidth - 2 - labelLen - leftDashCount
-			if rightDashCount < 0 {
-				rightDashCount = 0
-			}
+			leftDashCount := remaining / 2
+			rightDashCount := remaining - leftDashCount
 
 			bottomLine := lipgloss.NewStyle().Foreground(color).Render(
 				border.BottomLeft + 
@@ -1821,10 +1783,8 @@ func (m model) renderAgentPanel() string {
 				strings.Repeat(border.Bottom, rightDashCount) + 
 				border.BottomRight,
 			)
-			
 			renderedCard = lipgloss.JoinVertical(lipgloss.Left, renderedCard, bottomLine)
 		}
-
 		cards = append(cards, renderedCard)
 	}
 
@@ -1917,34 +1877,20 @@ func (m model) View() string {
 	var renderedMessages []string
 	for _, msg := range m.messages {
 		if msg == "SPLASH_SCREEN" {
-			// Calculate 2/3 and 1/3 split for responsive splash screen
-			// We subtract 2 for the outer borders of the app itself
-			innerAppWidth := m.width - 2
-			leftWidth := (innerAppWidth * 2) / 3
-			rightWidth := innerAppWidth - leftWidth
-
-			// Both boxes have RoundedBorder (2 cols) and Padding(1, 4) (8 cols)
-			// Total horizontal overhead is 10
-			leftContentWidth := leftWidth - 10
-			rightContentWidth := rightWidth - 10
+			// SPLASH_SCREEN split: 2/3 Logo, 1/3 Recent Activity
+			leftW := (m.width * 2) / 3
+			rightW := m.width - leftW - 2
 			
-			if leftContentWidth < 20 { leftContentWidth = 20 }
-			if rightContentWidth < 20 { rightContentWidth = 20 }
-
-			// Render boxes with explicit width and matching height
-			leftBox := welcomeBoxStyle.Copy().Width(leftContentWidth).Height(12).Render(m.welcomeScreen[0])
+			left := welcomeBoxStyle.Copy().Width(leftW).Render(m.welcomeScreen[0])
+			right := infoBoxStyle.Copy().Width(rightW).Render(getRecentActivity(rightW))
 			
-			// Dynamically refresh the recent activity with the calculated inner width
-			dynamicRecentActivity := getRecentActivity(rightContentWidth + 10)
-			rightBox := infoBoxStyle.Copy().Width(rightContentWidth).Height(12).Render(dynamicRecentActivity)
-			
-			renderedMessages = append(renderedMessages, lipgloss.JoinHorizontal(lipgloss.Top, leftBox, rightBox))
+			renderedMessages = append(renderedMessages, lipgloss.JoinHorizontal(lipgloss.Top, left, right))
 		} else {
 			renderedMessages = append(renderedMessages, msg)
 		}
 	}
 
-	// Add dynamic status/logs if loading
+	// Add dynamic status if loading
 	if m.loading {
 		if m.observeMode && len(m.observeLog) > 0 {
 			displayLogs := m.observeLog
@@ -1975,111 +1921,37 @@ func (m model) View() string {
 		renderedMessages = append(renderedMessages, agentMsgStyle.Render(fmt.Sprintf("✦ [%s] ", agentLabel))+m.spinner.View()+" "+status)
 	}
 
-	// Update viewport content dynamically
+	// Update viewport content
 	m.viewport.SetContent(strings.Join(renderedMessages, "\n\n"))
 	m.viewport.GotoBottom()
 
-	var mainBody string
 	agentPanelView := ""
 	if m.showAgentPanel {
 		agentPanelView = m.renderAgentPanel()
 	}
-	agentPanelHeight := lipgloss.Height(agentPanelView)
-
-	if m.state == stateModelList {
-		if m.loading {
-			m.viewport.Height = m.height - 6 - agentPanelHeight
-			mainBody = lipgloss.JoinVertical(lipgloss.Left, agentPanelView, m.viewport.View(), inputBoxStyle.Render(m.spinner.View()+" Fetching models…"))
-		} else {
-			mainBody = lipgloss.JoinVertical(lipgloss.Left, agentPanelView, lipgloss.NewStyle().Padding(1, 2).Render(m.listModel.View()))
-		}
-	} else {
-		// 1.5. Autocomplete overlay
-		var acView string
-		if m.acActive && len(m.acMatches) > 0 {
-			var lines []string
-			maxMatchWidth := m.width - 6
-			for i, match := range m.acMatches {
-				displayMatch := strings.ReplaceAll(match, "\n", " ")
-				if len(displayMatch) > maxMatchWidth && maxMatchWidth > 3 {
-					displayMatch = displayMatch[:maxMatchWidth-3] + "…"
-				}
-				if i == m.acIndex {
-					lines = append(lines, lipgloss.NewStyle().Background(borderColor).Render(" "+displayMatch+" "))
-				} else {
-					lines = append(lines, lipgloss.NewStyle().Render(" "+displayMatch+" "))
-				}
-			}
-			if m.acHasMore {
-				lines = append(lines, lipgloss.NewStyle().Foreground(lipgloss.Color("#888888")).Render(" ▼ more"))
-			}
-			acBox := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(borderColor).Render(strings.Join(lines, "\n"))
-			acView = acBox
-		}
-
-		// 2. Input
-		inputView := inputBoxStyle.Render(m.textArea.View())
-
-		if acView != "" {
-			acHeight := lipgloss.Height(acView)
-			m.viewport.Height = m.height - m.textArea.Height() - 3 - acHeight - agentPanelHeight
-			mainBody = lipgloss.JoinVertical(lipgloss.Left, agentPanelView, m.viewport.View(), lipgloss.NewStyle().PaddingLeft(1).Render(acView), inputView)
-		} else {
-			m.viewport.Height = m.height - m.textArea.Height() - 3 - agentPanelHeight
-			mainBody = lipgloss.JoinVertical(lipgloss.Left, agentPanelView, m.viewport.View(), inputView)
-		}
-	}
-
-	// 3. Status
-	w1 := m.width / 3
-	w2 := m.width / 3
+	
+	// Output Box (Viewport) with border
+	vpView := viewportStyle.Width(m.width - 2).Render(m.viewport.View())
+	
+	// Input Box with border
+	inputView := inputBoxStyle.Width(m.width - 2).Render(m.textArea.View())
+	
+	// Bottom Status Line (no border)
+	w1, w2 := m.width/3, m.width/3
 	w3 := m.width - w1 - w2
-
-	baseStyle := statusBarStyle.Copy()
-	p1Style := baseStyle.Copy().Width(w1).Align(lipgloss.Left)
-	p2Style := baseStyle.Copy().Width(w2).Align(lipgloss.Center)
-	p3Style := baseStyle.Copy().Width(w3).Align(lipgloss.Right)
-
-	cwdText := " " + m.cwd
-	if m.gitBranch != "" {
-		mod := ""
-		if m.gitModified {
-			mod = "*"
-		}
-		cwdText += fmt.Sprintf(" (%s%s)", m.gitBranch, mod)
-	}
-	p1 := p1Style.Render(cwdText)
-
-	modeText := "local mode"
-	if m.state == stateShell {
-		modeText = "shell mode"
-		p2Style = p2Style.Foreground(googleYellow)
-	} else if m.planMode {
-		modeText = "plan mode"
-		p2Style = p2Style.Foreground(googleYellow)
-	}
-	p2 := p2Style.Render(modeText)
-
-	ctxCount := 0
-	if m.manager != nil {
-		ctxCount = len(m.manager.ListContext())
-	}
-	ctxStr := ""
-	if ctxCount > 0 {
-		ctxStr = fmt.Sprintf(" [%d pinned] ", ctxCount)
-	}
-	p3 := p3Style.Render(ctxStr + m.activeModel + " ")
-
+	p1 := statusBarStyle.Copy().Width(w1).Align(lipgloss.Left).Render(" " + m.cwd)
+	p2 := statusBarStyle.Copy().Width(w2).Align(lipgloss.Center).Render("swarm mode")
+	p3 := statusBarStyle.Copy().Width(w3).Align(lipgloss.Right).Render(m.activeModel + " ")
 	statusView := lipgloss.JoinHorizontal(lipgloss.Top, p1, p2, p3)
-	boxedBody := appStyle.Width(m.width).Height(m.height).Render(mainBody)
 
-	return lipgloss.JoinVertical(lipgloss.Left, boxedBody, statusView)
+	mainBody := lipgloss.JoinVertical(lipgloss.Left, agentPanelView, vpView, inputView)
+	return lipgloss.JoinVertical(lipgloss.Left, mainBody, statusView)
 }
 
 func launchInteractiveShell(planMode bool, resume bool) error {
 	p := tea.NewProgram(initialModel(planMode, resume), tea.WithAltScreen(), tea.WithMouseCellMotion())
 	if _, err := p.Run(); err != nil {
-		return fmt.Errorf("could not start interactive shell: %w", err)
+		return fmt.Errorf("error: %w", err)
 	}
 	return nil
 }

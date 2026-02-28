@@ -122,5 +122,5 @@ new projects, or deploy existing agents.
 ______________________________________________________________________
 
 *The `demo.gif` above is generated autonomously using Charmbracelet's `vhs`
-tool. Agents working on this project should re-run `vhs demo_swarm.tape` whenever
+tool. Agents working on this project should re-run `vhs demo.tape` whenever
 they significantly alter the UI.*

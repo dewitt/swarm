@@ -100,7 +100,7 @@ func renderLogo() string {
 			Height(3).
 			Align(lipgloss.Center, lipgloss.Center).
 			Bold(true).
-			MarginRight(0) 
+			MarginRight(1) 
 
 		boxes = append(boxes, style.Render(c))
 	}

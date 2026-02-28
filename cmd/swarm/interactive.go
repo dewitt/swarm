@@ -1763,10 +1763,6 @@ func (m model) renderAgentPanel() string {
 			iconStr = "⧖ "
 		}
 
-		// Fixed-width emoji container (2 cells)
-		iconStyle := lipgloss.NewStyle().Width(2)
-		displayIcon := iconStyle.Render(a.icon)
-
 		// Map state to human-readable label
 		stateLabel := strings.Title(a.state)
 		if a.state == "idle" {
@@ -1780,15 +1776,18 @@ func (m model) renderAgentPanel() string {
 			style = style.Width(cardWidth - 2).Height(3)
 
 			statusText := a.status
-			// Accurate status truncation: prefix is 3 (icon+space), plus card padding and borders
+			// Accurate status truncation
 			maxStatusLen := cardWidth - 7
 			if len(statusText) > maxStatusLen && maxStatusLen > 0 {
 				statusText = statusText[:maxStatusLen] + "…"
 			}
 
 			// Ensure all lines have the same prefix offset (3 cells) for perfect alignment
+			// Prefix 1: Icon (2) + Space (1) = 3
+			// Prefix 2: Status Icon/Spinner (2) + Space (1) = 3
+			// Prefix 3: Spaces (3) = 3
 			card = lipgloss.JoinVertical(lipgloss.Left,
-				lipgloss.NewStyle().Foreground(color).Bold(true).Render(displayIcon+" "+a.name),
+				lipgloss.NewStyle().Foreground(color).Bold(true).Render(a.icon+" "+a.name),
 				iconStr+" "+lipgloss.NewStyle().Foreground(tipColor).Render(statusText),
 				"   "+lipgloss.NewStyle().Foreground(tipColor).Italic(true).Faint(true).Render(stateLabel),
 			)
@@ -1802,7 +1801,7 @@ func (m model) renderAgentPanel() string {
 			}
 
 			card = lipgloss.JoinVertical(lipgloss.Left,
-				lipgloss.NewStyle().Foreground(color).Bold(true).Render(displayIcon+" "+a.name),
+				lipgloss.NewStyle().Foreground(color).Bold(true).Render(a.icon+" "+a.name),
 				iconStr+" "+lipgloss.NewStyle().Foreground(tipColor).Render(statusText),
 			)
 		} else {

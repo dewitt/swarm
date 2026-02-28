@@ -214,21 +214,3 @@ func TestMouseSequenceFiltering(t *testing.T) {
 		}
 	}
 }
-
-func TestConcatenatedMouseSequence(t *testing.T) {
-	m := initialModel(false, false)
-
-	// Simulated concatenated sequence that might be sent in one or more KeyMsgs
-	// The user says they see: '[<65;58;23M[<65;62;25M[<65;67;26M[<65;67;26M'
-	seqs := "[<65;58;23M[<65;62;25M[<65;67;26M[<65;67;26M"
-
-	// If sent rune-by-rune, it should be stripped by the regex filter when complete
-	for _, r := range seqs {
-		newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
-		m = newModel.(model)
-	}
-
-	if m.textArea.Value() != "" {
-		t.Errorf("FAIL: Mouse sequences leaked into textarea: %q", m.textArea.Value())
-	}
-}

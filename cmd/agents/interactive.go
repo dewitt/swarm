@@ -8,7 +8,6 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"github.com/atotto/clipboard"
@@ -77,8 +76,6 @@ var (
 			Border(lipgloss.NormalBorder()).
 			BorderForeground(borderColor).
 			Padding(0, 1)
-
-	mouseSeqRegex = regexp.MustCompile(`\[<\d+;\d+;\d+[Mm]`)
 )
 
 func colorize(lines []string, mainStyle, shadowStyle lipgloss.Style) []string {
@@ -1021,23 +1018,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	m.textArea, tiCmd = m.textArea.Update(msg)
 	cmds = append(cmds, tiCmd)
 
-	// Aggressively scrub mouse sequences that might have leaked through during rapid scrolling.
-	// We check for '[<' prefix as a fast-path before applying the regex.
-	val := m.textArea.Value()
-	if strings.Contains(val, "[<") {
-		newVal := mouseSeqRegex.ReplaceAllString(val, "")
-		if newVal != val {
-			m.textArea.SetValue(newVal)
-			m.textArea.CursorEnd()
-			val = newVal
-		}
-	}
-
 	if m.state == stateChat {
 		updateAutocomplete(&m)
 	}
 
 	// Check for automatic shell mode toggling
+	val := m.textArea.Value()
 	if m.state == stateChat && strings.HasPrefix(val, "!") {
 		m.state = stateShell
 		m.textArea.SetValue(strings.TrimPrefix(val, "!"))

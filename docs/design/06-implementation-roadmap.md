@@ -100,7 +100,7 @@ in parallel, and provides an Agent Panel to monitor them.
 - [x] **Task 7.1:** Implement the "Agent Panel" Bubble Tea layout
   component, creating a visual grid of active "Agent Cards" above the main
   chat viewport.
-- [ ] **Task 7.2:** Refactor the SDK Event Bus to stream live tool telemetry
+- [x] **Task 7.2:** Refactor the SDK Event Bus to stream live tool telemetry
   (e.g., streaming `stdout` from `bash_execute`) directly to the Agent Cards.
 - [x] **Task 7.3:** Implement the "Observer Agent" pattern: A lightweight,
   parallel model execution loop that synthesizes raw telemetry into semantic

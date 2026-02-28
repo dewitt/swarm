@@ -1,19 +1,26 @@
 Output docs/assets/demo_swarm.gif
-
-Require ./bin/swarm
-
-Set Theme "Catppuccin Latte"
+Set FontSize 16
+Set Width 1200
+Set Height 800
 Set WindowBar Colorful
 Set BorderRadius 10
-Set FontSize 16
-Set Width 1600
-Set Height 900
-Set TypingSpeed 75ms
 
 Hide
-Type "./bin/swarm --demo-swarm"
+Type "export AGENTS_DRY_RUN=true"
 Enter
-Sleep 1s
+Type "./bin/swarm"
+Enter
+Sleep 2s
 Show
 
-Sleep 30s
+Type "Build and test this repository"
+Sleep 500ms
+Enter
+
+Sleep 25s
+
+Type "Now deploy it to production"
+Sleep 500ms
+Enter
+
+Sleep 15s

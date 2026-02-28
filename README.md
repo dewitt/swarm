@@ -15,8 +15,9 @@ into native ecosystems.
 
 - **Agent Panel**: The UI shifts from a basic chat REPL into an agent-centric
   layout when swarms are deployed. It visualizes concurrent agents working in
-  parallel via live "Agent Cards" above the main chat. Try it by running
-  `swarm --demo-swarm`.
+  parallel via live "Agent Cards" featuring **Live Telemetry** (e.g., real-time
+  scrolling build logs and test outputs) and dynamic status updates. Try it by
+  running `swarm --demo-swarm`.
 
   ![Agent Panel Demo](docs/assets/demo_swarm.gif)
 

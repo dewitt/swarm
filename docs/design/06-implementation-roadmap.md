@@ -90,3 +90,22 @@ transparently on a single user request.
   Expert, Data Engineer).
 - **Task 6.3:** Ensure this workflow satisfies
   `docs/cuj/03-swarm-design-collaboration.md`.
+
+## Phase 7: Dynamic Swarm Provisioning & Mission Control
+
+**Goal:** Realize the "Engineering Manager Paradigm" where the CLI
+autonomously decomposes complex tasks, provisions $N$ agents to execute them
+in parallel, and provides a dashboard to monitor them.
+
+- **Task 7.1:** Implement the "Swarm Dashboard" Bubble Tea layout component,
+  creating a visual grid of active "Agent Cards" above the main chat viewport.
+- **Task 7.2:** Refactor the SDK Event Bus to stream live tool telemetry
+  (e.g., streaming `stdout` from `bash_execute`) directly to the Agent Cards.
+- **Task 7.3:** Implement the "Observer Agent" pattern: A lightweight,
+  parallel model execution loop that synthesizes raw telemetry into semantic
+  status updates.
+- **Task 7.4:** Implement Swarm "Control Panel" interactions: pausing,
+  resuming, or killing specific agents from the dashboard.
+- **Task 7.5:** Implement dynamic auto-provisioning: Teach the Router Agent
+  how to write a dependency graph and spin up arbitrary, parallel Worker
+  Agents based on the graph's complexity.

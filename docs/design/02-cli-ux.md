@@ -2,9 +2,9 @@
 
 ## The UX Bar
 
-The entire point of the `agents` project is to provide a world-class,
+The entire point of the `swarm` project is to provide a world-class,
 sophisticated terminal experience. The benchmark for quality is set by modern
-AI CLIs such as **Gemini CLI**, **Claude Code**, and **Codex**. The `agents`
+AI CLIs such as **Gemini CLI**, **Claude Code**, and **Codex**. The `swarm`
 CLI is not merely a script runner; it is a polished, persistent, and highly
 interactive developer environment.
 
@@ -120,7 +120,7 @@ The interface must be structurally organized to manage complex state without
 overwhelming the user.
 
 - **Boot / Splash Screen:** On boot, the CLI should render a visually distinct
-  splash screen displaying the `agents` logo, helpful tip commands, and a
+  splash screen displaying the `swarm` logo, helpful tip commands, and a
   dynamic **Recent Activity** list indicating the summaries (the most recent
   user prompt) of the user's last 3 interactive sessions (queried from the
   SQLite database).

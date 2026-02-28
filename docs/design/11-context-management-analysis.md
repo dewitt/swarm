@@ -3,7 +3,7 @@
 As the complexity of a task grows, the LLM's context window becomes the most
 critical constraint. Managing what the agent "sees" is the primary challenge
 in CLI agent design. This document compares how leading tools handle context
-and proposes a unified, market-aligned design for the `agents` CLI.
+and proposes a unified, market-aligned design for the `swarm` CLI.
 
 ## Competitive Landscape
 
@@ -56,7 +56,7 @@ The market has converged on two primary workflows for context management:
    massive refactor of `manager.go`, never forget what's in this file.") This
    file is injected into the system prompt or prepended to every single turn.
 
-## Proposed Design for `agents` CLI
+## Proposed Design for `swarm` CLI
 
 Following our "UX Familiarity" principle, we will adopt the market-standard
 paradigms:

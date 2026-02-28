@@ -2,7 +2,7 @@
 
 ## The Philosophy: Zero HITL for Verification
 
-A core tenet of the `agents` project is that **Human-In-The-Loop (HITL) should
+A core tenet of the `swarm` project is that **Human-In-The-Loop (HITL) should
 only be required for permissions or creative opinions, never for mechanical
 verification.**
 

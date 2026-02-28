@@ -80,12 +80,12 @@ into native ecosystems.
 
 ## Building from Source
 
-To build the `agents` binary from source:
+To build the `swarm` binary from source:
 
 ```bash
 # Clone the repository
 git clone https://github.com/dewitt/swarm.git
-cd agents
+cd swarm
 
 # Build the binary
 go build -o bin/swarm ./cmd/swarm

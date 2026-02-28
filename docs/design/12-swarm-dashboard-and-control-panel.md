@@ -3,7 +3,7 @@
 ## The Problem: The Black Box of Agent Swarms
 
 Current AI developer tools (including the foundational iterations of the
-`agents` CLI) treat interactions linearly: a user inputs a prompt, a spinner
+`swarm` CLI) treat interactions linearly: a user inputs a prompt, a spinner
 appears (`Thinking...`), and eventually, an output is rendered.
 
 As we scale to complex multi-agent topologies—where dozens or even hundreds of
@@ -20,7 +20,7 @@ know:
 1. How can I intervene?
 
 This document outlines the design for the **Swarm Dashboard and Control
-Panel**, the defining feature that transforms `agents` from a basic chat
+Panel**, the defining feature that transforms `swarm` from a basic chat
 interface into a Supreme Orchestrator.
 
 ## The Vision: Air Traffic Control for Code
@@ -80,7 +80,7 @@ entire 100k line Java codebase to Go."*
 
 ## 4. The Separation of Concerns: SDK vs. UI
 
-A foundational principle of the `agents` project is the strict separation
+A foundational principle of the `swarm` project is the strict separation
 between the core SDK (`pkg/sdk/`) and the Presentation Layer (`cmd/swarm/`).
 This separation must be rigorously maintained as we build out the Swarm
 Dashboard.
@@ -155,7 +155,7 @@ upgraded to an **Event Bus**.
 
 ## The Ultimate Vision: "Do This Complicated Thing"
 
-The north star of the `agents` project is an interface that effortlessly
+The north star of the `swarm` project is an interface that effortlessly
 scales from a trivial, single-turn query to a massive, asynchronous
 engineering effort—all from the exact same entry point.
 

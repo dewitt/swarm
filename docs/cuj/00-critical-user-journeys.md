@@ -1,7 +1,7 @@
 # Critical User Journeys (CUJs)
 
 This directory contains detailed narratives of how developers interact with
-the `agents` CLI in various scenarios. These journeys guide the product
+the `swarm` CLI in various scenarios. These journeys guide the product
 design, ensuring the tool remains user-centric, frictionless, and powerful.
 
 ## Existing Journeys
@@ -82,7 +82,7 @@ Claude Code, or Codex, we should explore the following user journeys:
 
 ### 10. Agentic Test Generation in CI
 
-- **Concept:** While the primary UI is the terminal, the `agents` binary also
+- **Concept:** While the primary UI is the terminal, the `swarm` binary also
   runs in CI/CD. When a user pushes a feature without tests, a headless
   instance of the CLI detects the omission, generates missing unit and
   integration tests, and automatically commits them to the branch if they

@@ -2,7 +2,7 @@
 
 ## Introduction
 
-The `agents` project is a command-line interface (CLI) and embeddable SDK for
+The `swarm` project is a command-line interface (CLI) and embeddable SDK for
 managing, building, and deploying AI agents. It embraces a highly modular,
 lightweight, and GitOps-first philosophy, delegating complex orchestration
 logic to large language models (LLMs) rather than hardcoded implementations.
@@ -10,7 +10,7 @@ logic to large language models (LLMs) rather than hardcoded implementations.
 ## High-Level Goals
 
 1. **User Experience First**: Provide an out-of-the-box experience similar to
-   Gemini CLI or Claude Code, installable simply via `brew install agents`.
+   Gemini CLI or Claude Code, installable simply via `brew install swarm`.
 1. **Framework Agnosticism**: While the tool's core logic is built on the
    Google Agent Development Kit (ADK), it orchestrates and manages agents
    written in any framework (ADK, LangChain, LangGraph, custom frameworks).
@@ -31,7 +31,7 @@ The architecture is divided into three primary layers:
 
 ### 1. Presentation Layer (Terminal UI & CLI)
 
-- **Component**: The `agents` CLI binary.
+- **Component**: The `swarm` CLI binary.
 - **Responsibility**: Provides the interactive, conversational terminal
   interface. It handles prompt parsing, rich text rendering (Markdown, syntax
   highlighting), and local user configuration.
@@ -40,7 +40,7 @@ The architecture is divided into three primary layers:
 
 ### 2. Core SDK Layer (Business Logic & Orchestration)
 
-- **Component**: The embeddable `agents` Go SDK.
+- **Component**: The embeddable `swarm` Go SDK.
 - **Responsibility**: The brain of the CLI. Powered internally by the Go ADK,
   it handles:
   - Agent capability discovery (inspecting a project's agents).

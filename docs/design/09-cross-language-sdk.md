@@ -1,13 +1,13 @@
 # Cross-Language SDK Architecture
 
-The `agents` project is designed as two distinct layers:
+The `swarm` project is designed as two distinct layers:
 
 1. **The CLI (`cmd/swarm/`)**: A Terminal User Interface and application
    entry point.
 1. **The Core SDK (`pkg/sdk/`)**: The embeddable intelligence and
    orchestration engine.
 
-To maximize the impact of the `agents` ecosystem, the Core SDK must be
+To maximize the impact of the `swarm` ecosystem, the Core SDK must be
 accessible to developers working in *any* programming language, not just Go.
 This document outlines the architectural requirements and strategies for
 cross-compiling the Go core into native language bindings (Python, TypeScript,

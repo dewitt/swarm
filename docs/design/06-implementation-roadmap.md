@@ -1,7 +1,7 @@
 # Implementation Roadmap
 
 This document sequences the detailed design and implementation phases for the
-`agents` project. Future AI agents should consult this roadmap to determine
+`swarm` project. Future AI agents should consult this roadmap to determine
 the next actionable unit of work.
 
 ## Phase 1: Foundational CLI & SDK Shell

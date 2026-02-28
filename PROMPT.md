@@ -7,7 +7,7 @@ This project has several requirements:
   be exposed as an embeddable SDK (likely wrapped and exposed via
   native-language wrappers) and terminal (and optionally other) UIs.
 - It should be called 'agents', and should support a user-friendly
-  installation flow as simple as "brew install agents".
+  installation flow as simple as "brew install swarm".
 - It should be built on ADK if possible to power the core business logic
   internally, but that's an implementation detail
 - It should be able to work with agents written in all types of frameworks,

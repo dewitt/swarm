@@ -13,7 +13,7 @@ Development Kit (ADK) but aren't sure how to set up the boilerplate.
 Alex installs the CLI tool via Homebrew.
 
 ```bash
-brew install agents
+brew install swarm
 ```
 
 ### 2. Initialization & Conversation
@@ -33,7 +33,7 @@ The CLI launches its interactive interface:
 
 ### 3. Scaffolding
 
-The `agents` internal Router Agent understands the intent. It delegates the
+The `swarm` internal Router Agent understands the intent. It delegates the
 task to the Builder Agent, equipped with the ADK Python Skill.
 
 > **Swarm CLI:** Excellent! I'll set up a Google ADK Python project for you.

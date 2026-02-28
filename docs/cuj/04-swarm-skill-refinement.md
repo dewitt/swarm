@@ -2,7 +2,7 @@
 
 ## User Persona
 
-Jordan is the maintainer of the `agents` CLI project. They want to ensure the
+Jordan is the maintainer of the `swarm` CLI project. They want to ensure the
 internal Skills (like `builder_agent`, `gitops_agent`, or `adk-skill`) are
 up-to-date with the latest framework APIs, best practices, and ecosystem
 standards without manually rewriting them.
@@ -11,7 +11,7 @@ standards without manually rewriting them.
 
 ### 1. Initiating the Swarm Request
 
-Jordan opens the terminal in the root of the `agents` repository and launches
+Jordan opens the terminal in the root of the `swarm` repository and launches
 the CLI.
 
 ```bash

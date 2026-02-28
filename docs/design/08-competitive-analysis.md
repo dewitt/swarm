@@ -1,7 +1,7 @@
 # Competitive Analysis: CLI Agent Feature Superset
 
 This document tracks the capabilities of leading AI CLI agents (Gemini CLI,
-Claude Code, and Codex) to ensure the `agents` project targets a comprehensive
+Claude Code, and Codex) to ensure the `swarm` project targets a comprehensive
 superset of modern development features.
 
 ## 1. Core Interactions & Interface

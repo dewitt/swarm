@@ -52,7 +52,7 @@ Priya reviews the file and is satisfied.
 
 ### 5. Monitoring
 
-Because `agents` is integrated with the local repository, it can track the
+Because `swarm` is integrated with the local repository, it can track the
 GitHub Action it just triggered.
 
 > **Swarm CLI:** The deployment workflow has started on GitHub. *\[Spinner:

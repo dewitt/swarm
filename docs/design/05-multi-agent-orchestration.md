@@ -2,7 +2,7 @@
 
 ## Core Principle: One Agent is Never Enough
 
-The `agents` project is designed around the belief that single-agent
+The `swarm` project is designed around the belief that single-agent
 architectures are fragile. Real-world tasks require delegation, specialized
 context, and verification loops.
 
@@ -46,7 +46,7 @@ to:
 
 - Visualize the routing graph locally.
 - Mock interactions between sub-agents during local testing.
-- Deploy the agents either as a single monolithic service or as distributed
+- Deploy the swarm either as a single monolithic service or as distributed
   microservices (if the deployment Skill supports it).
 
 ## Swarm Extensibility
@@ -59,10 +59,10 @@ scaffold these complex patterns for the user.
 ## 4. Third-Party Agent Orchestration
 
 As the ecosystem evolves, monolithic AI tools (like Claude Code, Codex, or
-Gemini CLI) will become highly capable specialists. The `agents` CLI should
+Gemini CLI) will become highly capable specialists. The `swarm` CLI should
 not attempt to rewrite these massive, proprietary systems from scratch.
 
-Instead, the `agents` CLI will act as the **Supreme Orchestrator**.
+Instead, the `swarm` CLI will act as the **Supreme Orchestrator**.
 
 ### The Implementation
 
@@ -79,5 +79,5 @@ For example, if a user asks for a massive refactoring of a legacy codebase:
    `bash_execute` tool.
 1. The Router Agent reviews the resulting diff and reports back to the user.
 
-By treating other AI CLI tools as executable sub-agents, the `agents` CLI
+By treating other AI CLI tools as executable sub-agents, the `swarm` CLI
 becomes the ultimate unified control plane for software development.

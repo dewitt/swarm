@@ -2,7 +2,7 @@
 
 ## The GitOps Philosophy
 
-The `agents` project rejects the idea of a proprietary, black-box deployment
+The `swarm` project rejects the idea of a proprietary, black-box deployment
 engine. Instead, it assumes that version control (Git) is the source of truth
 for both code and infrastructure. Deployment is achieved by integrating with
 established GitHub (or GitLab/Bitbucket) processes.

@@ -6,7 +6,7 @@ pending future iteration.
 
 ## Context
 
-As the `agents` CLI evolves into a true "Mission Control" for orchestrating
+As the `swarm` CLI evolves into a true "Mission Control" for orchestrating
 swarms of parallel, long-running agentic processes, the traditional
 synchronous Chat REPL paradigm breaks down.
 

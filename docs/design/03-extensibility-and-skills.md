@@ -4,7 +4,7 @@
 
 The agent ecosystem is evolving too rapidly to build a monolithic CLI that
 natively understands every framework, model provider, and deployment target.
-The `agents` project takes a different approach: **Dynamic Extensibility via
+The `swarm` project takes a different approach: **Dynamic Extensibility via
 Skills**.
 
 We defer the "heavy lifting" to LLMs. Instead of writing Go code to parse a
@@ -45,7 +45,7 @@ Skills.
 
 By using Skills:
 
-1. The `agents` binary remains extremely small and light.
+1. The `swarm` binary remains extremely small and light.
 1. Capabilities can be updated independently of the core CLI releases.
 1. Users can inspect, fork, and modify how the CLI behaves simply by editing
    Markdown files, democratizing extensibility.

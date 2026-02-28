@@ -1,6 +1,6 @@
 # Project Philosophy (PHILOSOPHY.md)
 
-This document outlines the core beliefs and guiding principles of the `agents`
+This document outlines the core beliefs and guiding principles of the `swarm`
 project. When faced with an architectural decision, always favor the path that
 aligns closest to these ideals.
 
@@ -93,7 +93,7 @@ different tools in the ecosystem.
   commands, file referencing, or context management), we default to the UX
   patterns established by market leaders (e.g., Cursor, Claude Code, Gemini
   CLI, Codex). If a user knows how to use Claude Code, they should
-  instinctively know how to use the `agents` CLI.
+  instinctively know how to use the `swarm` CLI.
 - **Innovate with Conviction:** We only break from established UX norms when
   no standard exists, or when we have deep conviction that our novel approach
   represents a significant leap forward and is poised to become the new
@@ -101,8 +101,8 @@ different tools in the ecosystem.
 
 ## The "Engineering Manager" Paradigm
 
-The ultimate goal of `agents` is to abstract away the mechanics of agent
-orchestration. A user should be able to type `$ agents` and give an
+The ultimate goal of `swarm` is to abstract away the mechanics of agent
+orchestration. A user should be able to type `$ swarm` and give an
 arbitrarily complex directive (e.g., *"Migrate our billing service from Python
 to Go"*).
 

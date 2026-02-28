@@ -2,7 +2,7 @@
 
 ## Embeddable Core
 
-The core of `agents` is fundamentally an SDK, written entirely in Go. By
+The core of `swarm` is fundamentally an SDK, written entirely in Go. By
 decoupling the business logic from the presentation layer, we ensure that:
 
 1. The terminal UI is just one of many possible consumers.
@@ -28,7 +28,7 @@ Internally, the SDK uses a multi-agent topology to resolve user commands:
 
 ## Framework Agnosticism
 
-While our internal agents use ADK, the *target* agents (the agents the user is
+While our internal agents use ADK, the *target* agents (the swarm the user is
 building) can be in any framework. The SDK achieves this via an **Adapter
 Pattern**.
 
@@ -50,7 +50,7 @@ deploy based on this manifest.
 ## Dynamic Extensibility (Skills)
 
 Instead of hardcoding support for every new agent framework or deployment
-target, `agents` uses **Skills**.
+target, `swarm` uses **Skills**.
 
 - A Skill is a lightweight, dynamically loaded configuration (often just
   Markdown + a tool manifest).

@@ -1763,7 +1763,7 @@ func (m model) renderAgentPanel() string {
 			iconStr = "⧖ "
 		}
 
-		// Fixed-width emoji container to prevent misalignment
+		// Fixed-width emoji container (2 cells)
 		iconStyle := lipgloss.NewStyle().Width(2)
 		displayIcon := iconStyle.Render(a.icon)
 
@@ -1780,29 +1780,30 @@ func (m model) renderAgentPanel() string {
 			style = style.Width(cardWidth - 2).Height(3)
 
 			statusText := a.status
-			// Accurate status truncation
-			maxStatusLen := cardWidth - 6
+			// Accurate status truncation: prefix is 3 (icon+space), plus card padding and borders
+			maxStatusLen := cardWidth - 7
 			if len(statusText) > maxStatusLen && maxStatusLen > 0 {
 				statusText = statusText[:maxStatusLen] + "…"
 			}
 
+			// Ensure all lines have the same prefix offset (3 cells) for perfect alignment
 			card = lipgloss.JoinVertical(lipgloss.Left,
 				lipgloss.NewStyle().Foreground(color).Bold(true).Render(displayIcon+" "+a.name),
-				iconStr+lipgloss.NewStyle().Foreground(tipColor).Render(statusText),
-				lipgloss.NewStyle().Foreground(tipColor).Italic(true).Faint(true).Render(stateLabel),
+				iconStr+" "+lipgloss.NewStyle().Foreground(tipColor).Render(statusText),
+				"   "+lipgloss.NewStyle().Foreground(tipColor).Italic(true).Faint(true).Render(stateLabel),
 			)
 		} else if fidelity == "medium" {
 			style = style.Width(cardWidth - 2).Height(2)
 
 			statusText := a.status
-			maxStatusLen := cardWidth - 6
+			maxStatusLen := cardWidth - 7
 			if len(statusText) > maxStatusLen && maxStatusLen > 0 {
 				statusText = statusText[:maxStatusLen] + "…"
 			}
 
 			card = lipgloss.JoinVertical(lipgloss.Left,
 				lipgloss.NewStyle().Foreground(color).Bold(true).Render(displayIcon+" "+a.name),
-				iconStr+lipgloss.NewStyle().Foreground(tipColor).Render(statusText),
+				iconStr+" "+lipgloss.NewStyle().Foreground(tipColor).Render(statusText),
 			)
 		} else {
 			// low fidelity: minimalist icon cards
@@ -1829,7 +1830,7 @@ func (m model) renderAgentPanel() string {
 		BorderForeground(borderColor).
 		Padding(0, 1).
 		MarginBottom(1).
-		Width(m.width - 2).
+		Width(m.width - 2). // Force full width Agent Panel
 		Render(grid)
 }
 

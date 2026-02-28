@@ -56,8 +56,8 @@ func initDemoSwarm() demoSwarmModel {
 		{name: "Web Researcher", icon: "🌐", status: "Idle", state: "idle", spin: s},
 		{name: "GitOps", icon: "🐙", status: "Idle", state: "idle", spin: s},
 		{name: "Test Synthesizer", icon: "🧪", status: "Idle", state: "idle", spin: s},
-		{name: "Security Auditor", icon: "🛡️", status: "Idle", state: "idle", spin: s},
-		{name: "DB Architect", icon: "🗄️", status: "Idle", state: "idle", spin: s},
+		{name: "Security Auditor", icon: "🔐", status: "Idle", state: "idle", spin: s},
+		{name: "DB Architect", icon: "💾", status: "Idle", state: "idle", spin: s},
 		{name: "Code Generator", icon: "💻", status: "Idle", state: "idle", spin: s},
 	}
 
@@ -185,6 +185,11 @@ func (m demoSwarmModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.agents[0].status = "Awaiting input…"
 			m.messages = append(m.messages, agentMsgStyle.Render("✦ [Router] ")+"The swarm has successfully completed the OAuth 2.0 refactoring task. All tests pass, and PR #142 is ready. What would you like to do next?")
 		}
+
+		// Dynamically adjust viewport height in case the dashboard grew
+		dashboardHeight := lipgloss.Height(m.renderDashboard())
+		m.vp.Height = m.height - dashboardHeight - 4
+
 		m.updateVP()
 	}
 
@@ -193,8 +198,9 @@ func (m demoSwarmModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *demoSwarmModel) updateVP() {
 	var s strings.Builder
+	wrapStyle := lipgloss.NewStyle().Width(m.vp.Width)
 	for _, msg := range m.messages {
-		s.WriteString(msg)
+		s.WriteString(wrapStyle.Render(msg))
 		s.WriteString("\n\n")
 	}
 	m.vp.SetContent(s.String())
@@ -241,7 +247,10 @@ func (m demoSwarmModel) renderDashboard() string {
 		}
 
 		// Use Lipgloss for text wrapping instead of manual truncation
-		statusText := lipgloss.NewStyle().Width(cardWidth - 8).Render(a.status)
+		statusText := lipgloss.NewStyle().
+			Width(cardWidth - 8).
+			MaxHeight(2).
+			Render(a.status)
 
 		card := lipgloss.JoinVertical(lipgloss.Left,
 			lipgloss.NewStyle().Foreground(color).Bold(true).Render(a.icon+" "+a.name),

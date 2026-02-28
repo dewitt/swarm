@@ -566,7 +566,7 @@ func getRecentActivity() string {
 
 	sb.WriteString("\n" + lipgloss.NewStyle().Bold(true).Foreground(googleBlue).Render("Quick Tips") + "\n")
 	sb.WriteString(lipgloss.NewStyle().Foreground(tipColor).Render("^O") + " toggle observe  " + lipgloss.NewStyle().Foreground(tipColor).Render("!") + " run shell\n")
-	sb.WriteString(lipgloss.NewStyle().Foreground(tipColor).Render("/plan") + " brainstorm   " + lipgloss.NewStyle().Foreground(tipColor).Render("/agents") + " subagents")
+	sb.WriteString(lipgloss.NewStyle().Foreground(tipColor).Render("/plan") + " brainstorm   " + lipgloss.NewStyle().Foreground(tipColor).Render("/skills") + " skills")
 
 	return sb.String()
 }

@@ -536,7 +536,7 @@ func doGitTick() tea.Cmd {
 	})
 }
 
-func getRecentActivity() string {
+func getRecentActivity(width int) string {
 	m := sdk.NewManager()
 	sessions, _ := m.ListSessions(context.Background())
 	commits, _ := sdk.GetRecentCommits(".", 3)
@@ -544,11 +544,17 @@ func getRecentActivity() string {
 	var sb strings.Builder
 	sb.WriteString(lipgloss.NewStyle().Bold(true).Foreground(googleBlue).Render("Recent Activity") + "\n")
 
+	// Calculate max content width (width minus " git " prefix and padding)
+	maxContentWidth := width - 10
+	if maxContentWidth < 10 {
+		maxContentWidth = 10
+	}
+
 	hasActivity := false
 	if len(commits) > 0 {
 		for _, c := range commits {
-			if len(c) > 30 {
-				c = c[:27] + "..."
+			if runewidth.StringWidth(c) > maxContentWidth {
+				c = runewidth.Truncate(c, maxContentWidth-1, "…")
 			}
 			sb.WriteString(lipgloss.NewStyle().Foreground(googleGreen).Render(" git ") + c + "\n")
 		}
@@ -559,8 +565,8 @@ func getRecentActivity() string {
 	for i := len(sessions) - 1; i >= 0 && sessionCount < 3; i-- {
 		s := sessions[i]
 		summary := s.Summary
-		if len(summary) > 30 {
-			summary = summary[:27] + "..."
+		if runewidth.StringWidth(summary) > maxContentWidth {
+			summary = runewidth.Truncate(summary, maxContentWidth-1, "…")
 		}
 		sb.WriteString(lipgloss.NewStyle().Foreground(googleYellow).Render(" chat ") + summary + "\n")
 		sessionCount++
@@ -578,8 +584,13 @@ func getRecentActivity() string {
 	}
 
 	sb.WriteString("\n" + lipgloss.NewStyle().Bold(true).Foreground(googleBlue).Render("Quick Tips") + "\n")
-	sb.WriteString(lipgloss.NewStyle().Foreground(tipColor).Render("^O") + " toggle observe  " + lipgloss.NewStyle().Foreground(tipColor).Render("!") + " run shell\n")
-	sb.WriteString(lipgloss.NewStyle().Foreground(tipColor).Render("/plan") + " brainstorm   " + lipgloss.NewStyle().Foreground(tipColor).Render("/skills") + " skills")
+	if width > 50 {
+		sb.WriteString(lipgloss.NewStyle().Foreground(tipColor).Render("^O") + " toggle observe  " + lipgloss.NewStyle().Foreground(tipColor).Render("!") + " run shell\n")
+		sb.WriteString(lipgloss.NewStyle().Foreground(tipColor).Render("/plan") + " brainstorm   " + lipgloss.NewStyle().Foreground(tipColor).Render("/skills") + " skills")
+	} else {
+		sb.WriteString(lipgloss.NewStyle().Foreground(tipColor).Render("^O") + " observe  " + lipgloss.NewStyle().Foreground(tipColor).Render("!") + " shell\n")
+		sb.WriteString(lipgloss.NewStyle().Foreground(tipColor).Render("/plan") + " plan   " + lipgloss.NewStyle().Foreground(tipColor).Render("/skills") + " skills")
+	}
 
 	return sb.String()
 }
@@ -647,7 +658,7 @@ func initialModel(planMode bool, resume bool) model {
 	// Prepare splash screen components for dynamic rendering in View()
 	greeting := fmt.Sprintf("\n\n%s %s!", lipgloss.NewStyle().Foreground(tipColor).Render("Welcome back,"), lipgloss.NewStyle().Bold(true).Render(getUserName()))
 	logoAndGreeting := renderLogo() + greeting
-	recentActivity := getRecentActivity()
+	recentActivity := getRecentActivity(40) // Default width, will be updated in View()
 
 	return model{
 		textArea:       ta,
@@ -1906,10 +1917,13 @@ func (m model) View() string {
 		if msg == "SPLASH_SCREEN" {
 			// Calculate 2/3 and 1/3 split for responsive splash screen
 			leftWidth := (m.width * 2) / 3
-			rightWidth := m.width - leftWidth - 2 // account for JoinHorizontal gap
+			rightWidth := m.width - leftWidth - 1 // account for small padding
 
 			leftBox := welcomeBoxStyle.Copy().Width(leftWidth - 10).Height(12).Render(m.welcomeScreen[0])
-			rightBox := infoBoxStyle.Copy().Width(rightWidth - 10).Height(12).Render(m.welcomeScreen[1])
+			
+			// Dynamically refresh the recent activity with the calculated width
+			dynamicRecentActivity := getRecentActivity(rightWidth)
+			rightBox := infoBoxStyle.Copy().Width(rightWidth - 10).Height(12).Render(dynamicRecentActivity)
 			
 			renderedMessages = append(renderedMessages, lipgloss.JoinHorizontal(lipgloss.Top, leftBox, rightBox))
 		} else {

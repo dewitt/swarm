@@ -39,11 +39,13 @@ debt that should be addressed as the project evolves.
 - [x] **Async Interactions Design** (#19): Write a design doc for input
   queueing, interruptions, and async HITL interactions.
 
-- [ ] **Dynamic Loading State** (#7): Long-running subagent and tool
+- [x] **Dynamic Loading State** (#7): Long-running subagent and tool
   invocations need a dynamic loading state.
 
 ## Known Bugs
 
 - [x] **Dead-end Tool Calls** (#17): Subagent tool calls can reach a dead end.
-- [x] **Status Overwrites Name** (#15): Tool and subagent invocation status currently overwrites the agent name in the UI.
-- [ ] **Escape Sequences in Prompt** (#3): Strange escape sequences appear in the input prompt when scrolling.
+- [x] **Status Overwrites Name** (#15): Tool and subagent invocation status
+  currently overwrites the agent name in the UI.
+- [ ] **Escape Sequences in Prompt** (#3): Strange escape sequences appear in
+  the input prompt when scrolling.

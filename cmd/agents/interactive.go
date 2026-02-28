@@ -536,7 +536,7 @@ func getRecentActivity() string {
 	m := sdk.NewManager()
 	sessions, err := m.ListSessions(context.Background())
 	if err != nil || len(sessions) == 0 {
-		return "Recent activity\n(none yet)\n\nWhat's new\n/agents to create subagents\n/docs for API references\nctrl+c to background or exit"
+		return "Recent activity\n(none yet)\n\nWhat's new\n^O to toggle observe mode\n! to run shell commands\n/plan to brainstorm safely\n/agents to create subagents"
 	}
 
 	var sb strings.Builder
@@ -545,18 +545,19 @@ func getRecentActivity() string {
 	count := 0
 	for i := len(sessions) - 1; i >= 0 && count < 3; i-- {
 		s := sessions[i]
-		id := s.ID
-		if len(id) > 15 {
-			id = id[:12] + "..."
-		}
-		sb.WriteString(fmt.Sprintf("%-15s %s\n", s.UpdatedAt, id))
+		
+		// Update format to show the summary instead of ID.
+		// "2006-01-02 15:04:05" -> just show time if today, else date.
+		// But let's just show the summary with a max width so it fits.
+		sb.WriteString(fmt.Sprintf("> %s\n", s.Summary))
 		count++
 	}
 
 	sb.WriteString("\nWhat's new\n")
+	sb.WriteString("^O to toggle observe mode\n")
+	sb.WriteString("! to run shell commands\n")
+	sb.WriteString("/plan to brainstorm safely\n")
 	sb.WriteString("/agents to create subagents\n")
-	sb.WriteString("/docs for API references\n")
-	sb.WriteString("ctrl+c to background or exit\n")
 
 	return sb.String()
 }

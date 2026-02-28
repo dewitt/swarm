@@ -117,8 +117,9 @@ overwhelming the user.
 
 - **Boot / Splash Screen:** On boot, the CLI should render a visually distinct
   splash screen displaying the `agents` logo, helpful tip commands, and a
-  dynamic **Recent Activity** list indicating the timestamp and IDs of the
-  user's last 3 interactive sessions (queried from the SQLite database).
+  dynamic **Recent Activity** list indicating the summaries (the most recent
+  user prompt) of the user's last 3 interactive sessions (queried from the
+  SQLite database).
 - **Status Bar:** A persistent, minimal status bar at the bottom or top of the
   terminal session showing:
   - The current active LLM model (e.g., `gemini-2.5-pro`).

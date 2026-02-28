@@ -228,6 +228,7 @@ func webFetch(ctx tool.Context, args WebFetchArgs) (WebFetchResult, error) {
 type SessionInfo struct {
 	ID        string
 	UpdatedAt string
+	Summary   string
 }
 
 type AgentManager interface {
@@ -646,11 +647,49 @@ func (m *defaultManager) ListSessions(ctx context.Context) ([]SessionInfo, error
 		return nil, err
 	}
 
+	home, _ := os.UserHomeDir()
+	dbPath := filepath.Join(home, ".config", "agents", "sessions.db")
+	db, dbErr := gorm.Open(sqlite.Open(dbPath), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
+
 	var infos []SessionInfo
 	for _, s := range resp.Sessions {
+		summary := s.ID()
+		if dbErr == nil {
+			var event struct {
+				Content string
+			}
+			err := db.Table("events").
+				Select("content").
+				Where("session_id = ? AND author = ?", s.ID(), "user").
+				Order("timestamp DESC").
+				Limit(1).
+				Find(&event).Error
+
+			if err == nil && event.Content != "" {
+				var c map[string]interface{}
+				if json.Unmarshal([]byte(event.Content), &c) == nil {
+					if parts, ok := c["parts"].([]interface{}); ok && len(parts) > 0 {
+						if part, ok := parts[0].(map[string]interface{}); ok {
+							if text, ok := part["text"].(string); ok {
+								summary = text
+							}
+						}
+					}
+				}
+			}
+		}
+
+		if len(summary) > 40 {
+			summary = summary[:37] + "..."
+		}
+		summary = strings.ReplaceAll(summary, "\n", " ")
+
 		infos = append(infos, SessionInfo{
 			ID:        s.ID(),
 			UpdatedAt: s.LastUpdateTime().Format("2006-01-02 15:04:05"),
+			Summary:   summary,
 		})
 	}
 	return infos, nil

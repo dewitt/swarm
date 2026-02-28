@@ -33,6 +33,10 @@ into native ecosystems.
   conversation history with `/rewind`, and easily pick up where you left off
   using the `--resume` flag.
 
+- **Observe Mode**: Toggle deep ADK telemetry via `^O` to view thoughts, tool
+  args, and tool results in a dedicated UI pane, giving you full visibility
+  into the agent's internal reasoning.
+
 - **Read-Only Plan Mode**: Use the `/plan` command or `--plan` flag to safely
   brainstorm architecture with the agent explicitly sandboxed from modifying
   your filesystem.

@@ -8,6 +8,8 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
+	"runtime/debug"
+
 	"strings"
 
 	"github.com/atotto/clipboard"
@@ -1058,10 +1060,47 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 	cmd := parts[0]
 
 	switch cmd {
+	case "/about":
+		var buildInfoStr string
+		if info, ok := debug.ReadBuildInfo(); ok {
+			buildInfoStr = fmt.Sprintf("Go Version: %s\nPath: %s\nMain: %s %s\n", info.GoVersion, info.Path, info.Main.Path, info.Main.Version)
+			var revision string
+			var timeStr string
+			var modified bool
+			for _, setting := range info.Settings {
+				if setting.Key == "vcs.revision" {
+					revision = setting.Value
+				}
+				if setting.Key == "vcs.time" {
+					timeStr = setting.Value
+				}
+				if setting.Key == "vcs.modified" {
+					modified = setting.Value == "true"
+				}
+			}
+			if revision != "" {
+				modStr := ""
+				if modified {
+					modStr = " (dirty)"
+				}
+				buildInfoStr += fmt.Sprintf("Revision: %s%s\nBuild Time: %s", revision, modStr, timeStr)
+			}
+		} else {
+			buildInfoStr = "Build information not available."
+		}
+		aboutText := lipgloss.JoinVertical(lipgloss.Left,
+			lipgloss.NewStyle().Bold(true).Render("Agents CLI"),
+			"",
+			buildInfoStr,
+		)
+		icon := agentMsgStyle.Render("✦ ")
+		m.messages = append(m.messages, lipgloss.JoinHorizontal(lipgloss.Top, icon, aboutText))
 	case "/help":
 		helpText := lipgloss.JoinVertical(lipgloss.Left,
 			lipgloss.NewStyle().Bold(true).Render("Agents CLI Help Menu"),
 			"",
+			"  /about       Displays version and build information.",
+
 			"  /help        Shows this menu.",
 			"  /clear       Clears the conversation history.",
 			"  /context     Displays the current files and metadata loaded in memory.",

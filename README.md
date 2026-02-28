@@ -12,35 +12,53 @@ into native ecosystems.
   client-side slash commands (`/help`, `/model list`, `/skills`), multi-pane
   layouts, real-time agent handoff visualization, and flattened multiline
   history for stable autocomplete.
+
+- **Swarm Dashboard (Mission Control)**: The UI shifts from a basic chat REPL
+  into an air-traffic control layout when swarms are deployed. It visualizes
+  concurrent agents working in parallel via live status cards above the main
+  chat. Try it by running `agents --demo-swarm`.
+
+  ![Swarm Dashboard Demo](docs/assets/demo_swarm.gif)
+
 - **Direct Shell Execution (`!`)**: Toggle into a dedicated shell mode or run
   single-shot bash commands instantly from within the REPL without breaking
   your flow.
+
 - **Context Referencing (`@`)**: Seamlessly inject files directly into the
   LLM's context window by typing `@` to trigger an inline, fuzzy-filtered
   overlay of your workspace files.
+
 - **Session Persistence & Resumption**: Sessions are automatically persisted
   to a local SQLite database. View past activity with `/sessions`, rewind the
   conversation history with `/rewind`, and easily pick up where you left off
   using the `--resume` flag.
+
 - **Read-Only Plan Mode**: Use the `/plan` command or `--plan` flag to safely
   brainstorm architecture with the agent explicitly sandboxed from modifying
   your filesystem.
+
 - **Global Memory & Configuration**: Teach the agent your preferences once
   using the `/remember` command, and it will persist across all your projects.
   Check your global settings with `agents config` or `/config`.
+
 - **Web Fetch & Search**: Native capabilities to search the web and fetch
   up-to-date documentation during task execution using the `web_researcher`
   agent.
+
 - **UNIX Piping**: Integrate agents directly into your workflows via
   single-shot prompts and standard input (e.g.,
   `cat error.log | agents -p "What went wrong?"`).
+
 - **Dynamic Skills Architecture**: Completely decoupled capabilities adhering
   to the open `agentskills.io` standard (`SKILL.md`). Easily write, share, and
   dynamically load new skills without recompiling.
+
 - **Framework Agnostic**: Natively supports Google ADK, LangGraph, and custom
   architectures via `agent.yaml` manifests.
+
 - **Native CI/CD Integration**: Seamlessly scaffolds standard CI/CD pipelines
   (like GitHub Actions) and integrates directly with your native ecosystem.
+
 - **Agent Swarms**: The core SDK is powered by the Google Agent Development
   Kit (ADK) and orchestrates a swarm of specialized internal agents (Router,
   Builder, Deployment) using a cascading model architecture (fast models for

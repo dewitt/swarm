@@ -298,6 +298,9 @@ type model struct {
 	statusMsg    string
 	lastResponse string
 
+	// Mouse sequence filtering
+	inMouseSeq bool
+
 	// Autocomplete state
 	workspaceFiles []string
 	acMatches      []string
@@ -605,8 +608,22 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds  []tea.Cmd
 	)
 
-	// Global intercept for double Ctrl+C to quit
+	// Global intercept for mouse tracking leaking as key events
 	if keyMsg, ok := msg.(tea.KeyMsg); ok {
+		s := keyMsg.String()
+		if m.inMouseSeq {
+			if s == "M" || s == "m" {
+				m.inMouseSeq = false
+				return m, nil
+			}
+			// SGR mouse protocol characters: [<0-9;] or space
+			if s == "[" || s == "<" || s == ";" || s == " " || (len(s) == 1 && s[0] >= '0' && s[0] <= '9') {
+				return m, nil
+			}
+			// Unexpected character, stop filtering
+			m.inMouseSeq = false
+		}
+
 		if keyMsg.Type == tea.KeyCtrlC {
 			if m.quitting {
 				return m, tea.Quit
@@ -630,6 +647,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.textArea.Placeholder = "Type your message or /help (Alt+Enter or ^J for newline)"
 			}
 		}
+
+		if keyMsg.Type == tea.KeyEsc {
+			m.inMouseSeq = true
+		}
 	}
 
 	// If we are in the model list state, hijack the keys
@@ -641,6 +662,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Let it pass through to the main handler below
 		case tea.KeyMsg:
 			if msg.Type == tea.KeyEsc {
+				m.inMouseSeq = true
 				m.state = stateChat
 				return m, tea.ClearScreen
 			}
@@ -685,7 +707,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.acMode = ""
 				return m, nil
 			}
-			return m, tea.Quit
+			return m, nil // Don't quit, just clear state
 		case tea.KeyCtrlJ:
 			m.textArea.InsertString("\n")
 			return m, nil
@@ -840,6 +862,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tea.MouseMsg:
+		m.inMouseSeq = false
 		var vpCmd tea.Cmd
 		m.viewport, vpCmd = m.viewport.Update(msg)
 		return m, vpCmd
@@ -1415,7 +1438,7 @@ func (m model) View() string {
 }
 
 func launchInteractiveShell(planMode bool, resume bool) error {
-	p := tea.NewProgram(initialModel(planMode, resume), tea.WithAltScreen(), tea.WithMouseCellMotion())
+	p := tea.NewProgram(initialModel(planMode, resume), tea.WithAltScreen(), tea.WithMouseAllMotion())
 	if _, err := p.Run(); err != nil {
 		return fmt.Errorf("could not start interactive shell: %w", err)
 	}

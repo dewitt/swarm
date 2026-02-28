@@ -127,3 +127,37 @@ upgraded to an **Event Bus**.
 1. **Phase 5: Granular Interventions.** Implement the Control Panel logic
    allowing the user to pause, terminate, or converse with specific agents in
    the dashboard.
+
+## The Ultimate Vision: "Do This Complicated Thing"
+
+The north star of the `agents` project is an interface that effortlessly
+scales from a trivial, single-turn query to a massive, asynchronous
+engineering effort—all from the exact same entry point.
+
+A user should be able to type `$ agents` to open the console and simply say:
+
+> *"Refactor the entire billing microservice from Python to Go, ensure 100%
+> test coverage, and update the Kubernetes deployment manifests."*
+
+The CLI must be smart enough to understand that this is not a task for a
+single LLM call. It must autonomously:
+
+1. **Plan & Decompose:** The Router agent immediately spins up a "Planning
+   Swarm" to break the massive request down into a dependency graph of
+   sub-tasks.
+1. **Dynamic Provisioning:** The system dynamically provisions as many agents
+   as necessary to complete the work in parallel. It might launch three
+   "Translation Agents" to convert Python files to Go concurrently, one "Test
+   Synthesis Agent" to write the Go tests, and a "DevOps Agent" to handle the
+   manifests.
+1. **Continuous Coordination:** A "Supervisor Agent" sits above them, managing
+   dependencies (e.g., telling the Test Agent to wait until the Translation
+   Agent finishes a specific package).
+1. **Transparent Execution:** Throughout this process (which may take hours),
+   the Swarm Dashboard gives the user perfect, real-time visibility into the
+   chaotic concurrency, synthesizing the activity via Observer Agents so the
+   user feels completely in control.
+
+In this paradigm, the user is no longer a pair programmer; they are an
+Engineering Manager. The CLI is their entire engineering department,
+dynamically scaling its workforce to meet the exact complexity of the request.

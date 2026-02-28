@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/atotto/clipboard"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textarea"
@@ -293,7 +294,8 @@ type model struct {
 	activeModel string
 	renderer    *glamour.TermRenderer
 
-	statusMsg string
+	statusMsg    string
+	lastResponse string
 
 	// Autocomplete state
 	workspaceFiles []string
@@ -832,6 +834,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, vpCmd
 		}
 
+	case tea.MouseMsg:
+		var vpCmd tea.Cmd
+		m.viewport, vpCmd = m.viewport.Update(msg)
+		return m, vpCmd
 	case streamMsg:
 		if strings.HasPrefix(msg.text, "[TOOL_CALL] ") {
 			m.statusMsg = "Running " + strings.TrimPrefix(msg.text, "[TOOL_CALL] ") + "..."
@@ -1062,6 +1068,7 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 			"  /model list  Open an interactive list of all available models.",
 			"  /config      Prints the current global configuration.",
 			"  /remember    Saves a global preference (e.g. /remember I use tabs).",
+			"  /copy        Copies the last agent response to the system clipboard.",
 			"  /rewind [n]  Rewinds the conversation history by n turns (default 1).",
 			"  /plan        Enter read-only plan mode to brainstorm safely.",
 			"  /act         Exit plan mode and allow the agent to execute actions.",
@@ -1156,6 +1163,16 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 			m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+fmt.Sprintf("Model preference saved as '%s'.", newModelName))
 		} else {
 			m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Render("Failed to load config: "+err.Error()))
+		}
+	case "/copy":
+		if m.lastResponse != "" {
+			if err := clipboard.WriteAll(m.lastResponse); err != nil {
+				m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Render("Failed to copy to clipboard: "+err.Error()))
+			} else {
+				m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"Copied last response to clipboard.")
+			}
+		} else {
+			m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"No response available to copy.")
 		}
 	case "/clear":
 		// Clear everything except the welcome screen
@@ -1272,8 +1289,17 @@ func (m *model) updateViewport() {
 		s.WriteString(agentMsgStyle.Render("✦ ") + m.spinner.View() + " " + status)
 		s.WriteString("\n\n")
 	}
+	isAtBottom := m.viewport.AtBottom()
+	currentY := m.viewport.YOffset
+
 	m.viewport.SetContent(s.String())
-	m.viewport.GotoBottom()
+
+	if isAtBottom {
+		m.viewport.GotoBottom()
+	} else {
+		// Retain scroll position
+		m.viewport.YOffset = currentY
+	}
 }
 
 func (m model) View() string {
@@ -1384,7 +1410,7 @@ func (m model) View() string {
 }
 
 func launchInteractiveShell(planMode bool, resume bool) error {
-	p := tea.NewProgram(initialModel(planMode, resume), tea.WithAltScreen())
+	p := tea.NewProgram(initialModel(planMode, resume), tea.WithAltScreen(), tea.WithMouseCellMotion())
 	if _, err := p.Run(); err != nil {
 		return fmt.Errorf("could not start interactive shell: %w", err)
 	}

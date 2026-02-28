@@ -84,47 +84,27 @@ var (
 )
 
 func renderLogo() string {
-	// DEC-style logo: each character in its own box with a small gap.
+	// DEC-style logo: each character in its own red box with white text.
 	chars := []string{">", "s", "w", "a", "r", "m"}
-	
-	// Slate gradient (Slate 300 to Slate 800)
-	colors := []string{
-		"#cbd5e1", // Slate 300
-		"#94a3b8", // Slate 400
-		"#64748b", // Slate 500
-		"#475569", // Slate 600
-		"#334155", // Slate 700
-		"#1e293b", // Slate 800
-	}
-
-	if !lipgloss.HasDarkBackground() {
-		colors = []string{
-			"#334155", // Slate 700
-			"#475569", // Slate 600
-			"#64748b", // Slate 500
-			"#94a3b8", // Slate 400
-			"#cbd5e1", // Slate 300
-			"#e2e8f0", // Slate 200
-		}
-	}
+	decRed := lipgloss.Color("#a9042c")
+	white := lipgloss.Color("#ffffff")
 
 	var boxes []string
 	for i, c := range chars {
 		style := lipgloss.NewStyle().
-			Border(lipgloss.NormalBorder()).
-			BorderForeground(lipgloss.Color(colors[i])).
-			Foreground(lipgloss.Color(colors[i])).
+			Background(decRed).
+			Foreground(white).
 			Padding(0, 1).
 			Bold(true)
-		
-		// Add a margin to the right to create the "small gap".
-		// Increase gap after the ">" to represent the space in "> swarm".
+
+		// Small gap between boxes (1 column).
+		// We use a larger gap (2 columns) after the ">" to separate the prompt from the name.
 		if i == 0 {
 			style = style.MarginRight(2)
 		} else if i < len(chars)-1 {
 			style = style.MarginRight(1)
 		}
-		
+
 		boxes = append(boxes, style.Render(c))
 	}
 

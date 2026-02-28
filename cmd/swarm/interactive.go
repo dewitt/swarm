@@ -544,15 +544,17 @@ func getRecentActivity(width int) string {
 	var sb strings.Builder
 	sb.WriteString(lipgloss.NewStyle().Bold(true).Foreground(googleBlue).Render("Recent Activity") + "\n")
 
-	// Calculate max content width (width minus " git " prefix and padding)
-	maxContentWidth := width - 10
-	if maxContentWidth < 10 {
-		maxContentWidth = 10
+	// Calculate max content width (width minus borders(2), padding(8), and " git " prefix(5))
+	maxContentWidth := width - 10 - 5
+	if maxContentWidth < 5 {
+		maxContentWidth = 5
 	}
 
 	hasActivity := false
 	if len(commits) > 0 {
 		for _, c := range commits {
+			// Remove any newlines to prevent wrapping
+			c = strings.ReplaceAll(c, "\n", " ")
 			if runewidth.StringWidth(c) > maxContentWidth {
 				c = runewidth.Truncate(c, maxContentWidth-1, "…")
 			}
@@ -564,7 +566,7 @@ func getRecentActivity(width int) string {
 	sessionCount := 0
 	for i := len(sessions) - 1; i >= 0 && sessionCount < 3; i-- {
 		s := sessions[i]
-		summary := s.Summary
+		summary := strings.ReplaceAll(s.Summary, "\n", " ")
 		if runewidth.StringWidth(summary) > maxContentWidth {
 			summary = runewidth.Truncate(summary, maxContentWidth-1, "…")
 		}
@@ -1916,14 +1918,25 @@ func (m model) View() string {
 	for _, msg := range m.messages {
 		if msg == "SPLASH_SCREEN" {
 			// Calculate 2/3 and 1/3 split for responsive splash screen
-			leftWidth := (m.width * 2) / 3
-			rightWidth := m.width - leftWidth - 1 // account for small padding
+			// We subtract 2 for the outer borders of the app itself
+			innerAppWidth := m.width - 2
+			leftWidth := (innerAppWidth * 2) / 3
+			rightWidth := innerAppWidth - leftWidth
 
-			leftBox := welcomeBoxStyle.Copy().Width(leftWidth - 10).Height(12).Render(m.welcomeScreen[0])
+			// Both boxes have RoundedBorder (2 cols) and Padding(1, 4) (8 cols)
+			// Total horizontal overhead is 10
+			leftContentWidth := leftWidth - 10
+			rightContentWidth := rightWidth - 10
 			
-			// Dynamically refresh the recent activity with the calculated width
-			dynamicRecentActivity := getRecentActivity(rightWidth)
-			rightBox := infoBoxStyle.Copy().Width(rightWidth - 10).Height(12).Render(dynamicRecentActivity)
+			if leftContentWidth < 20 { leftContentWidth = 20 }
+			if rightContentWidth < 20 { rightContentWidth = 20 }
+
+			// Render boxes with explicit width and matching height
+			leftBox := welcomeBoxStyle.Copy().Width(leftContentWidth).Height(12).Render(m.welcomeScreen[0])
+			
+			// Dynamically refresh the recent activity with the calculated inner width
+			dynamicRecentActivity := getRecentActivity(rightContentWidth + 10)
+			rightBox := infoBoxStyle.Copy().Width(rightContentWidth).Height(12).Render(dynamicRecentActivity)
 			
 			renderedMessages = append(renderedMessages, lipgloss.JoinHorizontal(lipgloss.Top, leftBox, rightBox))
 		} else {

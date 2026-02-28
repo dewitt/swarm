@@ -1,8 +1,10 @@
 package sdk
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 
@@ -38,11 +40,39 @@ func bashExecuteTool(ctx tool.Context, args BashExecuteArgs) (BashExecuteResult,
 	cmd := exec.Command("bash", "-c", args.Command)
 	cmd.Dir = dir
 
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	// Setup telemetry if available in context
+	var telemetry chan<- string
+	if val := ctx.Value(telemetryContextKey{}); val != nil {
+		if ch, ok := val.(chan<- string); ok {
+			telemetry = ch
+		}
+	}
 
-	err := cmd.Run()
+	stdoutPipe, _ := cmd.StdoutPipe()
+	stderrPipe, _ := cmd.StderrPipe()
+
+	var stdoutBuf, stderrBuf bytes.Buffer
+	
+	if err := cmd.Start(); err != nil {
+		return BashExecuteResult{Success: false, Error: err.Error(), ExitCode: -1}, nil
+	}
+
+	// Stream stdout and stderr
+	stream := func(r io.Reader, buf *bytes.Buffer) {
+		scanner := bufio.NewScanner(r)
+		for scanner.Scan() {
+			line := scanner.Text()
+			buf.WriteString(line + "\n")
+			if telemetry != nil {
+				telemetry <- line
+			}
+		}
+	}
+
+	go stream(stdoutPipe, &stdoutBuf)
+	go stream(stderrPipe, &stderrBuf)
+
+	err := cmd.Wait()
 
 	exitCode := 0
 	if err != nil {
@@ -53,12 +83,12 @@ func bashExecuteTool(ctx tool.Context, args BashExecuteArgs) (BashExecuteResult,
 		}
 	}
 
-	combinedOutput := stdout.String()
-	if stderr.Len() > 0 {
+	combinedOutput := stdoutBuf.String()
+	if stderrBuf.Len() > 0 {
 		if combinedOutput != "" {
 			combinedOutput += "\n"
 		}
-		combinedOutput += "STDERR:\n" + stderr.String()
+		combinedOutput += "STDERR:\n" + stderrBuf.String()
 	}
 
 	result := BashExecuteResult{

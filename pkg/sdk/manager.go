@@ -265,6 +265,7 @@ const (
 	ChatEventHandoff      ChatEventType = "handoff"
 	ChatEventToolCall     ChatEventType = "tool_call"
 	ChatEventToolResult   ChatEventType = "tool_result"
+	ChatEventTelemetry    ChatEventType = "telemetry"
 	ChatEventThought      ChatEventType = "thought"
 	ChatEventFinalResponse ChatEventType = "final_response"
 	ChatEventError        ChatEventType = "error"
@@ -292,6 +293,9 @@ type AgentManifest struct {
 	Language   string `yaml:"language"`
 	Entrypoint string `yaml:"entrypoint"`
 }
+
+// telemetryContextKey is used to pass a telemetry channel through the context to tools.
+type telemetryContextKey struct{}
 
 // defaultManager is the internal implementation of AgentManager.
 type defaultManager struct {
@@ -781,6 +785,19 @@ func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan ChatEv
 			}
 			if strings.Contains(strings.ToLower(prompt), "test") {
 				out <- ChatEvent{Type: ChatEventToolCall, Content: "bash_execute"}
+				// Simulate some build/test logs
+				out <- ChatEvent{Type: ChatEventTelemetry, Content: "pip install -r requirements.txt..."}
+				time.Sleep(100 * time.Millisecond)
+				out <- ChatEvent{Type: ChatEventTelemetry, Content: "Collecting google-genai..."}
+				time.Sleep(100 * time.Millisecond)
+				out <- ChatEvent{Type: ChatEventTelemetry, Content: "Successfully installed google-genai-1.40.0"}
+				time.Sleep(100 * time.Millisecond)
+				out <- ChatEvent{Type: ChatEventTelemetry, Content: "python agent.py --test"}
+				time.Sleep(100 * time.Millisecond)
+				out <- ChatEvent{Type: ChatEventTelemetry, Content: "Test Passed: test_init"}
+				time.Sleep(100 * time.Millisecond)
+				out <- ChatEvent{Type: ChatEventTelemetry, Content: "Test Passed: test_chat"}
+				
 				out <- ChatEvent{Type: ChatEventFinalResponse, Agent: "router_agent", Content: "I successfully executed `pip install -r requirements.txt` and `python agent.py` using my bash tool. All tests passed!"}
 				return
 			}
@@ -842,7 +859,19 @@ Keep your analysis silent. ONLY output the routing decision.`, strings.Join(m.su
 		}
 		// --- End CIA Pre-processing ---
 
-		events := m.run.Run(ctx, m.userID, m.sessionID, genai.NewContentFromText(prompt, genai.Role("user")), agent.RunConfig{})
+		// Setup telemetry channel for tools
+		telemetryChan := make(chan string, 100)
+		toolCtx := context.WithValue(ctx, telemetryContextKey{}, (chan<- string)(telemetryChan))
+
+		// Listen for telemetry in the background and pipe to output
+		go func() {
+			for line := range telemetryChan {
+				out <- ChatEvent{Type: ChatEventTelemetry, Content: line}
+			}
+		}()
+		defer close(telemetryChan)
+
+		events := m.run.Run(toolCtx, m.userID, m.sessionID, genai.NewContentFromText(prompt, genai.Role("user")), agent.RunConfig{})
 
 		for event, err := range events {
 			if err != nil {

@@ -134,3 +134,75 @@ func TestHistoryNavigation(t *testing.T) {
 		t.Errorf("expected text area value %q, got %q", unsubmitted, m.textArea.Value())
 	}
 }
+
+func TestGitStatusUpdate(t *testing.T) {
+	m := initialModel(false, false)
+
+	// Initial state
+	m.gitBranch = "old-branch"
+	m.gitModified = false
+
+	// Simulate gitStatusMsg
+	newBranch := "new-feature"
+	newModified := true
+	msg := gitStatusMsg{
+		branch:   newBranch,
+		modified: newModified,
+	}
+
+	newModel, cmd := m.Update(msg)
+	m = newModel.(model)
+
+	if m.gitBranch != newBranch {
+		t.Errorf("expected gitBranch %q, got %q", newBranch, m.gitBranch)
+	}
+	if m.gitModified != newModified {
+		t.Errorf("expected gitModified %v, got %v", newModified, m.gitModified)
+	}
+	if cmd != nil {
+		t.Errorf("expected nil cmd, got %v", cmd)
+	}
+}
+
+func TestGitTickUpdate(t *testing.T) {
+	m := initialModel(false, false)
+
+	// Simulate gitTickMsg
+	msg := gitTickMsg{}
+
+	_, cmd := m.Update(msg)
+	if cmd == nil {
+		t.Fatal("expected non-nil cmd for gitTickMsg")
+	}
+
+	// We expect a batch command containing checkGitStatus and doGitTick
+	// We can't easily introspect the batch, but we can at least ensure it's not nil.
+}
+
+func TestCheckGitStatus(t *testing.T) {
+	cmd := checkGitStatus()
+	if cmd == nil {
+		t.Fatal("expected non-nil cmd for checkGitStatus")
+	}
+
+	msg := cmd()
+	if _, ok := msg.(gitStatusMsg); !ok {
+		t.Errorf("expected gitStatusMsg, got %T", msg)
+	}
+}
+
+func TestResponseMsgTriggersGitStatusUpdate(t *testing.T) {
+	m := initialModel(false, false)
+	msg := responseMsg{text: "some output", isShell: true}
+
+	_, cmd := m.Update(msg)
+	if cmd == nil {
+		t.Fatal("expected non-nil cmd for responseMsg")
+	}
+
+	// We can't easily verify it's checkGitStatus, but we can call it and check its type
+	innerMsg := cmd()
+	if _, ok := innerMsg.(gitStatusMsg); !ok {
+		t.Errorf("expected gitStatusMsg, got %T", innerMsg)
+	}
+}

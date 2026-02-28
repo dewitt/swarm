@@ -288,6 +288,8 @@ type model struct {
 	planMode    bool
 	state       uiState
 	cwd         string
+	gitBranch   string
+	gitModified bool
 	activeModel string
 	renderer    *glamour.TermRenderer
 
@@ -493,6 +495,24 @@ func saveHistory(history []string) {
 	}
 }
 
+func getGitInfo() (string, bool) {
+	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
+	out, err := cmd.Output()
+	if err != nil {
+		return "", false
+	}
+	branch := strings.TrimSpace(string(out))
+
+	cmd = exec.Command("git", "status", "--porcelain")
+	out, err = cmd.Output()
+	modified := false
+	if err == nil && len(strings.TrimSpace(string(out))) > 0 {
+		modified = true
+	}
+
+	return branch, modified
+}
+
 func initialModel(planMode bool, resume bool) model {
 	ta := textarea.New()
 	ta.Placeholder = "Type your message or /help (Alt+Enter or ^J for newline)"
@@ -547,6 +567,8 @@ func initialModel(planMode bool, resume bool) model {
 
 	loadedHist := loadHistory()
 
+	branch, modified := getGitInfo()
+
 	return model{
 		textArea:    ta,
 		viewport:    vp,
@@ -561,6 +583,8 @@ func initialModel(planMode bool, resume bool) model {
 		planMode:    planMode,
 		state:       stateChat,
 		cwd:         cwd,
+		gitBranch:   branch,
+		gitModified: modified,
 		activeModel: activeModel,
 		renderer:    renderer,
 	}
@@ -1320,7 +1344,15 @@ func (m model) View() string {
 	p2Style := baseStyle.Copy().Width(w2).Align(lipgloss.Center)
 	p3Style := baseStyle.Copy().Width(w3).Align(lipgloss.Right)
 
-	p1 := p1Style.Render(" " + m.cwd)
+	cwdText := " " + m.cwd
+	if m.gitBranch != "" {
+		mod := ""
+		if m.gitModified {
+			mod = "*"
+		}
+		cwdText += fmt.Sprintf(" (%s%s)", m.gitBranch, mod)
+	}
+	p1 := p1Style.Render(cwdText)
 
 	modeText := "local mode"
 	if m.state == stateShell {

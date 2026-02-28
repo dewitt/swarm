@@ -818,7 +818,7 @@ func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan ChatEv
 				out <- ChatEvent{Type: ChatEventTelemetry, Content: "git commit -m 'Setup GAE deployment'"}
 				out <- ChatEvent{Type: ChatEventTelemetry, Content: "git push origin main"}
 				time.Sleep(1 * time.Second)
-				out <- ChatEvent{Type: ChatEventFinalResponse, Agent: "gitops_agent", Content: "I have generated the GitHub Actions workflow and pushed it to main. Your agent is now deploying to Google Agent Engine."}
+				out <- ChatEvent{Type: ChatEventFinalResponse, Agent: "gitops_agent", Content: "Deployment successful! I have generated the GitHub Actions workflow and pushed it to main. Your application is now live at https://swarm-cli-demo.google.com"}
 				return
 			}
 			out <- ChatEvent{Type: ChatEventFinalResponse, Agent: "router_agent", Content: "This is a deterministic dry-run response."}

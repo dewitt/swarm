@@ -295,6 +295,10 @@ type model struct {
 	observeLog   []string
 	activeAgent  string
 
+	// Input Queueing and Async HITL
+	inputQueue []string
+	cancelChat context.CancelFunc
+
 	// Autocomplete state
 	workspaceFiles []string
 	acMatches      []string
@@ -664,6 +668,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Global intercept for double Ctrl+C to quit
 	if keyMsg, ok := msg.(tea.KeyMsg); ok {
 		if keyMsg.Type == tea.KeyCtrlC {
+			if m.loading {
+				if m.cancelChat != nil {
+					m.cancelChat()
+					m.cancelChat = nil
+				}
+				m.inputQueue = nil
+				m.loading = false
+				m.statusMsg = ""
+				m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Bold(true).Render("✦ [System] Swarm execution forcefully halted by user."))
+				m.updateViewport()
+				m.updateInputStyle()
+				return m, nil
+			}
 			if m.quitting {
 				return m, tea.Quit
 			}
@@ -680,11 +697,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Reset quitting state on any other keypress
 		if m.quitting {
 			m.quitting = false
-			if m.state == stateShell {
-				m.textArea.Placeholder = "Type your shell command"
-			} else {
-				m.textArea.Placeholder = "Type your message or /help (Alt+Enter or ^J for newline)"
-			}
+			m.updateInputStyle()
 		}
 	}
 
@@ -744,6 +757,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.Type {
 		case tea.KeyEsc:
+			if m.loading {
+				if m.cancelChat != nil {
+					m.cancelChat()
+					m.cancelChat = nil
+				}
+				m.inputQueue = nil
+				m.loading = false
+				m.statusMsg = ""
+				m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Bold(true).Render("✦ [System] Swarm execution forcefully halted by user."))
+				m.updateViewport()
+				m.updateInputStyle()
+				return m, nil
+			}
 			if m.acActive {
 				m.acActive = false
 				m.acMode = ""
@@ -784,6 +810,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			if m.loading {
+				input := m.textArea.Value()
+				trimmedInput := strings.TrimSpace(input)
+				if trimmedInput != "" {
+					m.inputQueue = append(m.inputQueue, trimmedInput)
+					m.textArea.Reset()
+
+					queuedIcon := lipgloss.NewStyle().Foreground(googleYellow).Render("⧖ ")
+					m.messages = append(m.messages, queuedIcon+trimmedInput)
+					m.updateViewport()
+				}
 				return m, nil
 			}
 
@@ -806,16 +842,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			if m.state == stateShell && (trimmedInput == "exit" || trimmedInput == "quit") {
 				m.state = stateChat
-				m.textArea.Placeholder = "Type your message or /help (Alt+Enter or ^J for newline)"
-				m.textArea.SetPromptFunc(2, func(lineIdx int) string {
-					if lineIdx == 0 {
-						return promptStyle.Render("> ")
-					}
-					return "  "
-				})
 				m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"Exited shell execution mode.")
 				m.textArea.Reset()
 				m.updateViewport()
+				m.updateInputStyle()
 				return m, nil
 			}
 
@@ -836,7 +866,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 				if m.state == stateShell {
 					m.loading = true
-					cmds = append(cmds, m.runShellCommand(input))
+					ctx, cancel := context.WithCancel(context.Background())
+					m.cancelChat = cancel
+					cmds = append(cmds, m.runShellCommand(ctx, input))
 				} else if strings.HasPrefix(input, "/") {
 					parts := strings.Fields(input)
 					if len(parts) > 0 && (parts[0] == "/exit" || parts[0] == "/quit") {
@@ -848,10 +880,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 				} else if strings.HasPrefix(input, "!") {
 					m.loading = true
-					cmds = append(cmds, m.runShellCommand(strings.TrimSpace(strings.TrimPrefix(input, "!"))))
+					ctx, cancel := context.WithCancel(context.Background())
+					m.cancelChat = cancel
+					cmds = append(cmds, m.runShellCommand(ctx, strings.TrimSpace(strings.TrimPrefix(input, "!"))))
 				} else {
 					m.loading = true
-					cmds = append(cmds, m.callSDK(input))
+					ctx, cancel := context.WithCancel(context.Background())
+					m.cancelChat = cancel
+					cmds = append(cmds, m.callSDK(ctx, input))
 				}
 				m.updateViewport()
 			}
@@ -1013,7 +1049,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.activeAgent = "Router"
 		m.observeLog = nil
 		m.updateViewport()
-		return m, checkGitStatus()
+		return m, m.dequeueAndRun()
 
 	case streamErrMsg:
 		m.loading = false
@@ -1021,7 +1057,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.observeLog = nil
 		m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Width(m.viewport.Width).Render("Error: "+msg.err.Error()))
 		m.updateViewport()
-		return m, checkGitStatus()
+		return m, m.dequeueAndRun()
 
 	case responseMsg:
 		m.loading = false
@@ -1041,7 +1077,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.messages = append(m.messages, agentMsgStyle.Render("✦\n")+strings.TrimSpace(out))
 		}
 		m.updateViewport()
-		return m, checkGitStatus()
+		return m, m.dequeueAndRun()
 
 	case modelsLoadedMsg:
 		m.loading = false
@@ -1114,23 +1150,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.state == stateChat && strings.HasPrefix(val, "!") {
 		m.state = stateShell
 		m.textArea.SetValue(strings.TrimPrefix(val, "!"))
-		m.textArea.Placeholder = "Type your shell command"
-		m.textArea.SetPromptFunc(2, func(lineIdx int) string {
-			if lineIdx == 0 {
-				return lipgloss.NewStyle().Foreground(googleYellow).Bold(true).Render("! ")
-			}
-			return "  "
-		})
 	} else if m.state == stateShell && strings.HasPrefix(val, "!") {
 		m.state = stateChat
 		m.textArea.SetValue(strings.TrimPrefix(val, "!"))
-		m.textArea.Placeholder = "Type your message or /help (Alt+Enter or ^J for newline)"
-		m.textArea.SetPromptFunc(2, func(lineIdx int) string {
-			if lineIdx == 0 {
-				return promptStyle.Render("> ")
-			}
-			return "  "
-		})
 	}
 
 	if m.loading {
@@ -1138,18 +1160,46 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, spCmd)
 	}
 
+	m.updateInputStyle()
 	return m, tea.Batch(cmds...)
 }
 
-func (m model) callSDK(input string) tea.Cmd {
+func (m model) callSDK(ctx context.Context, input string) tea.Cmd {
 	if m.planMode {
 		input = "[SYSTEM: You are in PLAN MODE. You must strictly act as a read-only architectural advisor. Under NO circumstances should you use tools to write files, execute bash commands, or alter git state. Only use tools to read and list files.]\n\nUser: " + input
 	}
-	ch, err := m.manager.Chat(context.Background(), input)
+	ch, err := m.manager.Chat(ctx, input)
 	if err != nil {
 		return func() tea.Msg { return streamErrMsg{err: err} }
 	}
 	return listenForStream(ch)
+}
+
+func (m *model) dequeueAndRun() tea.Cmd {
+	if len(m.inputQueue) == 0 {
+		m.loading = false
+		return checkGitStatus()
+	}
+
+	nextInput := m.inputQueue[0]
+	m.inputQueue = m.inputQueue[1:]
+
+	if m.state == stateShell {
+		m.loading = true
+		ctx, cancel := context.WithCancel(context.Background())
+		m.cancelChat = cancel
+		return m.runShellCommand(ctx, nextInput)
+	} else if strings.HasPrefix(nextInput, "!") {
+		m.loading = true
+		ctx, cancel := context.WithCancel(context.Background())
+		m.cancelChat = cancel
+		return m.runShellCommand(ctx, strings.TrimSpace(strings.TrimPrefix(nextInput, "!")))
+	} else {
+		m.loading = true
+		ctx, cancel := context.WithCancel(context.Background())
+		m.cancelChat = cancel
+		return m.callSDK(ctx, nextInput)
+	}
 }
 
 func listenForStream(ch <-chan string) tea.Cmd {
@@ -1162,9 +1212,9 @@ func listenForStream(ch <-chan string) tea.Cmd {
 	}
 }
 
-func (m model) runShellCommand(command string) tea.Cmd {
+func (m model) runShellCommand(ctx context.Context, command string) tea.Cmd {
 	return func() tea.Msg {
-		cmd := exec.Command("bash", "-c", command)
+		cmd := exec.CommandContext(ctx, "bash", "-c", command)
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			return responseMsg{text: string(out), err: err, isShell: true}
@@ -1505,6 +1555,43 @@ func (m *model) updateViewport() {
 	} else {
 		// Retain scroll position
 		m.viewport.YOffset = currentY
+	}
+}
+
+func (m *model) updateInputStyle() {
+	if m.quitting {
+		if m.state == stateShell {
+			m.textArea.Placeholder = "Press ^C again to quit, or ! to exit shell mode."
+		} else {
+			m.textArea.Placeholder = "Press ^C again to quit."
+		}
+		return
+	}
+
+	if m.loading {
+		m.textArea.Placeholder = "Agents are working. Type to queue a message or press Esc to interrupt..."
+		m.textArea.SetPromptFunc(2, func(lineIdx int) string {
+			if lineIdx == 0 {
+				return lipgloss.NewStyle().Foreground(googleYellow).Render("⧖ ")
+			}
+			return "  "
+		})
+	} else if m.state == stateShell {
+		m.textArea.Placeholder = "Type your shell command"
+		m.textArea.SetPromptFunc(2, func(lineIdx int) string {
+			if lineIdx == 0 {
+				return lipgloss.NewStyle().Foreground(googleYellow).Bold(true).Render("! ")
+			}
+			return "  "
+		})
+	} else {
+		m.textArea.Placeholder = "Type your message or /help (Alt+Enter or ^J for newline)"
+		m.textArea.SetPromptFunc(2, func(lineIdx int) string {
+			if lineIdx == 0 {
+				return promptStyle.Render("> ")
+			}
+			return "  "
+		})
 	}
 }
 

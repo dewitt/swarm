@@ -102,16 +102,24 @@ func colorize(lines []string, mainStyle, shadowStyle lipgloss.Style) []string {
 }
 
 func renderLogo() string {
-	shadowColor := lipgloss.Color("#888888") // Grey
-	gtColor := lipgloss.Color("#555555")     // Off-black
+	sMainGt := lipgloss.NewStyle().Foreground(lipgloss.Color("#cbd5e1")).Bold(true) // Slate 300
+	sMainS := lipgloss.NewStyle().Foreground(lipgloss.Color("#94a3b8")).Bold(true)  // Slate 400
+	sMainW := lipgloss.NewStyle().Foreground(lipgloss.Color("#64748b")).Bold(true)  // Slate 500
+	sMainA := lipgloss.NewStyle().Foreground(lipgloss.Color("#475569")).Bold(true)  // Slate 600
+	sMainR := lipgloss.NewStyle().Foreground(lipgloss.Color("#334155")).Bold(true)  // Slate 700
+	sMainM := lipgloss.NewStyle().Foreground(lipgloss.Color("#1e293b")).Bold(true)  // Slate 800
+	sShadow := lipgloss.NewStyle().Foreground(lipgloss.Color("#e2e8f0")).Bold(true) // Slate 200
 
-	sMainGt := lipgloss.NewStyle().Foreground(gtColor).Bold(true)
-	sMainS := lipgloss.NewStyle().Foreground(googleBlue).Bold(true)
-	sMainW := lipgloss.NewStyle().Foreground(googleRed).Bold(true)
-	sMainA := lipgloss.NewStyle().Foreground(googleYellow).Bold(true)
-	sMainR := lipgloss.NewStyle().Foreground(googleBlue).Bold(true)
-	sMainM := lipgloss.NewStyle().Foreground(googleGreen).Bold(true)
-	sShadow := lipgloss.NewStyle().Foreground(shadowColor).Bold(true)
+	// Neutral palette (Adaptive for light/dark)
+	if !lipgloss.HasDarkBackground() {
+		sMainGt = lipgloss.NewStyle().Foreground(lipgloss.Color("#334155")).Bold(true)
+		sMainS = lipgloss.NewStyle().Foreground(lipgloss.Color("#475569")).Bold(true)
+		sMainW = lipgloss.NewStyle().Foreground(lipgloss.Color("#64748b")).Bold(true)
+		sMainA = lipgloss.NewStyle().Foreground(lipgloss.Color("#94a3b8")).Bold(true)
+		sMainR = lipgloss.NewStyle().Foreground(lipgloss.Color("#cbd5e1")).Bold(true)
+		sMainM = lipgloss.NewStyle().Foreground(lipgloss.Color("#e2e8f0")).Bold(true)
+		sShadow = lipgloss.NewStyle().Foreground(lipgloss.Color("#1e293b")).Bold(true)
+	}
 
 	gt := colorize([]string{
 		"██╗    ",
@@ -123,54 +131,59 @@ func renderLogo() string {
 		"       ",
 	}, sMainGt, sShadow)
 
+	// s (lowercase)
 	s := colorize([]string{
-		"        ",
-		" ██████╗",
-		"██╔════╝",
-		"╚█████╗ ",
-		" ╚═══██╗",
-		"██████╔╝",
-		"╚═════╝ ",
+		"       ",
+		"       ",
+		" ▄███▄ ",
+		" ▀███▄ ",
+		" ▄███▀ ",
+		" ▀▀▀▀  ",
+		"       ",
 	}, sMainS, sShadow)
 
+	// w (lowercase)
 	w := colorize([]string{
-		"        ",
-		"██╗    ██╗",
-		"██║    ██║",
-		"██║ █╗ ██║",
-		"██║███╗██║",
-		"╚███╔███╔╝",
-		" ╚══╝╚══╝ ",
+		"       ",
+		"       ",
+		" █   █ ",
+		" █ █ █ ",
+		" ╚█╩█╝ ",
+		"  ▀ ▀  ",
+		"       ",
 	}, sMainW, sShadow)
 
+	// a (lowercase)
 	a := colorize([]string{
-		"        ",
-		" █████╗ ",
-		"██╔══██╗",
-		"███████║",
-		"██╔══██║",
-		"██║  ██║",
-		"╚═╝  ╚═╝",
+		"       ",
+		"       ",
+		"  ▄███▄",
+		" █▀  █ ",
+		" █▄▄██ ",
+		"  ▀▀▀  ",
+		"       ",
 	}, sMainA, sShadow)
 
+	// r (lowercase)
 	r := colorize([]string{
-		"        ",
-		"██████╗ ",
-		"██╔══██╗",
-		"██████╔╝",
-		"██╔══██╗",
-		"██║  ██║",
-		"╚═╝  ╚═╝",
+		"       ",
+		"       ",
+		" █ ▄██ ",
+		" █▀▀   ",
+		" █     ",
+		" ▀     ",
+		"       ",
 	}, sMainR, sShadow)
 
+	// m (lowercase)
 	m := colorize([]string{
-		"        ",
-		"███╗   ███╗",
-		"████╗ ████║",
-		"██╔████╔██║",
-		"██║╚██╔╝██║",
-		"██║ ╚═╝ ██║",
-		"╚═╝     ╚═╝",
+		"       ",
+		"       ",
+		" ██ ▄ ▄",
+		" █ █ █ ",
+		" █ █ █ ",
+		" ▀ ▀ ▀ ",
+		"       ",
 	}, sMainM, sShadow)
 
 	var sb strings.Builder

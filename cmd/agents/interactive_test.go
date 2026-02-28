@@ -75,3 +75,62 @@ func TestSnapshotFileAutocomplete(t *testing.T) {
 	fmt.Println(rawView)
 	fmt.Println("=== END TUI FILE AUTOCOMPLETE SNAPSHOT ===")
 }
+
+func TestHistoryNavigation(t *testing.T) {
+	m := initialModel(false, false)
+	m.history = []string{"first command", "second command"}
+	m.historyIdx = 2
+
+	// 1. Type something unsubmitted
+	unsubmitted := "unsubmitted text"
+	for _, r := range unsubmitted {
+		newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		m = newModel.(model)
+	}
+	if m.textArea.Value() != unsubmitted {
+		t.Errorf("expected text area value %q, got %q", unsubmitted, m.textArea.Value())
+	}
+
+	// 2. Press Up arrow
+	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyUp})
+	m = newModel.(model)
+	if m.textArea.Value() != "second command" {
+		t.Errorf("expected text area value %q, got %q", "second command", m.textArea.Value())
+	}
+	if m.historyIdx != 1 {
+		t.Errorf("expected historyIdx 1, got %d", m.historyIdx)
+	}
+	if m.currentInput != unsubmitted {
+		t.Errorf("expected currentInput %q, got %q", unsubmitted, m.currentInput)
+	}
+
+	// 3. Press Up arrow again
+	newModel, _ = m.Update(tea.KeyMsg{Type: tea.KeyUp})
+	m = newModel.(model)
+	if m.textArea.Value() != "first command" {
+		t.Errorf("expected text area value %q, got %q", "first command", m.textArea.Value())
+	}
+	if m.historyIdx != 0 {
+		t.Errorf("expected historyIdx 0, got %d", m.historyIdx)
+	}
+
+	// 4. Press Down arrow
+	newModel, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m = newModel.(model)
+	if m.textArea.Value() != "second command" {
+		t.Errorf("expected text area value %q, got %q", "second command", m.textArea.Value())
+	}
+	if m.historyIdx != 1 {
+		t.Errorf("expected historyIdx 1, got %d", m.historyIdx)
+	}
+
+	// 5. Press Down arrow again to return to unsubmitted
+	newModel, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m = newModel.(model)
+	if m.historyIdx != 2 {
+		t.Errorf("expected historyIdx 2, got %d", m.historyIdx)
+	}
+	if m.textArea.Value() != unsubmitted {
+		t.Errorf("expected text area value %q, got %q", unsubmitted, m.textArea.Value())
+	}
+}

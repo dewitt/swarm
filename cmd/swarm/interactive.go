@@ -83,104 +83,52 @@ var (
 			Padding(0, 1)
 )
 
-func colorize(lines []string, mainStyle, shadowStyle lipgloss.Style) []string {
-	var res []string
-	for _, line := range lines {
-		var sb strings.Builder
-		for _, r := range line {
-			if r == '█' {
-				sb.WriteString(mainStyle.Render(string(r)))
-			} else if r != ' ' {
-				sb.WriteString(shadowStyle.Render(string(r)))
-			} else {
-				sb.WriteRune(r)
-			}
-		}
-		res = append(res, sb.String())
-	}
-	return res
-}
-
 func renderLogo() string {
-	sMainGt := lipgloss.NewStyle().Foreground(lipgloss.Color("#cbd5e1")).Bold(true) // Slate 300
-	sMainS := lipgloss.NewStyle().Foreground(lipgloss.Color("#94a3b8")).Bold(true)  // Slate 400
-	sMainW := lipgloss.NewStyle().Foreground(lipgloss.Color("#64748b")).Bold(true)  // Slate 500
-	sMainA := lipgloss.NewStyle().Foreground(lipgloss.Color("#475569")).Bold(true)  // Slate 600
-	sMainR := lipgloss.NewStyle().Foreground(lipgloss.Color("#334155")).Bold(true)  // Slate 700
-	sMainM := lipgloss.NewStyle().Foreground(lipgloss.Color("#1e293b")).Bold(true)  // Slate 800
-	sShadow := lipgloss.NewStyle().Foreground(lipgloss.Color("#e2e8f0")).Bold(true) // Slate 200
+	// DEC-style logo: each character in its own box with a small gap.
+	chars := []string{">", "s", "w", "a", "r", "m"}
+	
+	// Slate gradient (Slate 300 to Slate 800)
+	colors := []string{
+		"#cbd5e1", // Slate 300
+		"#94a3b8", // Slate 400
+		"#64748b", // Slate 500
+		"#475569", // Slate 600
+		"#334155", // Slate 700
+		"#1e293b", // Slate 800
+	}
 
 	if !lipgloss.HasDarkBackground() {
-		sMainGt = lipgloss.NewStyle().Foreground(lipgloss.Color("#334155")).Bold(true)
-		sMainS = lipgloss.NewStyle().Foreground(lipgloss.Color("#475569")).Bold(true)
-		sMainW = lipgloss.NewStyle().Foreground(lipgloss.Color("#64748b")).Bold(true)
-		sMainA = lipgloss.NewStyle().Foreground(lipgloss.Color("#94a3b8")).Bold(true)
-		sMainR = lipgloss.NewStyle().Foreground(lipgloss.Color("#cbd5e1")).Bold(true)
-		sMainM = lipgloss.NewStyle().Foreground(lipgloss.Color("#e2e8f0")).Bold(true)
-		sShadow = lipgloss.NewStyle().Foreground(lipgloss.Color("#1e293b")).Bold(true)
-	}
-
-	gt := colorize([]string{
-		"   ",
-		"   ",
-		" ❯ ",
-		"   ",
-		"   ",
-	}, sMainGt, sShadow)
-
-	s := colorize([]string{
-		"      ",
-		"  ___ ",
-		" (_ -|",
-		" /___/",
-		"      ",
-	}, sMainS, sShadow)
-
-	w := colorize([]string{
-		"        ",
-		" _ _ _  ",
-		"| | | | ",
-		" \\\\_/_/  ",
-		"        ",
-	}, sMainW, sShadow)
-
-	a := colorize([]string{
-		"      ",
-		"  __  ",
-		" / _` ",
-		" \\\\__, ",
-		"      ",
-	}, sMainA, sShadow)
-
-	r := colorize([]string{
-		"     ",
-		"  _  ",
-		" | _|",
-		" |_| ",
-		"     ",
-	}, sMainR, sShadow)
-
-	m := colorize([]string{
-		"           ",
-		"  _ _ _    ",
-		" | ' ' \\\\  ",
-		" |_|_|_|   ",
-		"           ",
-	}, sMainM, sShadow)
-
-	var sb strings.Builder
-	for i := 0; i < 5; i++ {
-		sb.WriteString(gt[i])
-		sb.WriteString(s[i])
-		sb.WriteString(w[i])
-		sb.WriteString(a[i])
-		sb.WriteString(r[i])
-		sb.WriteString(m[i])
-		if i < 4 {
-			sb.WriteString("\n")
+		colors = []string{
+			"#334155", // Slate 700
+			"#475569", // Slate 600
+			"#64748b", // Slate 500
+			"#94a3b8", // Slate 400
+			"#cbd5e1", // Slate 300
+			"#e2e8f0", // Slate 200
 		}
 	}
-	return sb.String()
+
+	var boxes []string
+	for i, c := range chars {
+		style := lipgloss.NewStyle().
+			Border(lipgloss.NormalBorder()).
+			BorderForeground(lipgloss.Color(colors[i])).
+			Foreground(lipgloss.Color(colors[i])).
+			Padding(0, 1).
+			Bold(true)
+		
+		// Add a margin to the right to create the "small gap".
+		// Increase gap after the ">" to represent the space in "> swarm".
+		if i == 0 {
+			style = style.MarginRight(2)
+		} else if i < len(chars)-1 {
+			style = style.MarginRight(1)
+		}
+		
+		boxes = append(boxes, style.Render(c))
+	}
+
+	return lipgloss.JoinHorizontal(lipgloss.Top, boxes...)
 }
 
 type streamMsg struct {

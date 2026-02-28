@@ -84,17 +84,61 @@ var (
 )
 
 func renderLogo() string {
-	// Halved DEC ratios: Box (5x6 cells), Gap (1 cell).
-	// Box Width:Height = 5:(6*2) = 5:12 = 1:2.4 (Maintains the exact 120:288 ratio).
-	// Gap: 1 cell wide. While this is 1/5 of the box width (vs 1/10), it is the
-	// smallest possible gap in a terminal and fits the smaller scale better.
-	
+	// DEC-style logo: 5x6 uniform rectangular boxes.
+	// We use a custom multi-line glyph for each character to vertically fill the box.
 	chars := []string{">", "s", "w", "a", "r", "m"}
 	decRed := lipgloss.Color("#a9042c")
 	white := lipgloss.Color("#ffffff")
 
+	// 5-line high glyphs
+	font := map[string][]string{
+		">": {
+			"█    ",
+			" █   ",
+			"  █  ",
+			" █   ",
+			"█    ",
+		},
+		"s": {
+			" ▄██ ",
+			" ▀█▄ ",
+			" ▄▄█ ",
+			" ▀▀▀ ",
+			"     ",
+		},
+		"w": {
+			"█   █",
+			"█   █",
+			"█ █ █",
+			"█▄█▄█",
+			"     ",
+		},
+		"a": {
+			" ▄██ ",
+			" █▄█ ",
+			" █▄█ ",
+			" ▀ ▀ ",
+			"     ",
+		},
+		"r": {
+			" █▄▀ ",
+			" █   ",
+			" █   ",
+			" ▀   ",
+			"     ",
+		},
+		"m": {
+			"█ █ █",
+			"█ █ █",
+			"█ █ █",
+			"▀ ▀ ▀",
+			"     ",
+		},
+	}
+
 	var logoParts []string
 	for i, c := range chars {
+		glyph := strings.Join(font[c], "\n")
 		box := lipgloss.NewStyle().
 			Background(decRed).
 			Foreground(white).
@@ -102,7 +146,7 @@ func renderLogo() string {
 			Height(6).
 			Align(lipgloss.Center, lipgloss.Center).
 			Bold(true).
-			Render(c)
+			Render(glyph)
 		logoParts = append(logoParts, box)
 		
 		// Insert manual 1-cell gap between boxes

@@ -74,12 +74,6 @@ when the CLI needs a decision.
 Agents fail when their context window drifts from the user's mental model. The
 UI must solve this.
 
-- **Status Bar:** A persistent, minimal status bar at the bottom or top of the
-  terminal session showing:
-  - The current active LLM model (e.g., `gemini-2.5-pro`).
-  - The number of files currently loaded into the agent's context.
-  - The current Git branch and modification status (e.g., `main*`).
-  - Token usage estimates (if applicable).
 - **Context Management:** Users can type `/context` to see a rich list of
   exactly what the agent "knows" right now, and `/drop [file]` to easily evict
   irrelevant files from the memory, keeping costs low and responses sharp.
@@ -115,6 +109,27 @@ intended for the local client.
 - **Agent Handoff:** Certain slash commands might exist to force a manual
   handoff to a specific agent (e.g., `/agent builder`) rather than relying on
   the Router Agent's natural language inference.
+
+## 8. Layout & Visual Hierarchy
+
+The interface must be structurally organized to manage complex state without
+overwhelming the user.
+
+- **Boot / Splash Screen:** On boot, the CLI should render a visually distinct
+  splash screen displaying the `agents` logo, helpful tip commands, and a
+  dynamic **Recent Activity** list indicating the timestamp and IDs of the
+  user's last 3 interactive sessions (queried from the SQLite database).
+- **Status Bar:** A persistent, minimal status bar at the bottom or top of the
+  terminal session showing:
+  - The current active LLM model (e.g., `gemini-2.5-pro`).
+  - The number of files currently loaded into the agent's context.
+  - The current Git branch and modification status (e.g., `main*`).
+  - Token usage estimates (if applicable).
+- **Observe Mode:** For debugging long-running or complex swarms, users can
+  toggle a `^O` or `/observe` mode. This introduces a dedicated "Observation
+  Box" that prints the live stream of the agent's inner monologue, tool
+  executions, and function arguments in real-time, preventing the "black box"
+  effect.
 
 ## Context and Session Management
 

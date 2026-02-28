@@ -836,6 +836,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.updateViewport()
 			return m, nil
 		case tea.KeyCtrlL:
+			m.messages = nil
+			m.updateViewport()
 			return m, tea.ClearScreen
 		case tea.KeyCtrlR:
 			if m.state == stateChat && !m.loading {
@@ -1511,15 +1513,8 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 			m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"No response available to copy.")
 		}
 	case "/clear":
-		// Clear everything except the welcome screen
-		if len(m.messages) > 0 {
-			m.messages = []string{m.messages[0]}
-		}
-		m.manager.Reset()
-		for _, a := range m.agents {
-			a.update("idle", "Idle")
-		}
-		m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"Screen and conversation history cleared. Context window reset.")
+		m.messages = nil
+		m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"Screen cleared.")
 	case "/rewind":
 		n := 1
 		if len(parts) > 1 {

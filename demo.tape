@@ -19,6 +19,9 @@ Sleep 500ms
 Enter
 Sleep 5s
 
+Ctrl+L
+Sleep 1s
+
 Type "/skills"
 Sleep 500ms
 Enter
@@ -29,10 +32,15 @@ Sleep 500ms
 Enter
 Sleep 5s
 
+Type "!"
+Sleep 500ms
+Enter
+Sleep 2s
+
 Type "Build and test this repository"
 Sleep 500ms
 Enter
-Sleep 5s
+Sleep 10s
 
 Type "Now deploy it to production"
 Sleep 500ms

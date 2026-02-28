@@ -110,7 +110,6 @@ func renderLogo() string {
 	sMainM := lipgloss.NewStyle().Foreground(lipgloss.Color("#1e293b")).Bold(true)  // Slate 800
 	sShadow := lipgloss.NewStyle().Foreground(lipgloss.Color("#e2e8f0")).Bold(true) // Slate 200
 
-	// Neutral palette (Adaptive for light/dark)
 	if !lipgloss.HasDarkBackground() {
 		sMainGt = lipgloss.NewStyle().Foreground(lipgloss.Color("#334155")).Bold(true)
 		sMainS = lipgloss.NewStyle().Foreground(lipgloss.Color("#475569")).Bold(true)
@@ -122,79 +121,62 @@ func renderLogo() string {
 	}
 
 	gt := colorize([]string{
-		"██╗    ",
-		"╚██╗   ",
-		" ╚██╗  ",
-		" ██╔╝  ",
-		"██╔╝   ",
-		"╚═╝    ",
-		"       ",
+		"   ",
+		"   ",
+		" ❯ ",
+		"   ",
+		"   ",
 	}, sMainGt, sShadow)
 
-	// s (lowercase)
 	s := colorize([]string{
-		"       ",
-		"       ",
-		" ▄███▄ ",
-		" ▀███▄ ",
-		" ▄███▀ ",
-		" ▀▀▀▀  ",
-		"       ",
+		"      ",
+		"      ",
+		"  ___ ",
+		" (__  ",
+		" ___/ ",
 	}, sMainS, sShadow)
 
-	// w (lowercase)
 	w := colorize([]string{
-		"       ",
-		"       ",
-		" █   █ ",
-		" █ █ █ ",
-		" ╚█╩█╝ ",
-		"  ▀ ▀  ",
-		"       ",
+		"        ",
+		"        ",
+		" _ _ _  ",
+		"| | | | ",
+		"|__/_/  ",
 	}, sMainW, sShadow)
 
-	// a (lowercase)
 	a := colorize([]string{
-		"       ",
-		"       ",
-		"  ▄███▄",
-		" █▀  █ ",
-		" █▄▄██ ",
-		"  ▀▀▀  ",
-		"       ",
+		"      ",
+		"      ",
+		"  __  ",
+		" / _` ",
+		" \__,|",
 	}, sMainA, sShadow)
 
-	// r (lowercase)
 	r := colorize([]string{
-		"       ",
-		"       ",
-		" █ ▄██ ",
-		" █▀▀   ",
-		" █     ",
-		" ▀     ",
-		"       ",
+		"     ",
+		"     ",
+		"  __ ",
+		" | _|",
+		" |_| ",
 	}, sMainR, sShadow)
 
-	// m (lowercase)
 	m := colorize([]string{
-		"       ",
-		"       ",
-		" ██ ▄ ▄",
-		" █ █ █ ",
-		" █ █ █ ",
-		" ▀ ▀ ▀ ",
-		"       ",
+		"         ",
+		"         ",
+		"  _ _ _  ",
+		" | | | | ",
+		" |_| |_| ",
 	}, sMainM, sShadow)
 
 	var sb strings.Builder
-	for i := 0; i < 7; i++ {
+	for i := 0; i < 5; i++ {
 		sb.WriteString(gt[i])
 		sb.WriteString(s[i])
 		sb.WriteString(w[i])
 		sb.WriteString(a[i])
 		sb.WriteString(r[i])
 		sb.WriteString(m[i])
-		if i < 6 {
+		if i < 4 {
 			sb.WriteString("\n")
 		}
 	}

@@ -100,16 +100,16 @@ func colorize(lines []string, mainStyle, shadowStyle lipgloss.Style) []string {
 }
 
 func renderLogo() string {
-	shadowColor := lipgloss.Color("#888888") // Grey
-	gtColor := lipgloss.Color("#555555")     // Off-black
+	shadowColor := lipgloss.Color("#CC00FF") // Neon Purple
+	gtColor := lipgloss.Color("#00FFFF")     // Neon Cyan
 
 	sMainGt := lipgloss.NewStyle().Foreground(gtColor).Bold(true)
-	sMainA := lipgloss.NewStyle().Foreground(googleBlue).Bold(true)
-	sMainG := lipgloss.NewStyle().Foreground(googleRed).Bold(true)
-	sMainE := lipgloss.NewStyle().Foreground(googleYellow).Bold(true)
-	sMainN := lipgloss.NewStyle().Foreground(googleBlue).Bold(true)
-	sMainT := lipgloss.NewStyle().Foreground(googleGreen).Bold(true)
-	sMainS := lipgloss.NewStyle().Foreground(googleRed).Bold(true)
+	sMainA := lipgloss.NewStyle().Foreground(lipgloss.Color("#FF007F")).Bold(true)
+	sMainG := lipgloss.NewStyle().Foreground(lipgloss.Color("#00FFFF")).Bold(true)
+	sMainE := lipgloss.NewStyle().Foreground(lipgloss.Color("#FF007F")).Bold(true)
+	sMainN := lipgloss.NewStyle().Foreground(lipgloss.Color("#00FFFF")).Bold(true)
+	sMainT := lipgloss.NewStyle().Foreground(lipgloss.Color("#FF007F")).Bold(true)
+	sMainS := lipgloss.NewStyle().Foreground(lipgloss.Color("#00FFFF")).Bold(true)
 	sShadow := lipgloss.NewStyle().Foreground(shadowColor).Bold(true)
 
 	gt := colorize([]string{
@@ -532,6 +532,35 @@ func doGitTick() tea.Cmd {
 	})
 }
 
+func getRecentActivity() string {
+	m := sdk.NewManager()
+	sessions, err := m.ListSessions(context.Background())
+	if err != nil || len(sessions) == 0 {
+		return "Recent activity\n(none yet)\n\nWhat's new\n/agents to create subagents\n/docs for API references\nctrl+c to background or exit"
+	}
+
+	var sb strings.Builder
+	sb.WriteString("Recent activity\n")
+
+	count := 0
+	for i := len(sessions) - 1; i >= 0 && count < 3; i-- {
+		s := sessions[i]
+		id := s.ID
+		if len(id) > 15 {
+			id = id[:12] + "..."
+		}
+		sb.WriteString(fmt.Sprintf("%-15s %s\n", s.UpdatedAt, id))
+		count++
+	}
+
+	sb.WriteString("\nWhat's new\n")
+	sb.WriteString("/agents to create subagents\n")
+	sb.WriteString("/docs for API references\n")
+	sb.WriteString("ctrl+c to background or exit\n")
+
+	return sb.String()
+}
+
 func initialModel(planMode bool, resume bool) model {
 	ta := textarea.New()
 	ta.Placeholder = "Type your message or /help (Alt+Enter or ^J for newline)"
@@ -561,7 +590,7 @@ func initialModel(planMode bool, resume bool) model {
 
 	// Create a beautiful splash screen
 	leftBox := welcomeBoxStyle.Render(fmt.Sprintf("%s\n\nWelcome back, %s!", renderLogo(), getUserName()))
-	rightBox := infoBoxStyle.Render(initialTips)
+	rightBox := infoBoxStyle.Render(getRecentActivity())
 	welcomeScreen := lipgloss.JoinHorizontal(lipgloss.Top, leftBox, rightBox)
 
 	cwd, _ := os.Getwd()
@@ -709,7 +738,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.acMode = ""
 				return m, nil
 			}
-			return m, tea.Quit
+			if m.textArea.Value() != "" {
+				m.textArea.SetValue("")
+				m.historyIdx = len(m.history)
+				return m, nil
+			}
+			return m, nil
 		case tea.KeyCtrlJ:
 			m.textArea.InsertString("\n")
 			return m, nil

@@ -84,12 +84,10 @@ var (
 )
 
 func renderLogo() string {
-	// Exact DEC ratios: Box (120x288), Gap (12x288)
-	// Box Width:Height = 120:288 = 1:2.4
-	// Gap:Box Width = 12:120 = 1:10
-	// Assuming terminal cell aspect ratio is 1:2 (W:H)
-	// Box: 10 cells wide, 12 cells high => Visual Ratio = 10 : (12*2) = 10:24 = 1:2.4
-	// Gap: 1 cell wide => Visual Ratio = 1:10 of box width.
+	// Halved DEC ratios: Box (5x6 cells), Gap (1 cell).
+	// Box Width:Height = 5:(6*2) = 5:12 = 1:2.4 (Maintains the exact 120:288 ratio).
+	// Gap: 1 cell wide. While this is 1/5 of the box width (vs 1/10), it is the
+	// smallest possible gap in a terminal and fits the smaller scale better.
 	
 	chars := []string{">", "s", "w", "a", "r", "m"}
 	decRed := lipgloss.Color("#a9042c")
@@ -100,8 +98,8 @@ func renderLogo() string {
 		box := lipgloss.NewStyle().
 			Background(decRed).
 			Foreground(white).
-			Width(10).
-			Height(12).
+			Width(5).
+			Height(6).
 			Align(lipgloss.Center, lipgloss.Center).
 			Bold(true).
 			Render(c)
@@ -111,7 +109,7 @@ func renderLogo() string {
 		if i < len(chars)-1 {
 			gap := lipgloss.NewStyle().
 				Width(1).
-				Height(12).
+				Height(6).
 				Render("")
 			logoParts = append(logoParts, gap)
 		}

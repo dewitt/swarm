@@ -1732,22 +1732,31 @@ func (m model) renderAgentPanel() string {
 		return ""
 	}
 
-	fidelity := "medium"
-	if len(visibleAgents) <= 8 {
-		fidelity = "high"
-	} else if len(visibleAgents) > 16 {
+	// Calculate optimal columns based on count and width
+	// We want to fit 2-4 cards comfortably per row.
+	cols := 4
+	if m.width < 100 {
+		cols = 2
+	} else if m.width < 140 {
+		cols = 3
+	}
+
+	fidelity := "high" // Always high if we have room
+	if len(visibleAgents) > cols*2 {
+		fidelity = "medium"
+	}
+	if len(visibleAgents) > 16 {
 		fidelity = "low"
 	}
 
-	cols := 4
-	if fidelity == "low" {
-		cols = (m.width - 4) / 8
-		if cols < 1 {
-			cols = 1
-		}
-	}
+	// Calculate exact card width
 	availableWidth := m.width - 2
 	cardWidth := availableWidth / cols
+	if fidelity == "low" {
+		cols = (m.width - 4) / 8
+		if cols < 1 { cols = 1 }
+		cardWidth = 8
+	}
 
 	// Helper to ensure an icon or spinner is exactly 2 cells wide
 	padPrefix := func(s string) string {
@@ -1945,12 +1954,20 @@ func (m model) View() string {
 	if m.showAgentPanel {
 		agentPanelView = m.renderAgentPanel()
 	}
-	
-	// Output Box (Viewport) with border
-	vpView := viewportStyle.Width(m.width - 2).Render(m.viewport.View())
+	agentPanelHeight := lipgloss.Height(agentPanelView)
 	
 	// Input Box with border
 	inputView := inputBoxStyle.Width(m.width - 2).Render(m.textArea.View())
+	inputHeight := lipgloss.Height(inputView)
+
+	// Status line height
+	statusHeight := 1
+
+	// Recalculate viewport height to fill remaining space
+	m.viewport.Height = m.height - agentPanelHeight - inputHeight - statusHeight
+	
+	// Output Box (Viewport) with border
+	vpView := viewportStyle.Width(m.width - 2).Height(m.viewport.Height).Render(m.viewport.View())
 	
 	// Main body is just the vertical stack of the three bordered sections
 	mainBody := lipgloss.JoinVertical(lipgloss.Left, agentPanelView, vpView, inputView)

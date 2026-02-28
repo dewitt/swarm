@@ -99,6 +99,23 @@ different tools in the ecosystem.
   represents a significant leap forward and is poised to become the new
   industry standard. We do not invent new paradigms just to be different.
 
+## 8. Ubiquitous Mediation
+
+We believe that, at the limit, every interaction—whether human-to-computer or
+computer-to-computer—will be mediated by an intelligent, autonomous agent
+acting on our behalf.
+
+- **The Agent as the Interface:** The user no longer interacts directly with
+  raw tools or rigid UIs. Instead, they interact with a coordinating
+  intelligence that translates intent into action.
+- **Proactive Conversation Management:** Our "Chat Input Agent" (CIA) is a
+  first-class realization of this principle. By using an agent to proactively
+  classify and route inputs, we ensure that the system remains fluid and
+  aligned with human thought patterns, even when they digress.
+- **Orchestration by Default:** We assume that every component of a system
+  will eventually be accessible through a mediating agentic layer, reducing
+  complex technical workflows to high-level goal-setting.
+
 ## The "Engineering Manager" Paradigm
 
 The ultimate goal of `swarm` is to abstract away the mechanics of agent

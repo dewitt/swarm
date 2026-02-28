@@ -657,8 +657,8 @@ func initialModel(planMode bool, resume bool) model {
 	agentSpinner.Style = lipgloss.NewStyle().Foreground(colorActive)
 
 	agents := []*swarmAgent{
-		{name: "Chat Input Agent", icon: "💠", status: "Idle", state: "idle", spin: agentSpinner, resident: true, lastActive: time.Now()},
-		{name: "Router", icon: "🧠", status: "Idle", state: "idle", spin: agentSpinner, resident: true, lastActive: time.Now()},
+		{name: "Chat Input Agent", icon: "⚙", status: "Idle", state: "idle", spin: agentSpinner, resident: true, lastActive: time.Now()},
+		{name: "Router", icon: "◈", status: "Idle", state: "idle", spin: agentSpinner, resident: true, lastActive: time.Now()},
 	}
 
 	manager := sdk.NewManager(sdk.ManagerConfig{ResumeLastSession: resume})
@@ -1740,7 +1740,6 @@ func (m model) renderAgentPanel() string {
 	}
 
 	// Calculate optimal columns based on count and width
-	// We want to fit 2-4 cards comfortably per row.
 	cols := 4
 	if m.width < 100 {
 		cols = 2
@@ -1748,7 +1747,7 @@ func (m model) renderAgentPanel() string {
 		cols = 3
 	}
 
-	fidelity := "high" // Always high if we have room
+	fidelity := "high"
 	if len(visibleAgents) > cols*2 {
 		fidelity = "medium"
 	}
@@ -1756,7 +1755,6 @@ func (m model) renderAgentPanel() string {
 		fidelity = "low"
 	}
 
-	// Inner width available for cards (subtract Agent Panel borders(2) and padding(2))
 	availableWidth := m.width - 4
 	if availableWidth < 20 { availableWidth = 20 }
 	
@@ -1767,27 +1765,16 @@ func (m model) renderAgentPanel() string {
 		cardWidth = 8
 	}
 
-	// Helper to ensure an icon or spinner is exactly 2 cells wide
-	padPrefix := func(s string) string {
-		w := runewidth.StringWidth(s)
-		if w == 0 {
-			return "  "
-		}
-		if w == 1 {
-			return s + " "
-		}
-		return s
-	}
-
-	// Helper to render a perfectly aligned line using two fixed-width columns.
+	// Helper to render a perfectly aligned line using two columns.
+	// Prefix is exactly 3 cells wide.
 	renderLine := func(prefix string, text string, style lipgloss.Style, width int) string {
-		prefixComp := padPrefix(prefix)
+		prefixComp := lipgloss.NewStyle().Width(3).Render(prefix)
 		contentWidth := width - 3
 		if runewidth.StringWidth(text) > contentWidth {
 			text = runewidth.Truncate(text, contentWidth-1, "…")
 		}
 		contentComp := style.Width(contentWidth).Render(text)
-		return lipgloss.JoinHorizontal(lipgloss.Left, prefixComp+" ", contentComp)
+		return lipgloss.JoinHorizontal(lipgloss.Left, prefixComp, contentComp)
 	}
 
 	var cards []string
@@ -1816,11 +1803,11 @@ func (m model) renderAgentPanel() string {
 		if a.state == "active" {
 			iconStr = a.spin.View()
 		} else if a.state == "success" {
-			iconStr = "✓"
+			iconStr = "⚒" // Use 1-cell glyph that runewidth understands
 		} else if a.state == "error" {
-			iconStr = "✗"
+			iconStr = "✖"
 		} else if a.state == "waiting" {
-			iconStr = "⧖"
+			iconStr = "⌚"
 		}
 
 		stateLabel := strings.Title(a.state)
@@ -1853,8 +1840,6 @@ func (m model) renderAgentPanel() string {
 		if fidelity == "high" || fidelity == "medium" {
 			label := " " + stateLabel + " "
 			labelLen := runewidth.StringWidth(label)
-			
-			// Right-align: Put most dashes on the left, and exactly 2 dashes on the right
 			remaining := cardWidth - 2 - labelLen
 			rightDashCount := 2
 			leftDashCount := remaining - rightDashCount
@@ -1912,27 +1897,13 @@ func getAgentIcon(name string) string {
 	name = strings.ToLower(name)
 	switch {
 	case strings.Contains(name, "chat input") || strings.Contains(name, "chat_input"):
-		return "💠"
+		return "⚙" // Gear (1-cell reliable)
 	case strings.Contains(name, "router"):
-		return "🧠"
+		return "◈" // Diamond (1-cell reliable)
 	case strings.Contains(name, "investigator") || strings.Contains(name, "codebase"):
-		return "🔍"
-	case strings.Contains(name, "builder") || strings.Contains(name, "generator"):
-		return "🛠️"
-	case strings.Contains(name, "gitops") || strings.Contains(name, "github"):
-		return "🐙"
-	case strings.Contains(name, "researcher") || strings.Contains(name, "web"):
-		return "🌐"
-	case strings.Contains(name, "test"):
-		return "🧪"
-	case strings.Contains(name, "security") || strings.Contains(name, "audit"):
-		return "🔐"
-	case strings.Contains(name, "db") || strings.Contains(name, "architect"):
-		return "💾"
-	case strings.Contains(name, "codex"):
-		return "📖"
+		return "🔎" // Magnifying glass (usually 2-cell)
 	default:
-		return "🤖"
+		return "○" // Circle (1-cell reliable)
 	}
 }
 

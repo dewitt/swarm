@@ -18,8 +18,6 @@ into native ecosystems.
   parallel via live "Agent Cards" featuring **Live Telemetry** (e.g., real-time
   scrolling build logs and test outputs) and dynamic status updates.
 
-  ![Agent Panel Demo](docs/assets/demo_swarm.gif)
-
 - **Direct Shell Execution (`!`)**: Toggle into a dedicated shell mode or run
   single-shot bash commands instantly from within the REPL without breaking
   your flow.
@@ -124,5 +122,5 @@ new projects, or deploy existing agents.
 ______________________________________________________________________
 
 *The `demo.gif` above is generated autonomously using Charmbracelet's `vhs`
-tool. Agents working on this project should re-run `vhs demo.tape` whenever
+tool. Agents working on this project should re-run `vhs demo_swarm.tape` whenever
 they significantly alter the UI.*

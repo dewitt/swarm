@@ -840,12 +840,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, vpCmd
 	case streamMsg:
 		if strings.HasPrefix(msg.text, "[TOOL_CALL] ") {
-			m.statusMsg = "Running " + strings.TrimPrefix(msg.text, "[TOOL_CALL] ") + "..."
+			m.statusMsg = "Running " + strings.TrimPrefix(msg.text, "[TOOL_CALL] ") + "…"
 			m.updateViewport()
 			return m, listenForStream(msg.ch)
 		}
 		if strings.HasPrefix(msg.text, "[AGENT_HANDOFF] ") {
-			m.statusMsg = "Handoff to " + strings.TrimPrefix(msg.text, "[AGENT_HANDOFF] ") + "..."
+			m.statusMsg = "Handoff to " + strings.TrimPrefix(msg.text, "[AGENT_HANDOFF] ") + "…"
 			m.updateViewport()
 			return m, listenForStream(msg.ch)
 		}
@@ -1282,7 +1282,7 @@ func (m *model) updateViewport() {
 		s.WriteString("\n\n")
 	}
 	if m.loading {
-		status := "Thinking..."
+		status := "Thinking…"
 		if m.statusMsg != "" {
 			status = m.statusMsg
 		}
@@ -1304,14 +1304,14 @@ func (m *model) updateViewport() {
 
 func (m model) View() string {
 	if m.width == 0 {
-		return "Loading..."
+		return "Loading…"
 	}
 
 	var mainBody string
 
 	if m.state == stateModelList {
 		if m.loading {
-			mainBody = lipgloss.JoinVertical(lipgloss.Left, m.viewport.View(), inputBoxStyle.Render(m.spinner.View()+" Fetching models..."))
+			mainBody = lipgloss.JoinVertical(lipgloss.Left, m.viewport.View(), inputBoxStyle.Render(m.spinner.View()+" Fetching models…"))
 		} else {
 			mainBody = lipgloss.NewStyle().Padding(1, 2).Render(m.listModel.View())
 		}
@@ -1327,7 +1327,7 @@ func (m model) View() string {
 			for i, match := range m.acMatches {
 				displayMatch := strings.ReplaceAll(match, "\n", " ")
 				if len(displayMatch) > maxMatchWidth && maxMatchWidth > 3 {
-					displayMatch = displayMatch[:maxMatchWidth-3] + "..."
+					displayMatch = displayMatch[:maxMatchWidth-3] + "…"
 				}
 
 				if i == m.acIndex {

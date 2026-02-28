@@ -51,7 +51,7 @@ func initDemoSwarm() demoSwarmModel {
 	s.Style = lipgloss.NewStyle().Foreground(colorActive)
 
 	agents := []*demoAgent{
-		{name: "Router", icon: "🧠", status: "Awaiting input...", state: "waiting", spin: s},
+		{name: "Router", icon: "🧠", status: "Awaiting input…", state: "waiting", spin: s},
 		{name: "Investigator", icon: "🔍", status: "Idle", state: "idle", spin: s},
 		{name: "Web Researcher", icon: "🌐", status: "Idle", state: "idle", spin: s},
 		{name: "GitOps", icon: "🐙", status: "Idle", state: "idle", spin: s},
@@ -113,10 +113,10 @@ func (m demoSwarmModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch m.ticks {
 		case 2:
 			m.agents[0].state = "active"
-			m.agents[0].status = "Decomposing task..."
+			m.agents[0].status = "Decomposing task…"
 			m.messages = append(m.messages, agentMsgStyle.Render("✦ [Router] ")+"Decomposing the task into sub-objectives: 1. Audit current codebase 2. Research OAuth patterns 3. Create Git Branch.")
 		case 4:
-			m.agents[0].status = "Provisioning Swarm..."
+			m.agents[0].status = "Provisioning Swarm…"
 		case 6:
 			m.agents[0].state = "waiting"
 			m.agents[0].status = "Delegated to Investigator"
@@ -147,21 +147,21 @@ func (m demoSwarmModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.agents[0].state = "waiting"
 			m.agents[0].status = "Waiting on Dev Swarm"
 			m.agents[6].state = "active"
-			m.agents[6].status = "Designing schema migrations..."
+			m.agents[6].status = "Designing schema migrations…"
 		case 22:
 			m.agents[6].state = "success"
 			m.agents[6].status = "Completed"
 			m.agents[7].state = "active"
-			m.agents[7].status = "Translating logic to Go..."
+			m.agents[7].status = "Translating logic to Go…"
 		case 24:
-			m.agents[7].status = "Refactoring user routes..."
+			m.agents[7].status = "Refactoring user routes…"
 		case 26:
 			m.agents[7].state = "success"
 			m.agents[7].status = "Completed"
 			m.agents[4].state = "active"
 			m.agents[5].state = "active"
-			m.agents[4].status = "Generating table tests..."
-			m.agents[5].status = "Auditing Go code for vulnerabilities..."
+			m.agents[4].status = "Generating table tests…"
+			m.agents[5].status = "Auditing Go code for vulnerabilities…"
 		case 28:
 			m.agents[4].status = "Executing tests: PASS (14/14)"
 			m.agents[5].status = "No vulnerabilities found."
@@ -182,7 +182,7 @@ func (m demoSwarmModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.messages = append(m.messages, agentMsgStyle.Render("✦ [GitOps] ")+"Created Pull Request #142 for your review.")
 		case 39:
 			m.agents[0].state = "waiting"
-			m.agents[0].status = "Awaiting input..."
+			m.agents[0].status = "Awaiting input…"
 			m.messages = append(m.messages, agentMsgStyle.Render("✦ [Router] ")+"The swarm has successfully completed the OAuth 2.0 refactoring task. All tests pass, and PR #142 is ready. What would you like to do next?")
 		}
 		m.updateVP()
@@ -272,7 +272,7 @@ func (m demoSwarmModel) renderDashboard() string {
 
 func (m demoSwarmModel) View() string {
 	if m.width == 0 {
-		return "Loading..."
+		return "Loading…"
 	}
 
 	// 1. Render Dashboard
@@ -316,7 +316,7 @@ func (m demoSwarmModel) View() string {
 		statusText := a.status
 		maxLen := ((m.width - 12) / 4) - 6
 		if len(statusText) > maxLen && maxLen > 0 {
-			statusText = statusText[:maxLen] + "..."
+			statusText = statusText[:maxLen] + "…"
 		}
 
 		card := lipgloss.JoinVertical(lipgloss.Left,

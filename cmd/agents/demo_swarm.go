@@ -92,7 +92,8 @@ func (m demoSwarmModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		m.vp.Width = msg.Width - 4
-		m.vp.Height = msg.Height - 18 // Leave room for 2 rows of dashboard
+		dashboardHeight := lipgloss.Height(m.renderDashboard())
+		m.vp.Height = msg.Height - dashboardHeight - 4 // Account for status bar and vpBox borders/padding
 		m.updateVP()
 
 	case spinner.TickMsg:
@@ -200,6 +201,75 @@ func (m *demoSwarmModel) updateVP() {
 	m.vp.GotoBottom()
 }
 
+func (m demoSwarmModel) renderDashboard() string {
+	var row1 []string
+	var row2 []string
+	for i, a := range m.agents {
+		border := lipgloss.NormalBorder()
+		color := colorIdle
+
+		switch a.state {
+		case "active":
+			border = lipgloss.ThickBorder()
+			color = colorActive
+		case "success":
+			color = colorSuccess
+		case "waiting":
+			color = colorWaiting
+		case "error":
+			color = colorError
+		}
+
+		cardWidth := (m.width - 4) / 4
+
+		style := lipgloss.NewStyle().
+			Border(border).
+			BorderForeground(color).
+			Padding(0, 1).
+			Width(cardWidth - 2). // Lipgloss width might be content width in this version, so subtract borders
+			Height(3)             // Content height 3 lines: Name, blank/status, status-wrap
+
+		iconStr := "  "
+		if a.state == "active" {
+			iconStr = a.spin.View() + " "
+		} else if a.state == "success" {
+			iconStr = "✓ "
+		} else if a.state == "error" {
+			iconStr = "✗ "
+		} else if a.state == "waiting" {
+			iconStr = "⧖ "
+		}
+
+		// Use Lipgloss for text wrapping instead of manual truncation
+		statusText := lipgloss.NewStyle().Width(cardWidth - 8).Render(a.status)
+
+		card := lipgloss.JoinVertical(lipgloss.Left,
+			lipgloss.NewStyle().Foreground(color).Bold(true).Render(a.icon+" "+a.name),
+			iconStr+lipgloss.NewStyle().Foreground(tipColor).Render(statusText),
+		)
+
+		renderedCard := style.Render(card)
+		if i < 4 {
+			row1 = append(row1, renderedCard)
+		} else {
+			row2 = append(row2, renderedCard)
+		}
+	}
+
+	dashboardRow1 := lipgloss.JoinHorizontal(lipgloss.Top, row1...)
+	dashboardRow2 := lipgloss.JoinHorizontal(lipgloss.Top, row2...)
+	dashboardGrid := lipgloss.JoinVertical(lipgloss.Left, dashboardRow1, dashboardRow2)
+
+	return lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(borderColor).
+		Padding(0, 1).
+		Render(lipgloss.JoinVertical(lipgloss.Left,
+			lipgloss.NewStyle().Bold(true).Render(" Swarm Dashboard - Mission Control"),
+			dashboardGrid,
+		))
+}
+
 func (m demoSwarmModel) View() string {
 	if m.width == 0 {
 		return "Loading..."
@@ -284,7 +354,7 @@ func (m demoSwarmModel) View() string {
 		BorderForeground(borderColor).
 		Padding(1, 2).
 		Width(m.width - 4).
-		Height(m.height - lipgloss.Height(dashboardBox) - 3).
+		Height(m.height - lipgloss.Height(dashboardBox) - 1).
 		Render(m.vp.View())
 
 	// 3. Status Bar

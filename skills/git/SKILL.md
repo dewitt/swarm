@@ -1,6 +1,6 @@
 ---
 name: git_agent
-description: A fast and lightweight agent for handling Git operations like switching branches, checking status, committing, and managing source code chores.
+description: "A fast and lightweight agent for handling Git operations like switching branches, checking status, committing, and managing source code chores."
 tools:
   - bash_execute
   - git_commit

@@ -30,6 +30,17 @@ debt that should be addressed as the project evolves.
   to detect intent shifts and handle transitions.
   See `docs/design/16-chat-input-agent.md`.
 
+- [x] **Agent Panel & Cards**: Implement a dynamic, event-driven visualization of
+  the agent swarm with ephemeral lifecycles and responsive fidelity levels.
+  See `docs/design/17-agent-cards-and-panel.md`.
+
+- [ ] **Agent Panel Interactivity**: Implement mouse support for Agent Cards,
+  allowing users to click cards to "drill down" into logs or micro-steer
+  individual agents.
+
+- [ ] **Dynamic Relationship Mapping**: Visualize the execution graph by
+  drawing dependency lines between parent and child Agent Cards in the panel.
+
 - [ ] **Cross-Language SDK Bindings**: Migrate the `pkg/sdk` interfaces to a
   strict Protobuf definition (`/proto`) and implement compilation targets for
   C-Shared Libraries (FFI) and WebAssembly to support native Python,

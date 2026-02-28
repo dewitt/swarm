@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 
 	"google.golang.org/adk/tool"
 )
@@ -24,6 +25,29 @@ func runGitCommand(dir string, args ...string) (string, error) {
 	}
 
 	return stdout.String(), nil
+}
+
+type GitInfo struct {
+	Branch   string
+	Modified bool
+}
+
+func GetGitInfo(dir string) (GitInfo, error) {
+	if dir == "" {
+		dir = "."
+	}
+	branch, err := runGitCommand(dir, "rev-parse", "--abbrev-ref", "HEAD")
+	if err != nil {
+		return GitInfo{}, err
+	}
+
+	status, err := runGitCommand(dir, "status", "--porcelain")
+	modified := false
+	if err == nil && len(strings.TrimSpace(status)) > 0 {
+		modified = true
+	}
+
+	return GitInfo{Branch: strings.TrimSpace(branch), Modified: modified}, nil
 }
 
 type GitCommitArgs struct {

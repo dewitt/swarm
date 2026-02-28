@@ -9,6 +9,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"runtime/debug"
+	"time"
 
 	"strings"
 
@@ -275,27 +276,27 @@ func getWorkspaceFiles() []string {
 }
 
 type model struct {
-	textArea    textarea.Model
-	viewport    viewport.Model
-	spinner     spinner.Model
-	listModel   list.Model
-	messages    []string
-	history     []string
-	historyIdx  int
+	textArea     textarea.Model
+	viewport     viewport.Model
+	spinner      spinner.Model
+	listModel    list.Model
+	messages     []string
+	history      []string
+	historyIdx   int
 	currentInput string
-	manager     sdk.AgentManager
-	err         error
-	width       int
-	height      int
-	loading     bool
-	quitting    bool
-	planMode    bool
-	state       uiState
-	cwd         string
-	gitBranch   string
-	gitModified bool
-	activeModel string
-	renderer    *glamour.TermRenderer
+	manager      sdk.AgentManager
+	err          error
+	width        int
+	height       int
+	loading      bool
+	quitting     bool
+	planMode     bool
+	state        uiState
+	cwd          string
+	gitBranch    string
+	gitModified  bool
+	activeModel  string
+	renderer     *glamour.TermRenderer
 
 	statusMsg    string
 	lastResponse string
@@ -501,21 +502,31 @@ func saveHistory(history []string) {
 }
 
 func getGitInfo() (string, bool) {
-	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
-	out, err := cmd.Output()
+	info, err := sdk.GetGitInfo(".")
 	if err != nil {
 		return "", false
 	}
-	branch := strings.TrimSpace(string(out))
+	return info.Branch, info.Modified
+}
 
-	cmd = exec.Command("git", "status", "--porcelain")
-	out, err = cmd.Output()
-	modified := false
-	if err == nil && len(strings.TrimSpace(string(out))) > 0 {
-		modified = true
+type gitStatusMsg struct {
+	branch   string
+	modified bool
+}
+
+func checkGitStatus() tea.Cmd {
+	return func() tea.Msg {
+		branch, modified := getGitInfo()
+		return gitStatusMsg{branch, modified}
 	}
+}
 
-	return branch, modified
+type gitTickMsg time.Time
+
+func doGitTick() tea.Cmd {
+	return tea.Tick(time.Second*10, func(t time.Time) tea.Msg {
+		return gitTickMsg(t)
+	})
 }
 
 func initialModel(planMode bool, resume bool) model {
@@ -596,7 +607,7 @@ func initialModel(planMode bool, resume bool) model {
 }
 
 func (m model) Init() tea.Cmd {
-	return tea.Batch(textarea.Blink, m.spinner.Tick)
+	return tea.Batch(textarea.Blink, m.spinner.Tick, doGitTick())
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -679,6 +690,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
+	case gitStatusMsg:
+		m.gitBranch = msg.branch
+		m.gitModified = msg.modified
+		return m, nil
+
+	case gitTickMsg:
+		return m, tea.Batch(checkGitStatus(), doGitTick())
+
 	case tea.KeyMsg:
 		switch msg.Type {
 		case tea.KeyEsc:
@@ -888,14 +907,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.loading = false
 		m.statusMsg = ""
 		m.updateViewport()
-		return m, nil
+		return m, checkGitStatus()
 
 	case streamErrMsg:
 		m.loading = false
 		m.statusMsg = ""
 		m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Width(m.viewport.Width).Render("Error: "+msg.err.Error()))
 		m.updateViewport()
-		return m, nil
+		return m, checkGitStatus()
 
 	case responseMsg:
 		m.loading = false
@@ -915,7 +934,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.messages = append(m.messages, agentMsgStyle.Render("✦\n")+strings.TrimSpace(out))
 		}
 		m.updateViewport()
-		return m, nil
+		return m, checkGitStatus()
 
 	case modelsLoadedMsg:
 		m.loading = false

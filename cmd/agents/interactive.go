@@ -100,16 +100,16 @@ func colorize(lines []string, mainStyle, shadowStyle lipgloss.Style) []string {
 }
 
 func renderLogo() string {
-	shadowColor := lipgloss.Color("#CC00FF") // Neon Purple
-	gtColor := lipgloss.Color("#00FFFF")     // Neon Cyan
+	shadowColor := lipgloss.Color("#888888") // Grey
+	gtColor := lipgloss.Color("#555555")     // Off-black
 
 	sMainGt := lipgloss.NewStyle().Foreground(gtColor).Bold(true)
-	sMainA := lipgloss.NewStyle().Foreground(lipgloss.Color("#FF007F")).Bold(true)
-	sMainG := lipgloss.NewStyle().Foreground(lipgloss.Color("#00FFFF")).Bold(true)
-	sMainE := lipgloss.NewStyle().Foreground(lipgloss.Color("#FF007F")).Bold(true)
-	sMainN := lipgloss.NewStyle().Foreground(lipgloss.Color("#00FFFF")).Bold(true)
-	sMainT := lipgloss.NewStyle().Foreground(lipgloss.Color("#FF007F")).Bold(true)
-	sMainS := lipgloss.NewStyle().Foreground(lipgloss.Color("#00FFFF")).Bold(true)
+	sMainA := lipgloss.NewStyle().Foreground(googleBlue).Bold(true)
+	sMainG := lipgloss.NewStyle().Foreground(googleRed).Bold(true)
+	sMainE := lipgloss.NewStyle().Foreground(googleYellow).Bold(true)
+	sMainN := lipgloss.NewStyle().Foreground(googleBlue).Bold(true)
+	sMainT := lipgloss.NewStyle().Foreground(googleGreen).Bold(true)
+	sMainS := lipgloss.NewStyle().Foreground(googleRed).Bold(true)
 	sShadow := lipgloss.NewStyle().Foreground(shadowColor).Bold(true)
 
 	gt := colorize([]string{

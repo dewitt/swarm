@@ -49,9 +49,13 @@ func TestNewManager(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	response := <-ch
-	expected := "[router_agent] Hello from the mock agent!"
-	if response != expected {
-		t.Fatalf("expected response '%s', got '%s'", expected, response)
+	event := <-ch
+	if event.Type != sdk.ChatEventFinalResponse {
+		t.Fatalf("expected final response event, got %v", event.Type)
+	}
+
+	expected := "Hello from the mock agent!"
+	if event.Content != expected {
+		t.Fatalf("expected content '%s', got '%s'", expected, event.Content)
 	}
 }

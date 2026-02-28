@@ -81,8 +81,12 @@ When run without arguments, it launches a persistent, interactive terminal sessi
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 				os.Exit(1)
 			}
-			for msg := range ch {
-				fmt.Println(msg)
+			for event := range ch {
+				if event.Type == sdk.ChatEventFinalResponse {
+					fmt.Printf("[%s] %s\n", event.Agent, event.Content)
+				} else if event.Type == sdk.ChatEventError {
+					fmt.Fprintf(os.Stderr, "Error: %s\n", event.Content)
+				}
 			}
 			return
 		}

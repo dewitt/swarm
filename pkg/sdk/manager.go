@@ -242,8 +242,8 @@ type AgentManager interface {
 	ListContext() []string
 
 	// Chat sends a natural language prompt to the internal Router Agent.
-	// It returns a channel that streams the response back to the caller.
-	Chat(ctx context.Context, prompt string) (<-chan string, error)
+	// It returns a channel that streams structured events back to the caller.
+	Chat(ctx context.Context, prompt string) (<-chan ChatEvent, error)
 	// Reset drops the current conversation history by generating a new session ID.
 	Reset()
 	// Reload dynamically reloads skills, configuration, and agent prompts without losing session state.
@@ -256,6 +256,25 @@ type AgentManager interface {
 	ListModels(ctx context.Context) ([]ModelInfo, error)
 	// ListSessions returns metadata about the persisted chat sessions.
 	ListSessions(ctx context.Context) ([]SessionInfo, error)
+}
+
+// ChatEventType defines the type of event being streamed from Chat.
+type ChatEventType string
+
+const (
+	ChatEventHandoff      ChatEventType = "handoff"
+	ChatEventToolCall     ChatEventType = "tool_call"
+	ChatEventToolResult   ChatEventType = "tool_result"
+	ChatEventThought      ChatEventType = "thought"
+	ChatEventFinalResponse ChatEventType = "final_response"
+	ChatEventError        ChatEventType = "error"
+)
+
+// ChatEvent represents a structured event streamed during a Chat session.
+type ChatEvent struct {
+	Type    ChatEventType
+	Agent   string
+	Content string
 }
 
 // ModelInfo contains metadata about an available AI model.
@@ -721,8 +740,8 @@ func (m *defaultManager) ListSessions(ctx context.Context) ([]SessionInfo, error
 	return infos, nil
 }
 
-func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan string, error) {
-	out := make(chan string)
+func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan ChatEvent, error) {
+	out := make(chan ChatEvent)
 
 	go func() {
 		defer close(out)
@@ -756,21 +775,21 @@ func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan string
 		if os.Getenv("AGENTS_DRY_RUN") == "true" {
 			// Provide fast, deterministic mock responses for vhs tape recordings
 			if strings.Contains(strings.ToLower(prompt), "build") {
-				out <- "[AGENT_HANDOFF] builder_agent"
-				out <- "[builder_agent] I have scaffolded a Python ADK agent for you. I created `agent.yaml`, `requirements.txt`, and `agent.py`."
+				out <- ChatEvent{Type: ChatEventHandoff, Content: "builder_agent"}
+				out <- ChatEvent{Type: ChatEventFinalResponse, Agent: "builder_agent", Content: "I have scaffolded a Python ADK agent for you. I created `agent.yaml`, `requirements.txt`, and `agent.py`."}
 				return
 			}
 			if strings.Contains(strings.ToLower(prompt), "test") {
-				out <- "[TOOL_CALL] bash_execute"
-				out <- "[router_agent] I successfully executed `pip install -r requirements.txt` and `python agent.py` using my bash tool. All tests passed!"
+				out <- ChatEvent{Type: ChatEventToolCall, Content: "bash_execute"}
+				out <- ChatEvent{Type: ChatEventFinalResponse, Agent: "router_agent", Content: "I successfully executed `pip install -r requirements.txt` and `python agent.py` using my bash tool. All tests passed!"}
 				return
 			}
 			if strings.Contains(strings.ToLower(prompt), "deploy") {
-				out <- "[AGENT_HANDOFF] gitops_agent"
-				out <- "[gitops_agent] I have generated `.github/workflows/deploy-agent-engine.yml` and pushed it to `main`. Your agent is deploying to Google Agent Engine."
+				out <- ChatEvent{Type: ChatEventHandoff, Content: "gitops_agent"}
+				out <- ChatEvent{Type: ChatEventFinalResponse, Agent: "gitops_agent", Content: "I have generated `.github/workflows/deploy-agent-engine.yml` and pushed it to `main`. Your agent is deploying to Google Agent Engine."}
 				return
 			}
-			out <- "[router_agent] This is a deterministic dry-run response."
+			out <- ChatEvent{Type: ChatEventFinalResponse, Agent: "router_agent", Content: "This is a deterministic dry-run response."}
 			return
 		}
 
@@ -810,7 +829,7 @@ Keep your analysis silent. ONLY output the routing decision.`, strings.Join(m.su
 							transferEvent.Author = "chat_input_agent"
 							transferEvent.Actions.TransferToAgent = target
 							_ = m.sessionSvc.AppendEvent(ctx, sessResp.Session, transferEvent)
-							out <- fmt.Sprintf("[AGENT_HANDOFF] %s", target)
+							out <- ChatEvent{Type: ChatEventHandoff, Content: target}
 						}
 					}
 				}
@@ -823,12 +842,12 @@ Keep your analysis silent. ONLY output the routing decision.`, strings.Join(m.su
 
 		for event, err := range events {
 			if err != nil {
-				out <- fmt.Sprintf("Error: %v", err)
+				out <- ChatEvent{Type: ChatEventError, Content: err.Error()}
 				return
 			}
 
 			if event.Actions.TransferToAgent != "" {
-				out <- fmt.Sprintf("[AGENT_HANDOFF] %s", event.Actions.TransferToAgent)
+				out <- ChatEvent{Type: ChatEventHandoff, Content: event.Actions.TransferToAgent}
 			}
 
 			if event.Content != nil {
@@ -841,7 +860,7 @@ Keep your analysis silent. ONLY output the routing decision.`, strings.Join(m.su
 								argsStr = " " + string(b)
 							}
 						}
-						out <- fmt.Sprintf("[TOOL_CALL] %s%s", part.FunctionCall.Name, argsStr)
+						out <- ChatEvent{Type: ChatEventToolCall, Content: fmt.Sprintf("%s%s", part.FunctionCall.Name, argsStr)}
 					}
 					if part.FunctionResponse != nil {
 						respStr := ""
@@ -856,7 +875,7 @@ Keep your analysis silent. ONLY output the routing decision.`, strings.Join(m.su
 								respStr = " " + respStr
 							}
 						}
-						out <- fmt.Sprintf("[TOOL_RESULT] %s%s", part.FunctionResponse.Name, respStr)
+						out <- ChatEvent{Type: ChatEventToolResult, Content: fmt.Sprintf("%s%s", part.FunctionResponse.Name, respStr)}
 					}
 					// Only stream thoughts if they exist. Wait until final response for actual text.
 					if part.Thought {
@@ -867,21 +886,13 @@ Keep your analysis silent. ONLY output the routing decision.`, strings.Join(m.su
 						}
 						// Replace newlines with spaces for a single line log
 						thought = strings.ReplaceAll(thought, "\n", " ")
-						out <- fmt.Sprintf("[THOUGHT] %s", thought)
+						out <- ChatEvent{Type: ChatEventThought, Agent: event.Author, Content: thought}
 					}
 				}
 			}
 
 			if !event.Partial && event.IsFinalResponse() {
 				var fullResponse strings.Builder
-
-				// Prefix with the author name if it's not the default router
-				author := event.Author
-				if author == "" {
-					author = "agent"
-				}
-				fullResponse.WriteString(fmt.Sprintf("[%s] ", author))
-
 				if event.Content != nil {
 					for _, part := range event.Content.Parts {
 						if part.Text != "" && !part.Thought {
@@ -889,7 +900,11 @@ Keep your analysis silent. ONLY output the routing decision.`, strings.Join(m.su
 						}
 					}
 				}
-				out <- fullResponse.String()
+				author := event.Author
+				if author == "" {
+					author = "agent"
+				}
+				out <- ChatEvent{Type: ChatEventFinalResponse, Agent: author, Content: fullResponse.String()}
 			}
 		}
 	}()

@@ -71,6 +71,21 @@ var (
 			Foreground(googleGreen).
 			Bold(true)
 
+	toolMsgStyle = lipgloss.NewStyle().
+			Foreground(googleYellow).
+			Italic(true)
+
+	thoughtMsgStyle = lipgloss.NewStyle().
+			Foreground(tipColor).
+			Italic(true)
+
+	errorMsgStyle = lipgloss.NewStyle().
+			Foreground(errorColor).
+			Bold(true)
+
+	statusMsgStyle = lipgloss.NewStyle().
+			Foreground(googleBlue)
+
 	statusBarStyle = lipgloss.NewStyle().
 			Foreground(statusFg).
 			Background(statusBg).
@@ -181,8 +196,8 @@ func renderLogo() string {
 }
 
 type streamMsg struct {
-	text string
-	ch   <-chan string
+	event sdk.ChatEvent
+	ch    <-chan sdk.ChatEvent
 }
 
 type streamDoneMsg struct{}
@@ -928,8 +943,20 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.viewport, vpCmd = m.viewport.Update(msg)
 		return m, vpCmd
 	case streamMsg:
-		if strings.HasPrefix(msg.text, "[TOOL_CALL] ") {
-			toolInfo := strings.TrimPrefix(msg.text, "[TOOL_CALL] ")
+		event := msg.event
+		switch event.Type {
+		case sdk.ChatEventHandoff:
+			newAgent := strings.TrimSpace(event.Content)
+			if m.observeMode {
+				m.observeLog = append(m.observeLog, fmt.Sprintf("[%s] ➡️ Delegated task to: %s", m.activeAgent, lipgloss.NewStyle().Bold(true).Render(newAgent)))
+			}
+			m.activeAgent = newAgent
+			m.statusMsg = ""
+			m.updateViewport()
+			return m, listenForStream(msg.ch)
+
+		case sdk.ChatEventToolCall:
+			toolInfo := event.Content
 			// Split name and args
 			parts := strings.SplitN(toolInfo, " ", 2)
 			toolName := parts[0]
@@ -948,10 +975,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.updateViewport()
 			return m, listenForStream(msg.ch)
-		}
-		if strings.HasPrefix(msg.text, "[TOOL_RESULT] ") {
+
+		case sdk.ChatEventToolResult:
 			if m.observeMode {
-				resultInfo := strings.TrimPrefix(msg.text, "[TOOL_RESULT] ")
+				resultInfo := event.Content
 				parts := strings.SplitN(resultInfo, " ", 2)
 				toolName := parts[0]
 				toolResult := ""
@@ -966,49 +993,43 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.updateViewport()
 			}
 			return m, listenForStream(msg.ch)
-		}
-		if strings.HasPrefix(msg.text, "[THOUGHT] ") {
+
+		case sdk.ChatEventThought:
 			if m.observeMode {
-				thought := strings.TrimPrefix(msg.text, "[THOUGHT] ")
-				m.observeLog = append(m.observeLog, fmt.Sprintf("[%s] 🤔 %s", m.activeAgent, lipgloss.NewStyle().Foreground(tipColor).Italic(true).Render(thought)))
+				thought := event.Content
+				m.observeLog = append(m.observeLog, fmt.Sprintf("[%s] 🤔 %s", event.Agent, lipgloss.NewStyle().Foreground(tipColor).Italic(true).Render(thought)))
 				m.updateViewport()
 			}
 			return m, listenForStream(msg.ch)
-		}
-		if strings.HasPrefix(msg.text, "[AGENT_HANDOFF] ") {
-			newAgent := strings.TrimSpace(strings.TrimPrefix(msg.text, "[AGENT_HANDOFF] "))
-			if m.observeMode {
-				m.observeLog = append(m.observeLog, fmt.Sprintf("[%s] ➡️ Delegated task to: %s", m.activeAgent, lipgloss.NewStyle().Bold(true).Render(newAgent)))
-			}
-			m.activeAgent = newAgent
+
+		case sdk.ChatEventFinalResponse:
 			m.statusMsg = ""
-			m.updateViewport()
-			return m, listenForStream(msg.ch)
-		}
-		// In the future this is where we'd stream text chunks.
-		// For now ADK mostly returns the whole block at the end.
-
-		text := msg.text
-		author := "agent"
-
-		// Extract the [author] prefix if it exists
-		authorStart := strings.Index(text, "[")
-		authorEnd := strings.Index(text, "] ")
-		if authorStart == 0 && authorEnd > 0 {
-			author = text[1:authorEnd]
-			text = text[authorEnd+2:]
-		}
-
-		out := text
-		if m.renderer != nil {
-			if rOut, err := m.renderer.Render(text); err == nil {
-				out = rOut
+			author := event.Agent
+			if author == "" {
+				author = "agent"
 			}
+			text := event.Content
+			out := text
+			if m.renderer != nil {
+				if rOut, err := m.renderer.Render(text); err == nil {
+					out = rOut
+				}
+			}
+
+			badge := getAgentBadge(author)
+			m.messages = append(m.messages, badge+"\n"+strings.TrimSpace(out))
+			m.loading = false
+			m.updateViewport()
+			return m, m.dequeueAndRun()
+
+		case sdk.ChatEventError:
+			m.statusMsg = ""
+			m.messages = append(m.messages, errorMsgStyle.Render(fmt.Sprintf("Error: %s", event.Content)))
+			m.loading = false
+			m.updateViewport()
+			return m, m.dequeueAndRun()
 		}
 
-		badge := getAgentBadge(author)
-		m.messages = append(m.messages, badge+"\n"+strings.TrimSpace(out))
-		m.updateViewport()
 		return m, listenForStream(msg.ch)
 
 	case streamDoneMsg:
@@ -1170,13 +1191,13 @@ func (m *model) dequeueAndRun() tea.Cmd {
 	}
 }
 
-func listenForStream(ch <-chan string) tea.Cmd {
+func listenForStream(ch <-chan sdk.ChatEvent) tea.Cmd {
 	return func() tea.Msg {
-		msg, ok := <-ch
+		event, ok := <-ch
 		if !ok {
 			return streamDoneMsg{}
 		}
-		return streamMsg{text: msg, ch: ch}
+		return streamMsg{event: event, ch: ch}
 	}
 }
 

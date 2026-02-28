@@ -235,11 +235,23 @@ const (
 )
 
 type swarmAgent struct {
-	name   string
-	icon   string
-	status string
-	state  string // "idle", "active", "success", "waiting", "error"
-	spin   spinner.Model
+	name       string
+	icon       string
+	status     string
+	state      string // "idle", "active", "success", "waiting", "error"
+	spin       spinner.Model
+	lastActive time.Time
+	resident   bool
+}
+
+func (a *swarmAgent) update(state, status string) {
+	if state != "" {
+		a.state = state
+	}
+	if status != "" {
+		a.status = status
+	}
+	a.lastActive = time.Now()
 }
 
 func getWorkspaceFiles() []string {
@@ -634,14 +646,15 @@ func initialModel(planMode bool, resume bool) model {
 	agentSpinner.Style = lipgloss.NewStyle().Foreground(colorActive)
 
 	agents := []*swarmAgent{
-		{name: "Router", icon: "🧠", status: "Idle", state: "idle", spin: agentSpinner},
-		{name: "Investigator", icon: "🔍", status: "Idle", state: "idle", spin: agentSpinner},
-		{name: "Web Researcher", icon: "🌐", status: "Idle", state: "idle", spin: agentSpinner},
-		{name: "GitOps", icon: "🐙", status: "Idle", state: "idle", spin: agentSpinner},
-		{name: "Test Synthesizer", icon: "🧪", status: "Idle", state: "idle", spin: agentSpinner},
-		{name: "Security Auditor", icon: "🔐", status: "Idle", state: "idle", spin: agentSpinner},
-		{name: "DB Architect", icon: "💾", status: "Idle", state: "idle", spin: agentSpinner},
-		{name: "Code Generator", icon: "💻", status: "Idle", state: "idle", spin: agentSpinner},
+		{name: "CIA", icon: "🛡️", status: "Monitoring", state: "active", spin: agentSpinner, resident: true, lastActive: time.Now()},
+		{name: "Router", icon: "🧠", status: "Idle", state: "idle", spin: agentSpinner, resident: true, lastActive: time.Now()},
+		{name: "Investigator", icon: "🔍", status: "Idle", state: "idle", spin: agentSpinner, lastActive: time.Now()},
+		{name: "Web Researcher", icon: "🌐", status: "Idle", state: "idle", spin: agentSpinner, lastActive: time.Now()},
+		{name: "GitOps", icon: "🐙", status: "Idle", state: "idle", spin: agentSpinner, lastActive: time.Now()},
+		{name: "Test Synthesizer", icon: "🧪", status: "Idle", state: "idle", spin: agentSpinner, lastActive: time.Now()},
+		{name: "Security Auditor", icon: "🔐", status: "Idle", state: "idle", spin: agentSpinner, lastActive: time.Now()},
+		{name: "DB Architect", icon: "💾", status: "Idle", state: "idle", spin: agentSpinner, lastActive: time.Now()},
+		{name: "Code Generator", icon: "💻", status: "Idle", state: "idle", spin: agentSpinner, lastActive: time.Now()},
 	}
 
 	return model{
@@ -988,12 +1001,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			// Update AgentPanel
 			if oldA := m.findAgent(m.activeAgent); oldA != nil {
-				oldA.state = "success"
-				oldA.status = "Task completed"
+				oldA.update("success", "")
+				oldA.update("", "Task completed")
 			}
 			if newA := m.findAgent(newAgentName); newA != nil {
-				newA.state = "active"
-				newA.status = "Analyzing context…"
+				newA.update("active", "")
+				newA.update("", "Analyzing context…")
 			}
 
 			m.activeAgent = newAgentName
@@ -1015,8 +1028,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			// Update AgentPanel
 			if a := m.findAgent(m.activeAgent); a != nil {
-				a.state = "active"
-				a.status = "Tool: " + toolName
+				a.update("active", "")
+				a.update("", "Tool: " + toolName)
 			}
 
 			if m.observeMode {
@@ -1036,7 +1049,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			// Update AgentPanel
 			if a := m.findAgent(m.activeAgent); a != nil {
-				a.status = "Completed " + toolName
+				a.update("", "Completed " + toolName)
 			}
 
 			if m.observeMode {
@@ -1056,8 +1069,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case sdk.ChatEventThought:
 			// Update AgentPanel
 			if a := m.findAgent(event.Agent); a != nil {
-				a.state = "active"
-				a.status = event.Content
+				a.update("active", "")
+				a.update("", event.Content)
 			}
 
 			if m.observeMode {
@@ -1076,8 +1089,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			// Update AgentPanel
 			if a := m.findAgent(author); a != nil {
-				a.state = "success"
-				a.status = "Response ready"
+				a.update("success", "")
+				a.update("", "Response ready")
 			}
 
 			text := event.Content
@@ -1099,8 +1112,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			// Update AgentPanel
 			if a := m.findAgent(m.activeAgent); a != nil {
-				a.state = "error"
-				a.status = "Failed"
+				a.update("error", "")
+				a.update("", "Failed")
 			}
 
 			m.messages = append(m.messages, errorMsgStyle.Render(fmt.Sprintf("Error: %s", event.Content)))
@@ -1264,12 +1277,12 @@ func (m *model) dequeueAndRun() tea.Cmd {
 
 	// Reset AgentPanel for new task
 	for _, a := range m.agents {
-		a.state = "idle"
-		a.status = "Idle"
+		a.update("idle", "")
+		a.update("", "Idle")
 	}
 	if r := m.findAgent("Router"); r != nil {
-		r.state = "active"
-		r.status = "Processing input…"
+		r.update("active", "")
+		r.update("", "Processing input…")
 	}
 
 	nextInput := m.inputQueue[0]
@@ -1495,8 +1508,8 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 		}
 		m.manager.Reset()
 		for _, a := range m.agents {
-			a.state = "idle"
-			a.status = "Idle"
+			a.update("idle", "")
+			a.update("", "Idle")
 		}
 		m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"Screen and conversation history cleared. Context window reset.")
 	case "/rewind":
@@ -1508,8 +1521,8 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 			m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Render("Failed to rewind: "+err.Error()))
 		} else {
 			for _, a := range m.agents {
-				a.state = "idle"
-				a.status = "Idle"
+				a.update("idle", "")
+				a.update("", "Idle")
 			}
 			// Wipe the local messages to reflect the rewound state (or just append a notice)
 			m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+fmt.Sprintf("Rewound the conversation history by %d turn(s).", n))
@@ -1695,9 +1708,29 @@ func (m *model) updateInputStyle() {
 }
 
 func (m model) renderAgentPanel() string {
-	var row1 []string
-	var row2 []string
-	for i, a := range m.agents {
+	var visibleAgents []*swarmAgent
+	now := time.Now()
+	for _, a := range m.agents {
+		// Visible if resident, or active/waiting, or has been active in the last 30 seconds
+		if a.resident || a.state == "active" || a.state == "waiting" || now.Sub(a.lastActive) < 30*time.Second {
+			visibleAgents = append(visibleAgents, a)
+		}
+	}
+
+	if len(visibleAgents) == 0 {
+		return ""
+	}
+
+	// Determine fidelity based on visible count and terminal width
+	fidelity := "medium"
+	if len(visibleAgents) <= 3 {
+		fidelity = "high"
+	} else if len(visibleAgents) > 8 {
+		fidelity = "low"
+	}
+
+	var cards []string
+	for _, a := range visibleAgents {
 		border := lipgloss.NormalBorder()
 		color := colorIdle
 
@@ -1713,14 +1746,10 @@ func (m model) renderAgentPanel() string {
 			color = colorError
 		}
 
-		cardWidth := (m.width - 8) / 4
-
 		style := lipgloss.NewStyle().
 			Border(border).
 			BorderForeground(color).
-			Padding(0, 1).
-			Width(cardWidth - 2).
-			Height(2)
+			Padding(0, 1)
 
 		iconStr := "  "
 		if a.state == "active" {
@@ -1733,27 +1762,66 @@ func (m model) renderAgentPanel() string {
 			iconStr = "⧖ "
 		}
 
-		statusText := a.status
-		if len(statusText) > cardWidth-8 && cardWidth > 8 {
-			statusText = statusText[:cardWidth-8] + "…"
+		var card string
+		if fidelity == "high" {
+			// 3 columns
+			cardWidth := (m.width - 8) / 3
+			style = style.Width(cardWidth - 2).Height(3)
+
+			statusText := a.status
+			if len(statusText) > cardWidth-8 && cardWidth > 8 {
+				statusText = statusText[:cardWidth-8] + "…"
+			}
+
+			card = lipgloss.JoinVertical(lipgloss.Left,
+				lipgloss.NewStyle().Foreground(color).Bold(true).Render(a.icon+" "+a.name),
+				iconStr+lipgloss.NewStyle().Foreground(tipColor).Render(statusText),
+				lipgloss.NewStyle().Foreground(tipColor).Italic(true).Faint(true).Render("Telemetry streaming…"),
+			)
+		} else if fidelity == "medium" {
+			// 4 columns
+			cardWidth := (m.width - 8) / 4
+			style = style.Width(cardWidth - 2).Height(2)
+
+			statusText := a.status
+			if len(statusText) > cardWidth-8 && cardWidth > 8 {
+				statusText = statusText[:cardWidth-8] + "…"
+			}
+
+			card = lipgloss.JoinVertical(lipgloss.Left,
+				lipgloss.NewStyle().Foreground(color).Bold(true).Render(a.icon+" "+a.name),
+				iconStr+lipgloss.NewStyle().Foreground(tipColor).Render(statusText),
+			)
+		} else {
+			// low fidelity: minimalist icon cards
+			style = style.Width(6).Height(1).Padding(0, 1)
+			card = lipgloss.NewStyle().Width(4).Align(lipgloss.Center).Render(a.icon)
 		}
 
-		card := lipgloss.JoinVertical(lipgloss.Left,
-			lipgloss.NewStyle().Foreground(color).Bold(true).Render(a.icon+" "+a.name),
-			iconStr+lipgloss.NewStyle().Foreground(tipColor).Render(statusText),
-		)
+		cards = append(cards, style.Render(card))
+	}
 
-		renderedCard := style.Render(card)
-		if i < 4 {
-			row1 = append(row1, renderedCard)
-		} else {
-			row2 = append(row2, renderedCard)
+	// Layout cards in rows
+	cols := 4
+	if fidelity == "high" {
+		cols = 3
+	} else if fidelity == "low" {
+		cols = (m.width - 4) / 8 // As many as fit
+		if cols < 1 {
+			cols = 1
 		}
 	}
 
-	agentPanelRow1 := lipgloss.JoinHorizontal(lipgloss.Top, row1...)
-	agentPanelRow2 := lipgloss.JoinHorizontal(lipgloss.Top, row2...)
-	agentPanelGrid := lipgloss.JoinVertical(lipgloss.Left, agentPanelRow1, agentPanelRow2)
+	var rows []string
+	for i := 0; i < len(cards); i += cols {
+		end := i + cols
+		if end > len(cards) {
+			end = len(cards)
+		}
+		rows = append(rows, lipgloss.JoinHorizontal(lipgloss.Top, cards[i:end]...))
+	}
+
+	grid := lipgloss.JoinVertical(lipgloss.Left, rows...)
 
 	return lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
@@ -1762,7 +1830,7 @@ func (m model) renderAgentPanel() string {
 		MarginBottom(1).
 		Render(lipgloss.JoinVertical(lipgloss.Left,
 			lipgloss.NewStyle().Bold(true).Render(" Agent Panel"),
-			agentPanelGrid,
+			grid,
 		))
 }
 

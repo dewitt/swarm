@@ -114,3 +114,13 @@ of an Engineering Manager overseeing a highly skilled, infinitely scalable
 virtual workforce. The CLI's UI must reflect this shift by providing
 high-level observability and steering mechanisms (Mission Control), rather
 than just a linear chat log.
+
+### UI is Just a Consumer
+
+Crucially, the "Engineering Manager" paradigm is a property of the *core SDK*,
+not the Terminal UI. The complex logic of provisioning sub-agents, routing
+tasks, and generating observer telemetry must be strictly encapsulated within
+the embeddable Go library. The TUI is simply a thin presentation layer that
+consumes these standardized events. This ensures that the same powerful swarm
+orchestration can be seamlessly embedded into web dashboards, VS Code
+extensions, or Slack bots without rewriting any business logic.

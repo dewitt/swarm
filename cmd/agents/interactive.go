@@ -280,6 +280,7 @@ type model struct {
 	messages    []string
 	history     []string
 	historyIdx  int
+	currentInput string
 	manager     sdk.AgentManager
 	err         error
 	width       int
@@ -801,6 +802,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			if m.textArea.Line() == 0 {
 				if len(m.history) > 0 && m.historyIdx > 0 {
+					if m.historyIdx == len(m.history) {
+						m.currentInput = m.textArea.Value()
+					}
 					m.historyIdx--
 					m.textArea.SetValue(m.history[m.historyIdx])
 					m.textArea.CursorEnd()
@@ -821,7 +825,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if len(m.history) > 0 && m.historyIdx < len(m.history) {
 					m.historyIdx++
 					if m.historyIdx == len(m.history) {
-						m.textArea.Reset()
+						m.textArea.SetValue(m.currentInput)
+						m.textArea.CursorEnd()
 					} else {
 						m.textArea.SetValue(m.history[m.historyIdx])
 						m.textArea.CursorEnd()

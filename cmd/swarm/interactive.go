@@ -647,7 +647,7 @@ func initialModel(planMode bool, resume bool) model {
 	agentSpinner.Style = lipgloss.NewStyle().Foreground(colorActive)
 
 	agents := []*swarmAgent{
-		{name: "Chat Input Agent", icon: "🛡️", status: "Idle", state: "idle", spin: agentSpinner, resident: true, lastActive: time.Now()},
+		{name: "Chat Input Agent", icon: "💠", status: "Idle", state: "idle", spin: agentSpinner, resident: true, lastActive: time.Now()},
 		{name: "Router", icon: "🧠", status: "Idle", state: "idle", spin: agentSpinner, resident: true, lastActive: time.Now()},
 	}
 
@@ -1727,18 +1727,30 @@ func (m model) renderAgentPanel() string {
 	availableWidth := m.width - 4
 	cardWidth := availableWidth / cols
 
-	// Helper to render a perfectly aligned line using Lipgloss styles.
+	// Helper to ensure an icon or spinner is exactly 2 cells wide
+	padPrefix := func(s string) string {
+		w := runewidth.StringWidth(s)
+		if w == 0 {
+			return "  "
+		}
+		if w == 1 {
+			return s + " "
+		}
+		return s
+	}
+
+	// Helper to render a perfectly aligned line using two fixed-width columns.
+	// This approach is robust across modern and legacy terminals.
 	renderLine := func(prefix string, text string, style lipgloss.Style, width int) string {
-		// Fix alignment by delegating padding to Lipgloss styles
-		prefixComp := lipgloss.NewStyle().Width(4).Render(prefix)
+		prefixComp := padPrefix(prefix)
 		
-		contentWidth := width - 4
+		contentWidth := width - 3 // 2 cells for prefix, 1 for spacer
 		if runewidth.StringWidth(text) > contentWidth {
 			text = runewidth.Truncate(text, contentWidth-1, "…")
 		}
 		contentComp := style.Width(contentWidth).Render(text)
 
-		return lipgloss.JoinHorizontal(lipgloss.Left, prefixComp, contentComp)
+		return lipgloss.JoinHorizontal(lipgloss.Left, prefixComp+" ", contentComp)
 	}
 
 	var cards []string
@@ -1830,14 +1842,14 @@ func (m *model) findAgent(name string) *swarmAgent {
 func getAgentIcon(name string) string {
 	name = strings.ToLower(name)
 	switch {
-	case strings.Contains(name, "cia") || strings.Contains(name, "chat_input"):
-		return "🛡️"
+	case strings.Contains(name, "chat input") || strings.Contains(name, "chat_input"):
+		return "💠"
 	case strings.Contains(name, "router"):
 		return "🧠"
 	case strings.Contains(name, "investigator") || strings.Contains(name, "codebase"):
 		return "🔍"
 	case strings.Contains(name, "builder") || strings.Contains(name, "generator"):
-		return "⚒ "
+		return "🛠️"
 	case strings.Contains(name, "gitops") || strings.Contains(name, "github"):
 		return "🐙"
 	case strings.Contains(name, "researcher") || strings.Contains(name, "web"):

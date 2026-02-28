@@ -234,6 +234,14 @@ const (
 	stateShell
 )
 
+type swarmAgent struct {
+	name   string
+	icon   string
+	status string
+	state  string // "idle", "active", "success", "waiting", "error"
+	spin   spinner.Model
+}
+
 func getWorkspaceFiles() []string {
 	var items []string
 	out, err := exec.Command("git", "ls-files").Output()
@@ -281,6 +289,11 @@ type model struct {
 	// Input Queueing and Async HITL
 	inputQueue []string
 	cancelChat context.CancelFunc
+
+	// Agent Panel state
+	agents        []*swarmAgent
+	ticks         int
+	showAgentPanel bool
 
 	// Autocomplete state
 	workspaceFiles []string
@@ -615,29 +628,51 @@ func initialModel(planMode bool, resume bool) model {
 
 	branch, modified := getGitInfo()
 
+	// Initialize Agent Panel agents
+	agentSpinner := spinner.New()
+	agentSpinner.Spinner = spinner.Dot
+	agentSpinner.Style = lipgloss.NewStyle().Foreground(colorActive)
+
+	agents := []*swarmAgent{
+		{name: "Router", icon: "🧠", status: "Idle", state: "idle", spin: agentSpinner},
+		{name: "Investigator", icon: "🔍", status: "Idle", state: "idle", spin: agentSpinner},
+		{name: "Web Researcher", icon: "🌐", status: "Idle", state: "idle", spin: agentSpinner},
+		{name: "GitOps", icon: "🐙", status: "Idle", state: "idle", spin: agentSpinner},
+		{name: "Test Synthesizer", icon: "🧪", status: "Idle", state: "idle", spin: agentSpinner},
+		{name: "Security Auditor", icon: "🔐", status: "Idle", state: "idle", spin: agentSpinner},
+		{name: "DB Architect", icon: "💾", status: "Idle", state: "idle", spin: agentSpinner},
+		{name: "Code Generator", icon: "💻", status: "Idle", state: "idle", spin: agentSpinner},
+	}
+
 	return model{
-		textArea:    ta,
-		viewport:    vp,
-		spinner:     s,
-		listModel:   l,
-		messages:    []string{welcomeScreen},
-		history:     loadedHist,
-		historyIdx:  len(loadedHist),
-		manager:     sdk.NewManager(sdk.ManagerConfig{ResumeLastSession: resume}),
-		loading:     false,
-		quitting:    false,
-		planMode:    planMode,
-		state:       stateChat,
-		cwd:         cwd,
-		gitBranch:   branch,
-		gitModified: modified,
-		activeModel: activeModel,
-		renderer:    renderer,
+		textArea:      ta,
+		viewport:      vp,
+		spinner:       s,
+		listModel:     l,
+		messages:      []string{welcomeScreen},
+		history:       loadedHist,
+		historyIdx:    len(loadedHist),
+		manager:       sdk.NewManager(sdk.ManagerConfig{ResumeLastSession: resume}),
+		loading:       false,
+		quitting:      false,
+		planMode:      planMode,
+		state:         stateChat,
+		cwd:           cwd,
+		gitBranch:     branch,
+		gitModified:   modified,
+		activeModel:   activeModel,
+		renderer:      renderer,
+		agents:        agents,
+		showAgentPanel: true,
 	}
 }
 
 func (m model) Init() tea.Cmd {
-	return tea.Batch(textarea.Blink, m.spinner.Tick, doGitTick())
+	cmds := []tea.Cmd{textarea.Blink, m.spinner.Tick, doGitTick()}
+	for _, a := range m.agents {
+		cmds = append(cmds, a.spin.Tick)
+	}
+	return tea.Batch(cmds...)
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -946,11 +981,22 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		event := msg.event
 		switch event.Type {
 		case sdk.ChatEventHandoff:
-			newAgent := strings.TrimSpace(event.Content)
+			newAgentName := strings.TrimSpace(event.Content)
 			if m.observeMode {
-				m.observeLog = append(m.observeLog, fmt.Sprintf("[%s] ➡️ Delegated task to: %s", m.activeAgent, lipgloss.NewStyle().Bold(true).Render(newAgent)))
+				m.observeLog = append(m.observeLog, fmt.Sprintf("[%s] ➡️ Delegated task to: %s", m.activeAgent, lipgloss.NewStyle().Bold(true).Render(newAgentName)))
 			}
-			m.activeAgent = newAgent
+
+			// Update AgentPanel
+			if oldA := m.findAgent(m.activeAgent); oldA != nil {
+				oldA.state = "success"
+				oldA.status = "Task completed"
+			}
+			if newA := m.findAgent(newAgentName); newA != nil {
+				newA.state = "active"
+				newA.status = "Analyzing context…"
+			}
+
+			m.activeAgent = newAgentName
 			m.statusMsg = ""
 			m.updateViewport()
 			return m, listenForStream(msg.ch)
@@ -966,6 +1012,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			m.statusMsg = "Running " + toolName + "…"
+
+			// Update AgentPanel
+			if a := m.findAgent(m.activeAgent); a != nil {
+				a.state = "active"
+				a.status = "Tool: " + toolName
+			}
+
 			if m.observeMode {
 				logEntry := fmt.Sprintf("[%s] Executing %s", m.activeAgent, toolName)
 				if toolArgs != "" {
@@ -977,10 +1030,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, listenForStream(msg.ch)
 
 		case sdk.ChatEventToolResult:
+			resultInfo := event.Content
+			parts := strings.SplitN(resultInfo, " ", 2)
+			toolName := parts[0]
+
+			// Update AgentPanel
+			if a := m.findAgent(m.activeAgent); a != nil {
+				a.status = "Completed " + toolName
+			}
+
 			if m.observeMode {
-				resultInfo := event.Content
-				parts := strings.SplitN(resultInfo, " ", 2)
-				toolName := parts[0]
 				toolResult := ""
 				if len(parts) > 1 {
 					toolResult = parts[1]
@@ -995,6 +1054,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, listenForStream(msg.ch)
 
 		case sdk.ChatEventThought:
+			// Update AgentPanel
+			if a := m.findAgent(event.Agent); a != nil {
+				a.state = "active"
+				a.status = event.Content
+			}
+
 			if m.observeMode {
 				thought := event.Content
 				m.observeLog = append(m.observeLog, fmt.Sprintf("[%s] 🤔 %s", event.Agent, lipgloss.NewStyle().Foreground(tipColor).Italic(true).Render(thought)))
@@ -1008,6 +1073,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if author == "" {
 				author = "agent"
 			}
+
+			// Update AgentPanel
+			if a := m.findAgent(author); a != nil {
+				a.state = "success"
+				a.status = "Response ready"
+			}
+
 			text := event.Content
 			out := text
 			if m.renderer != nil {
@@ -1024,6 +1096,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case sdk.ChatEventError:
 			m.statusMsg = ""
+
+			// Update AgentPanel
+			if a := m.findAgent(m.activeAgent); a != nil {
+				a.state = "error"
+				a.status = "Failed"
+			}
+
 			m.messages = append(m.messages, errorMsgStyle.Render(fmt.Sprintf("Error: %s", event.Content)))
 			m.loading = false
 			m.updateViewport()
@@ -1095,8 +1174,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.loading {
 			m.spinner, spCmd = m.spinner.Update(msg)
 			cmds = append(cmds, spCmd)
-			m.updateViewport()
 		}
+		for i, a := range m.agents {
+			if a.state == "active" {
+				var cmd tea.Cmd
+				m.agents[i].spin, cmd = a.spin.Update(msg)
+				cmds = append(cmds, cmd)
+			}
+		}
+		m.updateViewport()
+		return m, tea.Batch(cmds...)
 
 	case tea.WindowSizeMsg:
 		// Account for the outer border (2 lines) and the status bar (1 line)
@@ -1105,9 +1192,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		m.textArea.SetWidth(m.width - 4)
 
-		// Viewport height: Inner box minus input height and borders
+		agentPanelHeight := 0
+		if m.showAgentPanel {
+			agentPanelHeight = lipgloss.Height(m.renderAgentPanel())
+		}
+
+		// Viewport height: Inner box minus input height, borders, and agentPanel
 		m.viewport.Width = m.width - 4
-		m.viewport.Height = m.height - m.textArea.Height() - 2
+		m.viewport.Height = m.height - m.textArea.Height() - 3 - agentPanelHeight
 
 		// Update glamour word wrap
 		if m.renderer != nil {
@@ -1168,6 +1260,16 @@ func (m *model) dequeueAndRun() tea.Cmd {
 	if len(m.inputQueue) == 0 {
 		m.loading = false
 		return checkGitStatus()
+	}
+
+	// Reset AgentPanel for new task
+	for _, a := range m.agents {
+		a.state = "idle"
+		a.status = "Idle"
+	}
+	if r := m.findAgent("Router"); r != nil {
+		r.state = "active"
+		r.status = "Processing input…"
 	}
 
 	nextInput := m.inputQueue[0]
@@ -1392,6 +1494,10 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 			m.messages = []string{m.messages[0]}
 		}
 		m.manager.Reset()
+		for _, a := range m.agents {
+			a.state = "idle"
+			a.status = "Idle"
+		}
 		m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"Screen and conversation history cleared. Context window reset.")
 	case "/rewind":
 		n := 1
@@ -1401,6 +1507,10 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 		if err := m.manager.Rewind(n); err != nil {
 			m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Render("Failed to rewind: "+err.Error()))
 		} else {
+			for _, a := range m.agents {
+				a.state = "idle"
+				a.status = "Idle"
+			}
 			// Wipe the local messages to reflect the rewound state (or just append a notice)
 			m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+fmt.Sprintf("Rewound the conversation history by %d turn(s).", n))
 		}
@@ -1584,18 +1694,106 @@ func (m *model) updateInputStyle() {
 	}
 }
 
+func (m model) renderAgentPanel() string {
+	var row1 []string
+	var row2 []string
+	for i, a := range m.agents {
+		border := lipgloss.NormalBorder()
+		color := colorIdle
+
+		switch a.state {
+		case "active":
+			border = lipgloss.ThickBorder()
+			color = colorActive
+		case "success":
+			color = colorSuccess
+		case "waiting":
+			color = colorWaiting
+		case "error":
+			color = colorError
+		}
+
+		cardWidth := (m.width - 8) / 4
+
+		style := lipgloss.NewStyle().
+			Border(border).
+			BorderForeground(color).
+			Padding(0, 1).
+			Width(cardWidth - 2).
+			Height(2)
+
+		iconStr := "  "
+		if a.state == "active" {
+			iconStr = a.spin.View() + " "
+		} else if a.state == "success" {
+			iconStr = "✓ "
+		} else if a.state == "error" {
+			iconStr = "✗ "
+		} else if a.state == "waiting" {
+			iconStr = "⧖ "
+		}
+
+		statusText := a.status
+		if len(statusText) > cardWidth-8 && cardWidth > 8 {
+			statusText = statusText[:cardWidth-8] + "…"
+		}
+
+		card := lipgloss.JoinVertical(lipgloss.Left,
+			lipgloss.NewStyle().Foreground(color).Bold(true).Render(a.icon+" "+a.name),
+			iconStr+lipgloss.NewStyle().Foreground(tipColor).Render(statusText),
+		)
+
+		renderedCard := style.Render(card)
+		if i < 4 {
+			row1 = append(row1, renderedCard)
+		} else {
+			row2 = append(row2, renderedCard)
+		}
+	}
+
+	agentPanelRow1 := lipgloss.JoinHorizontal(lipgloss.Top, row1...)
+	agentPanelRow2 := lipgloss.JoinHorizontal(lipgloss.Top, row2...)
+	agentPanelGrid := lipgloss.JoinVertical(lipgloss.Left, agentPanelRow1, agentPanelRow2)
+
+	return lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(borderColor).
+		Padding(0, 1).
+		MarginBottom(1).
+		Render(lipgloss.JoinVertical(lipgloss.Left,
+			lipgloss.NewStyle().Bold(true).Render(" Agent Panel"),
+			agentPanelGrid,
+		))
+}
+
+func (m *model) findAgent(name string) *swarmAgent {
+	name = strings.ToLower(name)
+	for _, a := range m.agents {
+		if strings.Contains(strings.ToLower(a.name), name) || strings.Contains(name, strings.ToLower(a.name)) {
+			return a
+		}
+	}
+	return nil
+}
+
 func (m model) View() string {
 	if m.width == 0 {
 		return "Loading…"
 	}
 
 	var mainBody string
+	agentPanelView := ""
+	if m.showAgentPanel {
+		agentPanelView = m.renderAgentPanel()
+	}
+	agentPanelHeight := lipgloss.Height(agentPanelView)
 
 	if m.state == stateModelList {
 		if m.loading {
-			mainBody = lipgloss.JoinVertical(lipgloss.Left, m.viewport.View(), inputBoxStyle.Render(m.spinner.View()+" Fetching models…"))
+			m.viewport.Height = m.height - 6 - agentPanelHeight
+			mainBody = lipgloss.JoinVertical(lipgloss.Left, agentPanelView, m.viewport.View(), inputBoxStyle.Render(m.spinner.View()+" Fetching models…"))
 		} else {
-			mainBody = lipgloss.NewStyle().Padding(1, 2).Render(m.listModel.View())
+			mainBody = lipgloss.JoinVertical(lipgloss.Left, agentPanelView, lipgloss.NewStyle().Padding(1, 2).Render(m.listModel.View()))
 		}
 	} else {
 		// 1.5. Autocomplete overlay
@@ -1631,13 +1829,13 @@ func (m model) View() string {
 		if acView != "" {
 			// Adjust viewport height to account for autocomplete overlay
 			acHeight := lipgloss.Height(acView)
-			m.viewport.Height = m.height - m.textArea.Height() - 2 - acHeight
+			m.viewport.Height = m.height - m.textArea.Height() - 3 - acHeight - agentPanelHeight
 			vpView := m.viewport.View()
-			mainBody = lipgloss.JoinVertical(lipgloss.Left, vpView, lipgloss.NewStyle().PaddingLeft(1).Render(acView), inputView)
+			mainBody = lipgloss.JoinVertical(lipgloss.Left, agentPanelView, vpView, lipgloss.NewStyle().PaddingLeft(1).Render(acView), inputView)
 		} else {
-			m.viewport.Height = m.height - m.textArea.Height() - 2
+			m.viewport.Height = m.height - m.textArea.Height() - 3 - agentPanelHeight
 			vpView := m.viewport.View()
-			mainBody = lipgloss.JoinVertical(lipgloss.Left, vpView, inputView)
+			mainBody = lipgloss.JoinVertical(lipgloss.Left, agentPanelView, vpView, inputView)
 		}
 	}
 

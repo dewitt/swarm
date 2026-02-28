@@ -1,4 +1,4 @@
-# Swarm Dashboard & Control Panel Architecture
+# Agent Panel & Agent Control Plane Architecture
 
 ## The Problem: The Black Box of Agent Swarms
 
@@ -19,22 +19,21 @@ know:
 1. Are they stuck?
 1. How can I intervene?
 
-This document outlines the design for the **Swarm Dashboard and Control
-Panel**, the defining feature that transforms `swarm` from a basic chat
+This document outlines the design for the **Agent Panel and Control
+Plane**, the defining feature that transforms `swarm` from a basic chat
 interface into a Supreme Orchestrator.
 
 ## The Vision: Air Traffic Control for Code
 
-The UI must shift from a traditional "Chat REPL" to a "Mission Control"
-paradigm.
+The UI must shift from a traditional "Chat REPL" to an agent-centric Agent Panel.
 
 When a swarm is deployed, the terminal layout will dynamically split. The main
-chat/viewport remains for high-level synthesis, but a new, persistent **Swarm
-Dashboard** pane emerges.
+chat/viewport remains for high-level synthesis, but a new, persistent **Agent
+Panel** pane emerges.
 
-### 1. The Swarm Dashboard (Visualizing Concurrency)
+### 1. The Agent Panel (Visualizing Concurrency)
 
-The dashboard will utilize a grid or dynamic list of "Agent Cards."
+The Agent Panel will utilize a grid or dynamic list of "Agent Cards."
 
 **Each Agent Card displays:**
 
@@ -51,7 +50,7 @@ The dashboard will utilize a grid or dynamic list of "Agent Cards."
 - **Resource Constraints:** Current token expenditure or execution time limit
   warnings.
 
-### 2. The Control Panel (Intervention & Steering)
+### 2. The Agent Control Plane (Intervention & Steering)
 
 Users must be able to interact with the swarm in real-time without halting the
 entire system.
@@ -82,8 +81,8 @@ entire 100k line Java codebase to Go."*
 
 A foundational principle of the `swarm` project is the strict separation
 between the core SDK (`pkg/sdk/`) and the Presentation Layer (`cmd/swarm/`).
-This separation must be rigorously maintained as we build out the Swarm
-Dashboard.
+This separation must be rigorously maintained as we build out the Agent
+Panel.
 
 The "Engineering Manager" paradigm is a business logic concept, not just a UI
 trick.
@@ -99,7 +98,7 @@ trick.
 - **Portability:** By keeping the orchestration and telemetry strictly within
   the SDK, we ensure that other developers can effortlessly build completely
   different clients on top of the same swarm logic. A team could build a
-  Next.js web dashboard, a native iOS app, a VS Code extension, or a Slack
+  Next.js web Agent Panel, a native iOS app, a VS Code extension, or a Slack
   bot, and all of them would be able to monitor and steer the swarm
   identically without rewriting any of the core orchestration logic.
 
@@ -129,19 +128,20 @@ upgraded to an **Event Bus**.
 - **Component Architecture:** The UI must migrate to a rigid component
   architecture using libraries like `bubbles/list` or custom grid layouts.
 - **Focus Management:** The UI must support complex focus states (e.g.,
-  focusing the global chat input vs. focusing the dashboard grid to select an
-  agent).
-- **Responsive Layout:** The dashboard must collapse or paginate elegantly if
-  the user's terminal window is too small to render 50 distinct Agent Cards.
+  focusing the global chat input vs. focusing the Agent Panel grid to select
+  an agent).
+- **Responsive Layout:** The Agent Panel must collapse or paginate elegantly
+  if the user's terminal window is too small to render 50 distinct Agent
+  Cards.
 
-## Implementation Roadmap (Swarm Dashboard)
+## Implementation Roadmap (Agent Panel)
 
 1. **Phase 1: Structured Telemetry & Tool Context.** Refactor `Manager.Chat`
    to return a structured `Event` struct rather than a formatted string.
    Update the current TUI to display the specific arguments of a tool call
    (e.g., `Running bash: 'npm test'`).
 1. **Phase 2: The UI Grid.** Build the basic Bubble Tea grid component for the
-   Swarm Dashboard. Hardcode mock agents into the grid to perfect the layout,
+   Agent Panel. Hardcode mock agents into the grid to perfect the layout,
    responsive collapsing, and focus navigation.
 1. **Phase 3: Live Output Streaming.** Refactor the `bash_execute` tool in the
    SDK to stream its output to the event bus. Connect this stream to the Agent
@@ -149,9 +149,9 @@ upgraded to an **Event Bus**.
 1. **Phase 4: The Observer Agent.** Implement the background summarization
    loop that translates raw tool execution events into high-level semantic
    status updates for the UI.
-1. **Phase 5: Granular Interventions.** Implement the Control Panel logic
+1. **Phase 5: Granular Interventions.** Implement the Control Plane logic
    allowing the user to pause, terminate, or converse with specific agents in
-   the dashboard.
+   the Agent Panel.
 
 ## The Ultimate Vision: "Do This Complicated Thing"
 
@@ -179,7 +179,7 @@ single LLM call. It must autonomously:
    dependencies (e.g., telling the Test Agent to wait until the Translation
    Agent finishes a specific package).
 1. **Transparent Execution:** Throughout this process (which may take hours),
-   the Swarm Dashboard gives the user perfect, real-time visibility into the
+   the Agent Panel gives the user perfect, real-time visibility into the
    chaotic concurrency, synthesizing the activity via Observer Agents so the
    user feels completely in control.
 

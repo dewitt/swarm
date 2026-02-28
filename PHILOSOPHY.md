@@ -133,7 +133,7 @@ one hundred), and coordinate their parallel efforts to completion. In this
 paradigm, the user ceases to be a pair-programmer and instead assumes the role
 of an Engineering Manager overseeing a highly skilled, infinitely scalable
 virtual workforce. The CLI's UI must reflect this shift by providing
-high-level observability and steering mechanisms (Mission Control), rather
+high-level observability and steering mechanisms (Agent Panel), rather
 than just a linear chat log.
 
 ### UI is Just a Consumer
@@ -143,5 +143,5 @@ not the Terminal UI. The complex logic of provisioning sub-agents, routing
 tasks, and generating observer telemetry must be strictly encapsulated within
 the embeddable Go library. The TUI is simply a thin presentation layer that
 consumes these standardized events. This ensures that the same powerful swarm
-orchestration can be seamlessly embedded into web dashboards, VS Code
+orchestration can be seamlessly embedded into web-based Agent Panels, VS Code
 extensions, or Slack bots without rewriting any business logic.

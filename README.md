@@ -13,12 +13,12 @@ into native ecosystems.
   layouts, real-time agent handoff visualization, and flattened multiline
   history for stable autocomplete.
 
-- **Swarm Dashboard (Mission Control)**: The UI shifts from a basic chat REPL
-  into an air-traffic control layout when swarms are deployed. It visualizes
-  concurrent agents working in parallel via live status cards above the main
-  chat. Try it by running `swarm --demo-swarm`.
+- **Agent Panel**: The UI shifts from a basic chat REPL into an agent-centric
+  layout when swarms are deployed. It visualizes concurrent agents working in
+  parallel via live "Agent Cards" above the main chat. Try it by running
+  `swarm --demo-swarm`.
 
-  ![Swarm Dashboard Demo](docs/assets/demo_swarm.gif)
+  ![Agent Panel Demo](docs/assets/demo_swarm.gif)
 
 - **Direct Shell Execution (`!`)**: Toggle into a dedicated shell mode or run
   single-shot bash commands instantly from within the REPL without breaking

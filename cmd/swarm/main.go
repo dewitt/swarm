@@ -106,7 +106,7 @@ func init() {
 	rootCmd.Flags().StringVarP(&promptFlag, "prompt", "p", "", "Run a single-shot prompt and exit")
 	rootCmd.Flags().BoolVar(&planFlag, "plan", false, "Start the agent in read-only plan mode")
 	rootCmd.Flags().BoolVar(&resumeFlag, "resume", false, "Resume the last interactive session")
-	rootCmd.Flags().BoolVar(&demoSwarmFlag, "demo-swarm", false, "Launch the UI demo for the Swarm Dashboard")
+	rootCmd.Flags().BoolVar(&demoSwarmFlag, "demo-swarm", false, "Launch the UI demo for the Agent Panel")
 	rootCmd.AddCommand(configCmd)
 }
 func main() {

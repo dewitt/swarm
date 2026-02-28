@@ -92,8 +92,8 @@ func (m demoSwarmModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		m.vp.Width = msg.Width - 4
-		dashboardHeight := lipgloss.Height(m.renderDashboard())
-		m.vp.Height = msg.Height - dashboardHeight - 4 // Account for status bar and vpBox borders/padding
+		agentPanelHeight := lipgloss.Height(m.renderAgentPanel())
+		m.vp.Height = msg.Height - agentPanelHeight - 4 // Account for status bar and vpBox borders/padding
 		m.updateVP()
 
 	case spinner.TickMsg:
@@ -186,9 +186,9 @@ func (m demoSwarmModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.messages = append(m.messages, agentMsgStyle.Render("✦ [Router] ")+"The swarm has successfully completed the OAuth 2.0 refactoring task. All tests pass, and PR #142 is ready. What would you like to do next?")
 		}
 
-		// Dynamically adjust viewport height in case the dashboard grew
-		dashboardHeight := lipgloss.Height(m.renderDashboard())
-		m.vp.Height = m.height - dashboardHeight - 4
+		// Dynamically adjust viewport height in case the panel grew
+		agentPanelHeight := lipgloss.Height(m.renderAgentPanel())
+		m.vp.Height = m.height - agentPanelHeight - 4
 
 		m.updateVP()
 	}
@@ -207,7 +207,7 @@ func (m *demoSwarmModel) updateVP() {
 	m.vp.GotoBottom()
 }
 
-func (m demoSwarmModel) renderDashboard() string {
+func (m demoSwarmModel) renderAgentPanel() string {
 	var row1 []string
 	var row2 []string
 	for i, a := range m.agents {
@@ -265,17 +265,17 @@ func (m demoSwarmModel) renderDashboard() string {
 		}
 	}
 
-	dashboardRow1 := lipgloss.JoinHorizontal(lipgloss.Top, row1...)
-	dashboardRow2 := lipgloss.JoinHorizontal(lipgloss.Top, row2...)
-	dashboardGrid := lipgloss.JoinVertical(lipgloss.Left, dashboardRow1, dashboardRow2)
+	agentPanelRow1 := lipgloss.JoinHorizontal(lipgloss.Top, row1...)
+	agentPanelRow2 := lipgloss.JoinHorizontal(lipgloss.Top, row2...)
+	agentPanelGrid := lipgloss.JoinVertical(lipgloss.Left, agentPanelRow1, agentPanelRow2)
 
 	return lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(borderColor).
 		Padding(0, 1).
 		Render(lipgloss.JoinVertical(lipgloss.Left,
-			lipgloss.NewStyle().Bold(true).Render(" Swarm Dashboard - Mission Control"),
-			dashboardGrid,
+			lipgloss.NewStyle().Bold(true).Render(" Agent Panel"),
+			agentPanelGrid,
 		))
 }
 
@@ -284,7 +284,7 @@ func (m demoSwarmModel) View() string {
 		return "Loading…"
 	}
 
-	// 1. Render Dashboard
+	// 1. Render Panel
 	var row1 []string
 	var row2 []string
 	for i, a := range m.agents {
@@ -341,17 +341,17 @@ func (m demoSwarmModel) View() string {
 		}
 	}
 
-	dashboardRow1 := lipgloss.JoinHorizontal(lipgloss.Top, row1...)
-	dashboardRow2 := lipgloss.JoinHorizontal(lipgloss.Top, row2...)
-	dashboardGrid := lipgloss.JoinVertical(lipgloss.Left, dashboardRow1, dashboardRow2)
+	agentPanelRow1 := lipgloss.JoinHorizontal(lipgloss.Top, row1...)
+	agentPanelRow2 := lipgloss.JoinHorizontal(lipgloss.Top, row2...)
+	agentPanelGrid := lipgloss.JoinVertical(lipgloss.Left, agentPanelRow1, agentPanelRow2)
 
-	dashboardBox := lipgloss.NewStyle().
+	agentPanelBox := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(borderColor).
 		Padding(0, 1).
 		Render(lipgloss.JoinVertical(lipgloss.Left,
-			lipgloss.NewStyle().Bold(true).Render(" Swarm Dashboard - Mission Control"),
-			dashboardGrid,
+			lipgloss.NewStyle().Bold(true).Render(" Agent Panel"),
+			agentPanelGrid,
 		))
 
 	// 2. Render Viewport
@@ -362,13 +362,13 @@ func (m demoSwarmModel) View() string {
 		BorderRight(false).
 		BorderForeground(borderColor).
 		Padding(1, 2).
-		Height(m.height - lipgloss.Height(dashboardBox) - 1).
+		Height(m.height - lipgloss.Height(agentPanelBox) - 1).
 		Render(m.vp.View())
 
 	// 3. Status Bar
 	status := statusBarStyle.Width(m.width).Render(" swarm (main*)        [Demo Mode] ")
 
-	mainBody := lipgloss.JoinVertical(lipgloss.Left, dashboardBox, vpBox)
+	mainBody := lipgloss.JoinVertical(lipgloss.Left, agentPanelBox, vpBox)
 	// Force the main body to be exactly m.height - 1 lines to prevent terminal scrolling
 	mainBody = lipgloss.NewStyle().Width(m.width).Height(m.height - 1).Render(mainBody)
 

@@ -91,13 +91,13 @@ transparently on a single user request.
 - [ ] **Task 6.3:** Ensure this workflow satisfies
   `docs/cuj/03-swarm-design-collaboration.md`.
 
-## Phase 7: Dynamic Swarm Provisioning & Mission Control
+## Phase 7: Dynamic Swarm Provisioning & Agent Panel
 
 **Goal:** Realize the "Engineering Manager Paradigm" where the CLI
 autonomously decomposes complex tasks, provisions $N$ agents to execute them
-in parallel, and provides a dashboard to monitor them.
+in parallel, and provides an Agent Panel to monitor them.
 
-- [x] **Task 7.1:** Implement the "Swarm Dashboard" Bubble Tea layout
+- [x] **Task 7.1:** Implement the "Agent Panel" Bubble Tea layout
   component, creating a visual grid of active "Agent Cards" above the main
   chat viewport.
 - [ ] **Task 7.2:** Refactor the SDK Event Bus to stream live tool telemetry
@@ -106,7 +106,7 @@ in parallel, and provides a dashboard to monitor them.
   parallel model execution loop that synthesizes raw telemetry into semantic
   status updates (implemented as "Observe Mode" `^O`).
 - **Task 7.4:** Implement Swarm "Control Panel" interactions: pausing,
-  resuming, or killing specific agents from the dashboard.
+  resuming, or killing specific agents from the Agent Panel.
 - **Task 7.5:** Implement dynamic auto-provisioning: Teach the Router Agent
   how to write a dependency graph and spin up arbitrary, parallel Worker
   Agents based on the graph's complexity.

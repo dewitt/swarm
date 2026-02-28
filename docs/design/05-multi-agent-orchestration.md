@@ -20,10 +20,10 @@ architecture:
 - **Router Agent**: The front-door, powered by `gemini-2.5-flash` for snappy
   coordination. It converses with the user, maintains session context, and
   routes specific technical tasks to specialized sub-agents.
-- **Architect Agent**: Responsible for scaffolding project structures and
-  writing foundational code based on user requirements.
-- **Debugger Agent**: Invoked when a test fails or a deployment errors out. It
-  analyzes stack traces and proposes fixes.
+- **Web Researcher Agent**: Specialized in deep web research using the Google
+  Search grounding tool to pull down the latest documentation.
+- **Skill Architect Agent**: Maintains and optimizes dynamic `SKILL.md` files,
+  enforcing human-in-the-loop validation for major changes.
 - **GitOps Agent**: Specialized in crafting CI/CD pipelines, writing GitHub
   Actions, and executing Git operations.
 
@@ -64,17 +64,19 @@ not attempt to rewrite these massive, proprietary systems from scratch.
 
 Instead, the `agents` CLI will act as the **Supreme Orchestrator**.
 
-### The Vision
+### The Implementation
 
-We will write specialized "Wrapper Agents" (or Skills) that wrap the
-command-line interfaces of *other* AI coding agents.
+We have built specialized "Wrapper Agents" (as Skills) that wrap the
+command-line interfaces of *other* AI coding agents, specifically `gemini-cli`
+and `claude-code`.
 
 For example, if a user asks for a massive refactoring of a legacy codebase:
 
 1. The primary **Router Agent** analyzes the request.
-1. It delegates the task to a **Codex Sub-agent**.
-1. The Codex Sub-agent constructs the appropriate bash command (e.g.,
-   `codex --apply-patch ...`) and executes it using the `bash_execute` tool.
+1. It delegates the task to the **Gemini CLI Sub-agent**.
+1. The Sub-agent constructs the appropriate bash command (e.g.,
+   `gemini -p "refactor everything" --apply`) and executes it using the
+   `bash_execute` tool.
 1. The Router Agent reviews the resulting diff and reports back to the user.
 
 By treating other AI CLI tools as executable sub-agents, the `agents` CLI

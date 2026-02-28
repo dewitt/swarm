@@ -84,25 +84,40 @@ var (
 )
 
 func renderLogo() string {
-	// DEC-style logo: uniform rectangular boxes with wider padding.
-	// Padding(1, 2) creates a 5x3 box, making the 1-cell gap feel smaller.
+	// Exact DEC ratios: Box (120x288), Gap (12x288)
+	// Box Width:Height = 120:288 = 1:2.4
+	// Gap:Box Width = 12:120 = 1:10
+	// Assuming terminal cell aspect ratio is 1:2 (W:H)
+	// Box: 10 cells wide, 12 cells high => Visual Ratio = 10 : (12*2) = 10:24 = 1:2.4
+	// Gap: 1 cell wide => Visual Ratio = 1:10 of box width.
+	
 	chars := []string{">", "s", "w", "a", "r", "m"}
 	decRed := lipgloss.Color("#a9042c")
 	white := lipgloss.Color("#ffffff")
 
-	var boxes []string
-	for _, c := range chars {
-		style := lipgloss.NewStyle().
+	var logoParts []string
+	for i, c := range chars {
+		box := lipgloss.NewStyle().
 			Background(decRed).
 			Foreground(white).
-			Padding(1, 2).
+			Width(10).
+			Height(12).
+			Align(lipgloss.Center, lipgloss.Center).
 			Bold(true).
-			MarginRight(1)
-
-		boxes = append(boxes, style.Render(c))
+			Render(c)
+		logoParts = append(logoParts, box)
+		
+		// Insert manual 1-cell gap between boxes
+		if i < len(chars)-1 {
+			gap := lipgloss.NewStyle().
+				Width(1).
+				Height(12).
+				Render("")
+			logoParts = append(logoParts, gap)
+		}
 	}
 
-	return lipgloss.JoinHorizontal(lipgloss.Top, boxes...)
+	return lipgloss.JoinHorizontal(lipgloss.Top, logoParts...)
 }
 
 type streamMsg struct {

@@ -1771,26 +1771,34 @@ func (m model) renderAgentPanel() string {
 			stateLabel = "Complete"
 		}
 
+		// Fixed-width prefix column (exactly 3 cells)
+		prefixStyle := lipgloss.NewStyle().Width(3)
+
 		var card string
 		if fidelity == "high" {
 			style = style.Width(cardWidth - 2).Height(3)
 
 			statusText := a.status
-			// Accurate status truncation
 			maxStatusLen := cardWidth - 7
 			if len(statusText) > maxStatusLen && maxStatusLen > 0 {
 				statusText = statusText[:maxStatusLen] + "…"
 			}
 
-			// Ensure all lines have the same prefix offset (3 cells) for perfect alignment
-			// Prefix 1: Icon (2) + Space (1) = 3
-			// Prefix 2: Status Icon/Spinner (2) + Space (1) = 3
-			// Prefix 3: Spaces (3) = 3
-			card = lipgloss.JoinVertical(lipgloss.Left,
-				lipgloss.NewStyle().Foreground(color).Bold(true).Render(a.icon+" "+a.name),
-				iconStr+" "+lipgloss.NewStyle().Foreground(tipColor).Render(statusText),
-				"   "+lipgloss.NewStyle().Foreground(tipColor).Italic(true).Faint(true).Render(stateLabel),
+			// Use horizontal joining for each line to guarantee prefix alignment
+			line1 := lipgloss.JoinHorizontal(lipgloss.Left,
+				prefixStyle.Render(a.icon),
+				lipgloss.NewStyle().Foreground(color).Bold(true).Render(a.name),
 			)
+			line2 := lipgloss.JoinHorizontal(lipgloss.Left,
+				prefixStyle.Render(iconStr),
+				lipgloss.NewStyle().Foreground(tipColor).Render(statusText),
+			)
+			line3 := lipgloss.JoinHorizontal(lipgloss.Left,
+				prefixStyle.Render(""),
+				lipgloss.NewStyle().Foreground(tipColor).Italic(true).Faint(true).Render(stateLabel),
+			)
+
+			card = lipgloss.JoinVertical(lipgloss.Left, line1, line2, line3)
 		} else if fidelity == "medium" {
 			style = style.Width(cardWidth - 2).Height(2)
 
@@ -1800,10 +1808,16 @@ func (m model) renderAgentPanel() string {
 				statusText = statusText[:maxStatusLen] + "…"
 			}
 
-			card = lipgloss.JoinVertical(lipgloss.Left,
-				lipgloss.NewStyle().Foreground(color).Bold(true).Render(a.icon+" "+a.name),
-				iconStr+" "+lipgloss.NewStyle().Foreground(tipColor).Render(statusText),
+			line1 := lipgloss.JoinHorizontal(lipgloss.Left,
+				prefixStyle.Render(a.icon),
+				lipgloss.NewStyle().Foreground(color).Bold(true).Render(a.name),
 			)
+			line2 := lipgloss.JoinHorizontal(lipgloss.Left,
+				prefixStyle.Render(iconStr),
+				lipgloss.NewStyle().Foreground(tipColor).Render(statusText),
+			)
+
+			card = lipgloss.JoinVertical(lipgloss.Left, line1, line2)
 		} else {
 			// low fidelity: minimalist icon cards
 			style = style.Width(6).Height(1).Padding(0, 1)

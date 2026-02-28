@@ -778,32 +778,42 @@ func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan ChatEv
 
 		if os.Getenv("AGENTS_DRY_RUN") == "true" {
 			// Provide fast, deterministic mock responses for vhs tape recordings
-			if strings.Contains(strings.ToLower(prompt), "build") {
+			if strings.Contains(strings.ToLower(prompt), "build") || strings.Contains(strings.ToLower(prompt), "test") {
+				out <- ChatEvent{Type: ChatEventHandoff, Content: "codebase_investigator"}
+				out <- ChatEvent{Type: ChatEventThought, Agent: "codebase_investigator", Content: "Analyzing repository structure…"}
+				time.Sleep(1 * time.Second)
+				out <- ChatEvent{Type: ChatEventTelemetry, Content: "Reading src/legacy/auth.go..."}
+				out <- ChatEvent{Type: ChatEventTelemetry, Content: "Found 3 related files."}
+				time.Sleep(1 * time.Second)
+				
 				out <- ChatEvent{Type: ChatEventHandoff, Content: "builder_agent"}
-				out <- ChatEvent{Type: ChatEventFinalResponse, Agent: "builder_agent", Content: "I have scaffolded a Python ADK agent for you. I created `agent.yaml`, `requirements.txt`, and `agent.py`."}
-				return
-			}
-			if strings.Contains(strings.ToLower(prompt), "test") {
+				out <- ChatEvent{Type: ChatEventThought, Agent: "builder_agent", Content: "Compiling and testing…"}
 				out <- ChatEvent{Type: ChatEventToolCall, Content: "bash_execute"}
 				// Simulate some build/test logs
 				out <- ChatEvent{Type: ChatEventTelemetry, Content: "pip install -r requirements.txt..."}
-				time.Sleep(100 * time.Millisecond)
+				time.Sleep(500 * time.Millisecond)
 				out <- ChatEvent{Type: ChatEventTelemetry, Content: "Collecting google-genai..."}
-				time.Sleep(100 * time.Millisecond)
+				time.Sleep(500 * time.Millisecond)
 				out <- ChatEvent{Type: ChatEventTelemetry, Content: "Successfully installed google-genai-1.40.0"}
-				time.Sleep(100 * time.Millisecond)
+				time.Sleep(500 * time.Millisecond)
 				out <- ChatEvent{Type: ChatEventTelemetry, Content: "python agent.py --test"}
-				time.Sleep(100 * time.Millisecond)
+				time.Sleep(500 * time.Millisecond)
 				out <- ChatEvent{Type: ChatEventTelemetry, Content: "Test Passed: test_init"}
-				time.Sleep(100 * time.Millisecond)
+				time.Sleep(500 * time.Millisecond)
 				out <- ChatEvent{Type: ChatEventTelemetry, Content: "Test Passed: test_chat"}
 				
-				out <- ChatEvent{Type: ChatEventFinalResponse, Agent: "router_agent", Content: "I successfully executed `pip install -r requirements.txt` and `python agent.py` using my bash tool. All tests passed!"}
+				out <- ChatEvent{Type: ChatEventFinalResponse, Agent: "builder_agent", Content: "I have successfully audited, built, and tested the repository. All 14 tests passed!"}
 				return
 			}
 			if strings.Contains(strings.ToLower(prompt), "deploy") {
 				out <- ChatEvent{Type: ChatEventHandoff, Content: "gitops_agent"}
-				out <- ChatEvent{Type: ChatEventFinalResponse, Agent: "gitops_agent", Content: "I have generated `.github/workflows/deploy-agent-engine.yml` and pushed it to `main`. Your agent is deploying to Google Agent Engine."}
+				out <- ChatEvent{Type: ChatEventThought, Agent: "gitops_agent", Content: "Preparing deployment pipeline…"}
+				time.Sleep(1 * time.Second)
+				out <- ChatEvent{Type: ChatEventTelemetry, Content: "git add .github/workflows/deploy.yml"}
+				out <- ChatEvent{Type: ChatEventTelemetry, Content: "git commit -m 'Setup GAE deployment'"}
+				out <- ChatEvent{Type: ChatEventTelemetry, Content: "git push origin main"}
+				time.Sleep(1 * time.Second)
+				out <- ChatEvent{Type: ChatEventFinalResponse, Agent: "gitops_agent", Content: "I have generated the GitHub Actions workflow and pushed it to main. Your agent is now deploying to Google Agent Engine."}
 				return
 			}
 			out <- ChatEvent{Type: ChatEventFinalResponse, Agent: "router_agent", Content: "This is a deterministic dry-run response."}

@@ -84,23 +84,20 @@ var (
 )
 
 func renderLogo() string {
-	// DEC-style logo: uniform rectangular boxes, flush against each other.
+	// DEC-style logo: uniform rectangular boxes with wider padding.
+	// Padding(1, 2) creates a 5x3 box, making the 1-cell gap feel smaller.
 	chars := []string{">", "s", "w", "a", "r", "m"}
 	decRed := lipgloss.Color("#a9042c")
 	white := lipgloss.Color("#ffffff")
 
 	var boxes []string
 	for _, c := range chars {
-		// Width 3, Height 3 with 0 margin brings them as close as possible.
-		// Terminal fonts usually provide a hairline gap between cells.
 		style := lipgloss.NewStyle().
 			Background(decRed).
 			Foreground(white).
-			Width(3).
-			Height(3).
-			Align(lipgloss.Center, lipgloss.Center).
+			Padding(1, 2).
 			Bold(true).
-			MarginRight(1) 
+			MarginRight(1)
 
 		boxes = append(boxes, style.Render(c))
 	}

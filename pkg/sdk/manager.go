@@ -22,7 +22,6 @@ import (
 	"google.golang.org/adk/session/database"
 	"google.golang.org/adk/tool"
 	"google.golang.org/adk/tool/functiontool"
-	"google.golang.org/adk/tool/geminitool"
 	"google.golang.org/genai"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -158,6 +157,47 @@ type WebFetchArgs struct {
 type WebFetchResult struct {
 	Content string `json:"content"`
 	Error   string `json:"error,omitempty"`
+}
+
+type GoogleSearchArgs struct {
+	Query string `json:"query"`
+}
+
+type GoogleSearchResult struct {
+	Response string `json:"response"`
+	Error    string `json:"error,omitempty"`
+}
+
+func googleSearchFunc(ctx tool.Context, args GoogleSearchArgs) (GoogleSearchResult, error) {
+	apiKey := os.Getenv("GOOGLE_API_KEY")
+	if apiKey == "" {
+		return GoogleSearchResult{Error: "GOOGLE_API_KEY is not set"}, nil
+	}
+
+	client, err := genai.NewClient(context.Background(), &genai.ClientConfig{
+		APIKey: apiKey,
+	})
+	if err != nil {
+		return GoogleSearchResult{Error: err.Error()}, nil
+	}
+
+	resp, err := client.Models.GenerateContent(context.Background(), "gemini-2.5-flash",
+		genai.Text(args.Query),
+		&genai.GenerateContentConfig{
+			Tools: []*genai.Tool{
+				{GoogleSearch: &genai.GoogleSearch{}},
+			},
+		},
+	)
+	if err != nil {
+		return GoogleSearchResult{Error: err.Error()}, nil
+	}
+
+	if len(resp.Candidates) > 0 && resp.Candidates[0].Content != nil && len(resp.Candidates[0].Content.Parts) > 0 {
+		return GoogleSearchResult{Response: resp.Candidates[0].Content.Parts[0].Text}, nil
+	}
+
+	return GoogleSearchResult{Error: "No response from search"}, nil
 }
 
 func webFetch(ctx tool.Context, args WebFetchArgs) (WebFetchResult, error) {
@@ -355,6 +395,14 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 		log.Fatalf("Failed to create webFetch tool: %v", err)
 	}
 
+	googleSearchTool, err := functiontool.New(functiontool.Config{
+		Name:        "google_search",
+		Description: "Performs a Google Search to find up-to-date information on the internet. Provide a query string.",
+	}, googleSearchFunc)
+	if err != nil {
+		log.Fatalf("Failed to create googleSearch tool: %v", err)
+	}
+
 	toolRegistry := map[string]tool.Tool{
 		"list_local_files": listTool,
 		"read_local_file":  readTool,
@@ -364,7 +412,7 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 		"git_push":         gitPush,
 		"bash_execute":     bashExecute,
 		"web_fetch":        webFetchTool,
-		"google_search":    geminitool.GoogleSearch{},
+		"google_search":    googleSearchTool,
 	}
 
 	// Use persistent SQLite database for sessions

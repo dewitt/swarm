@@ -101,9 +101,9 @@ different tools in the ecosystem.
 
 ## 8. Ubiquitous Mediation
 
-We believe that, at the limit, every interaction—whether human-to-computer or
-computer-to-computer—will be mediated by an intelligent, autonomous agent
-acting on our behalf.
+We believe that, at the limit, every interaction—whether human-to-computer,
+computer-to-computer, or computer-to-human—will be mediated by an
+intelligent, autonomous agent acting on our behalf.
 
 - **The Agent as the Interface:** The user no longer interacts directly with
   raw tools or rigid UIs. Instead, they interact with a coordinating
@@ -112,6 +112,10 @@ acting on our behalf.
   first-class realization of this principle. By using an agent to proactively
   classify and route inputs, we ensure that the system remains fluid and
   aligned with human thought patterns, even when they digress.
+- **Intelligent Output Synthesis:** Just as inputs are mediated, computer-to-human
+  outputs should be synthesized by an agent to ensure they are communicated in
+  the most effective format, tone, and language for the specific user and
+  context (e.g., real-time translation or level-of-detail adjustment).
 - **Orchestration by Default:** We assume that every component of a system
   will eventually be accessible through a mediating agentic layer, reducing
   complex technical workflows to high-level goal-setting.

@@ -1727,19 +1727,30 @@ func (m model) renderAgentPanel() string {
 	availableWidth := m.width - 4
 	cardWidth := availableWidth / cols
 
-	// Helper to render a perfectly aligned line using two fixed-width columns
+	// Helper to render a perfectly aligned line using manual padding.
+	// We use a 4-cell prefix to provide extra safety for variable-width emojis.
 	renderLine := func(prefix string, text string, style lipgloss.Style, width int) string {
-		prefixStyle := lipgloss.NewStyle().Width(3).Align(lipgloss.Left)
-		contentStyle := style.Width(width - 3)
-
-		if runewidth.StringWidth(text) > (width - 3) {
-			text = runewidth.Truncate(text, (width - 3)-1, "…")
+		prefixWidth := runewidth.StringWidth(prefix)
+		// Modern terminals often render 1-width emojis as 2-width.
+		// If it's a known emoji (not spaces), we assume it might take 2 cells.
+		actualPrefixWidth := prefixWidth
+		if prefix != "" && prefix != "  " && prefix != "   " && prefixWidth == 1 {
+			// This is likely a 1-width emoji that renders as 2
+			actualPrefixWidth = 2
 		}
 
-		return lipgloss.JoinHorizontal(lipgloss.Left,
-			prefixStyle.Render(prefix),
-			contentStyle.Render(text),
-		)
+		padding := 4 - actualPrefixWidth
+		if padding < 1 {
+			padding = 1
+		}
+		prefixStr := prefix + strings.Repeat(" ", padding)
+
+		maxTextWidth := width - 4
+		if runewidth.StringWidth(text) > maxTextWidth {
+			text = runewidth.Truncate(text, maxTextWidth-1, "…")
+		}
+
+		return prefixStr + style.Render(text)
 	}
 
 	var cards []string

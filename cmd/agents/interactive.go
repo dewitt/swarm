@@ -1458,7 +1458,7 @@ func (m model) View() string {
 }
 
 func launchInteractiveShell(planMode bool, resume bool) error {
-	p := tea.NewProgram(initialModel(planMode, resume), tea.WithAltScreen(), tea.WithMouseAllMotion())
+	p := tea.NewProgram(initialModel(planMode, resume), tea.WithAltScreen(), tea.WithMouseCellMotion())
 	if _, err := p.Run(); err != nil {
 		return fmt.Errorf("could not start interactive shell: %w", err)
 	}

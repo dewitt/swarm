@@ -23,10 +23,10 @@ var configCmd = &cobra.Command{
 			fmt.Fprintf(os.Stderr, "Error loading configuration: %v\n", err)
 			os.Exit(1)
 		}
-		
+
 		fmt.Println("Global Configuration:")
 		fmt.Printf("  Model: %s\n", cfg.Model)
-		
+
 		path, err := sdk.DefaultConfigPath()
 		if err == nil {
 			fmt.Printf("\nStored at: %s\n", path)
@@ -71,7 +71,9 @@ When run without arguments, it launches a persistent, interactive terminal sessi
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 				os.Exit(1)
 			}
-			fmt.Println(<-ch)
+			for msg := range ch {
+				fmt.Println(msg)
+			}
 			return
 		}
 

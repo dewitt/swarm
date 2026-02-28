@@ -1,1 +1,0 @@
-\n## UI Testing and Regression\nWhenever you modify code that impacts the text entry UI, viewport, or main terminal layout, you MUST run the UI regression tests to verify visual stability. See `tests/ui/README.md` for instructions and acceptance criteria.

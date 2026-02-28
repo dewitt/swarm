@@ -102,9 +102,13 @@ opinions.
 
 1. **Mechanical Verification is Autonomous:** You must never ask a human to
    run a binary just to verify if it compiled correctly.
-1. **Execute Tests:** You must utilize headless testing, `go test ./...`, and
+3. **Execute Tests:** You must utilize headless testing, `go test ./...`, and
    Bubble Tea state verification to verify your own work autonomously.
-1. **Format:** All markdown files must be formatted using `mdformat --wrap 78`
+4. **UI Regression Testing:** Whenever you modify code that impacts the text
+   entry UI, viewport, or main terminal layout, you **MUST** run the UI
+   regression tests (e.g., `vhs tests/ui/text_entry.tape`) to verify visual
+   stability. See `tests/ui/README.md` for instructions.
+5. **Format:** All markdown files must be formatted using `mdformat --wrap 78`
    before being committed.
 
 ### Step 4: Asynchronous Handoffs

@@ -300,6 +300,7 @@ type model struct {
 
 	statusMsg    string
 	lastResponse string
+	activeAgent  string
 
 	// Autocomplete state
 	workspaceFiles []string
@@ -873,7 +874,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, listenForStream(msg.ch)
 		}
 		if strings.HasPrefix(msg.text, "[AGENT_HANDOFF] ") {
-			m.statusMsg = "Handoff to " + strings.TrimPrefix(msg.text, "[AGENT_HANDOFF] ") + "…"
+			m.activeAgent = strings.TrimSpace(strings.TrimPrefix(msg.text, "[AGENT_HANDOFF] "))
+			m.statusMsg = ""
 			m.updateViewport()
 			return m, listenForStream(msg.ch)
 		}
@@ -906,6 +908,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case streamDoneMsg:
 		m.loading = false
 		m.statusMsg = ""
+		m.activeAgent = "Router"
 		m.updateViewport()
 		return m, checkGitStatus()
 
@@ -1351,7 +1354,11 @@ func (m *model) updateViewport() {
 		if m.statusMsg != "" {
 			status = m.statusMsg
 		}
-		s.WriteString(agentMsgStyle.Render("✦ ") + m.spinner.View() + " " + status)
+		agentLabel := m.activeAgent
+		if agentLabel == "" {
+			agentLabel = "Router"
+		}
+		s.WriteString(agentMsgStyle.Render(fmt.Sprintf("✦ [%s] ", agentLabel)) + m.spinner.View() + " " + status)
 		s.WriteString("\n\n")
 	}
 	isAtBottom := m.viewport.AtBottom()

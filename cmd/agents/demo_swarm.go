@@ -233,7 +233,7 @@ func (m demoSwarmModel) renderDashboard() string {
 			BorderForeground(color).
 			Padding(0, 1).
 			Width(cardWidth - 2). // Lipgloss width might be content width in this version, so subtract borders
-			Height(3)             // Content height 3 lines: Name, blank/status, status-wrap
+			Height(2)             // Content height 2 lines: Name, status-wrap
 
 		iconStr := "  "
 		if a.state == "active" {
@@ -249,7 +249,7 @@ func (m demoSwarmModel) renderDashboard() string {
 		// Use Lipgloss for text wrapping instead of manual truncation
 		statusText := lipgloss.NewStyle().
 			Width(cardWidth - 8).
-			MaxHeight(2).
+			MaxHeight(1).
 			Render(a.status)
 
 		card := lipgloss.JoinVertical(lipgloss.Left,
@@ -362,16 +362,18 @@ func (m demoSwarmModel) View() string {
 		BorderRight(false).
 		BorderForeground(borderColor).
 		Padding(1, 2).
-		Width(m.width - 4).
 		Height(m.height - lipgloss.Height(dashboardBox) - 1).
 		Render(m.vp.View())
 
 	// 3. Status Bar
 	status := statusBarStyle.Width(m.width).Render(" agents (main*)        [Demo Mode] ")
 
+	mainBody := lipgloss.JoinVertical(lipgloss.Left, dashboardBox, vpBox)
+	// Force the main body to be exactly m.height - 1 lines to prevent terminal scrolling
+	mainBody = lipgloss.NewStyle().Width(m.width).Height(m.height - 1).Render(mainBody)
+
 	return lipgloss.JoinVertical(lipgloss.Left,
-		dashboardBox,
-		vpBox,
+		mainBody,
 		status,
 	)
 }

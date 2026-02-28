@@ -36,7 +36,7 @@ debt that should be addressed as the project evolves.
 
 - [x] **Observe Mode** (#18): Add a `^O` command for observe-mode.
 
-- [ ] **Async Interactions Design** (#19): Write a design doc for input
+- [x] **Async Interactions Design** (#19): Write a design doc for input
   queueing, interruptions, and async HITL interactions.
 
 - [ ] **Dynamic Loading State** (#7): Long-running subagent and tool

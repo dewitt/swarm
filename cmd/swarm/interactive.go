@@ -84,82 +84,67 @@ var (
 )
 
 func renderLogo() string {
-	// DEC-style logo: 5x6 uniform rectangular boxes.
-	// We use a custom multi-line glyph for each character to vertically fill the box.
+	// Stylized Swarm logo: forest palette with a subtle drop shadow
 	chars := []string{">", "s", "w", "a", "r", "m"}
-	decRed := lipgloss.Color("#a9042c")
-	white := lipgloss.Color("#ffffff")
-
-	// 5-line high glyphs
-	font := map[string][]string{
-		">": {
-			"█    ",
-			" █   ",
-			"  █  ",
-			" █   ",
-			"█    ",
-		},
-		"s": {
-			" ▄██ ",
-			" ▀█▄ ",
-			" ▄▄█ ",
-			" ▀▀▀ ",
-			"     ",
-		},
-		"w": {
-			"█   █",
-			"█   █",
-			"█ █ █",
-			"█▄█▄█",
-			"     ",
-		},
-		"a": {
-			" ▄██ ",
-			" █▄█ ",
-			" █▄█ ",
-			" ▀ ▀ ",
-			"     ",
-		},
-		"r": {
-			" █▄▀ ",
-			" █   ",
-			" █   ",
-			" ▀   ",
-			"     ",
-		},
-		"m": {
-			"█ █ █",
-			"█ █ █",
-			"█ █ █",
-			"▀ ▀ ▀",
-			"     ",
-		},
+	
+	// Dark Slate for ">", shades of Forest for "swarm"
+	colors := []string{
+		"#334155", // > (Dark Slate)
+		"#1b4332", // s
+		"#2d6a4f", // w
+		"#40916c", // a
+		"#52b788", // r
+		"#74c69d", // m
 	}
 
-	var logoParts []string
-	for i, c := range chars {
-		glyph := strings.Join(font[c], "\n")
-		box := lipgloss.NewStyle().
-			Background(decRed).
-			Foreground(white).
-			Width(5).
-			Height(6).
-			Align(lipgloss.Center, lipgloss.Center).
-			Bold(true).
-			Render(glyph)
-		logoParts = append(logoParts, box)
-		
-		// Insert manual 1-cell gap between boxes
-		if i < len(chars)-1 {
-			gap := lipgloss.NewStyle().
-				Width(1).
-				Height(6).
-				Render("")
-			logoParts = append(logoParts, gap)
+	if !lipgloss.HasDarkBackground() {
+		colors = []string{
+			"#1e293b", // > (Very Dark Slate)
+			"#1b4332", // s
+			"#2d6a4f", // w
+			"#40916c", // a
+			"#475569", // r (Slightly more muted in light mode)
+			"#64748b", // m
 		}
 	}
 
-	return lipgloss.JoinHorizontal(lipgloss.Top, logoParts...)
+	var row1 []string // Primary characters
+	var row2 []string // Subtle "shadow" line
+
+	for i, c := range chars {
+		mainColor := lipgloss.Color(colors[i])
+		
+		// Style the primary character
+		charStyle := lipgloss.NewStyle().
+			Foreground(mainColor).
+			Bold(true).
+			Padding(0, 1)
+		
+		// The shadow is a dark block character offset by 1 char to the right
+		// and on the line below.
+		shadowStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#1a1a1a")). // Subtle shadow
+			Padding(0, 1)
+
+		row1 = append(row1, charStyle.Render(c))
+		
+		if i == 0 {
+			// Larger gap after the ">" prompt
+			row1 = append(row1, "  ")
+			row2 = append(row2, "    ")
+		} else {
+			// Subtle gap between letters
+			row1 = append(row1, " ")
+			row2 = append(row2, "  ")
+		}
+
+		// Row 2: Shadow character
+		row2 = append(row2, shadowStyle.Render("▀"))
+	}
+
+	return lipgloss.JoinVertical(lipgloss.Left, 
+		lipgloss.JoinHorizontal(lipgloss.Bottom, row1...),
+		lipgloss.JoinHorizontal(lipgloss.Top, row2...))
 }
 
 type streamMsg struct {

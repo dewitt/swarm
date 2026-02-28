@@ -30,3 +30,22 @@ debt that should be addressed as the project evolves.
   strict Protobuf definition (`/proto`) and implement compilation targets for
   C-Shared Libraries (FFI) and WebAssembly to support native Python,
   TypeScript, and Rust wrappers. See `docs/design/09-cross-language-sdk.md`.
+
+- [ ] **Codex Agent** (#20): Add a Codex agent wrapper to delegate to Codex
+  CLI.
+
+- [ ] **Observe Mode** (#18): Add a `^O` command for observe-mode.
+
+- [ ] **Async Interactions Design** (#19): Write a design doc for input
+  queueing, interruptions, and async HITL interactions.
+
+- [ ] **Dynamic Loading State** (#7): Long-running subagent and tool
+  invocations need a dynamic loading state.
+
+## Known Bugs
+
+- [ ] **Dead-end Tool Calls** (#17): Subagent tool calls can reach a dead end.
+- [ ] **Status Overwrites Name** (#15): Tool and subagent invocation status
+  currently overwrites the agent name in the UI.
+- [ ] **Escape Sequences in Prompt** (#3): Strange escape sequences appear in
+  the input prompt when scrolling.

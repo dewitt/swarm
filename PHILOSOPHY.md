@@ -15,13 +15,13 @@ strict order of precedence:
 
 1. **Delegate to the Model:** Can the raw frontier LLM solve this inherently
    just by asking it nicely? If yes, stop here.
-2. **Delegate to Dynamic Skills:** If the model needs specialized context or a
+1. **Delegate to Dynamic Skills:** If the model needs specialized context or a
    workflow, can it be provided via a plain-text, dynamically loaded Markdown
    Skill? If yes, build a Skill.
-3. **Delegate to the Framework (ADK):** If programmatic logic or orchestration
+1. **Delegate to the Framework (ADK):** If programmatic logic or orchestration
    is truly required, does the Google Agent Development Kit (ADK) provide a
    native primitive for it? If yes, use the ADK.
-4. **Write Custom Code (Last Resort):** Only write custom Go code in this CLI
+1. **Write Custom Code (Last Resort):** Only write custom Go code in this CLI
    if it is strictly for terminal UI presentation or if all the above options
    have been entirely exhausted.
 
@@ -49,7 +49,8 @@ to `main`?") or creative opinions (e.g., "Do you like this UI layout?").
 
 ## 4. Native Ecosystems are the Source of Truth
 
-We believe in playing well with the customer's existing ecosystem rather than imposing proprietary deployment engines.
+We believe in playing well with the customer's existing ecosystem rather than
+imposing proprietary deployment engines.
 
 - Version control (Git) is the absolute source of truth for both code and
   infrastructure.
@@ -70,14 +71,46 @@ as the AI it commands.
 
 ## 6. Architectural Separation of Concerns
 
-We strictly enforce the boundary between the presentation layer and the underlying intelligence.
+We strictly enforce the boundary between the presentation layer and the
+underlying intelligence.
 
-- **UI vs. SDK:** The terminal UI (`cmd/agents/`) must remain a "dumb" client. It handles rendering, input capture, and local configuration logic, but it MUST NOT contain LLM prompting logic, system instructions, or tool implementations. All intelligence, session management, and orchestration belong exclusively in the embeddable `pkg/sdk/` backend.
-- **Modular Feature Partitioning:** New capabilities should be as self-contained as possible. Instead of creating monolithic "god classes," favor registering new, scoped tools, or building independent sub-agents that communicate via standard interfaces. 
+- **UI vs. SDK:** The terminal UI (`cmd/agents/`) must remain a "dumb" client.
+  It handles rendering, input capture, and local configuration logic, but it
+  MUST NOT contain LLM prompting logic, system instructions, or tool
+  implementations. All intelligence, session management, and orchestration
+  belong exclusively in the embeddable `pkg/sdk/` backend.
+- **Modular Feature Partitioning:** New capabilities should be as
+  self-contained as possible. Instead of creating monolithic "god classes,"
+  favor registering new, scoped tools, or building independent sub-agents that
+  communicate via standard interfaces.
 
 ## 7. UX Familiarity and Innovation
 
-We believe in minimizing friction for developers transitioning between different tools in the ecosystem.
+We believe in minimizing friction for developers transitioning between
+different tools in the ecosystem.
 
-- **Follow Market Leaders:** When implementing standard features (like slash commands, file referencing, or context management), we default to the UX patterns established by market leaders (e.g., Cursor, Claude Code, Gemini CLI, Codex). If a user knows how to use Claude Code, they should instinctively know how to use the `agents` CLI.
-- **Innovate with Conviction:** We only break from established UX norms when no standard exists, or when we have deep conviction that our novel approach represents a significant leap forward and is poised to become the new industry standard. We do not invent new paradigms just to be different.
+- **Follow Market Leaders:** When implementing standard features (like slash
+  commands, file referencing, or context management), we default to the UX
+  patterns established by market leaders (e.g., Cursor, Claude Code, Gemini
+  CLI, Codex). If a user knows how to use Claude Code, they should
+  instinctively know how to use the `agents` CLI.
+- **Innovate with Conviction:** We only break from established UX norms when
+  no standard exists, or when we have deep conviction that our novel approach
+  represents a significant leap forward and is poised to become the new
+  industry standard. We do not invent new paradigms just to be different.
+
+## The "Engineering Manager" Paradigm
+
+The ultimate goal of `agents` is to abstract away the mechanics of agent
+orchestration. A user should be able to type `$ agents` and give an
+arbitrarily complex directive (e.g., *"Migrate our billing service from Python
+to Go"*).
+
+The system must be intelligent enough to autonomously decompose the task,
+dynamically provision the exact number of specialized agents required (one or
+one hundred), and coordinate their parallel efforts to completion. In this
+paradigm, the user ceases to be a pair-programmer and instead assumes the role
+of an Engineering Manager overseeing a highly skilled, infinitely scalable
+virtual workforce. The CLI's UI must reflect this shift by providing
+high-level observability and steering mechanisms (Mission Control), rather
+than just a linear chat log.

@@ -14,8 +14,12 @@ The primary interaction model is a persistent session.
 
 - **Readline Support:** The prompt must support standard readline behaviors
   (history navigation via up/down arrows, line editing, reverse-i-search).
+- **Non-Blocking Input Queue:** The prompt must never be locked. Users can
+  queue up additional commands or thoughts while agents are actively working
+  in the background. Queued messages are visualized with an hourglass icon
+  (`⧖`).
 - **Graceful Interruption:** If an agent is generating a long response or
-  stuck in a loop, pressing `Ctrl+C` must instantly halt the current
+  stuck in a loop, pressing `Ctrl+C` or `Esc` must instantly halt the current
   generation **without** crashing or exiting the session. The user is returned
   immediately to the input prompt, and the agent retains the context of the
   interruption.

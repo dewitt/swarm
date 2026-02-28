@@ -1,5 +1,9 @@
 # Design Doc: Async HITL, Input Queueing, and Interruptions
 
+**Status:** Implemented (Core Input Queueing and Interruptions). Soft
+Interruptions (Course Correction) and explicit HITL blocking UI are still
+pending future iteration.
+
 ## Context
 
 As the `agents` CLI evolves into a true "Mission Control" for orchestrating

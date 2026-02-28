@@ -33,6 +33,11 @@ into native ecosystems.
   conversation history with `/rewind`, and easily pick up where you left off
   using the `--resume` flag.
 
+- **Async Execution & Input Queueing**: The CLI operates asynchronously. You
+  are never locked out while agents are working. You can queue up multiple
+  instructions or seamlessly interrupt (`Ctrl+C` or `Esc`) a runaway agent
+  mid-thought without crashing the session.
+
 - **Observe Mode**: Toggle deep ADK telemetry via `^O` to view thoughts, tool
   args, and tool results in a dedicated UI pane, giving you full visibility
   into the agent's internal reasoning.

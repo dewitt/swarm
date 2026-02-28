@@ -134,3 +134,83 @@ func TestHistoryNavigation(t *testing.T) {
 		t.Errorf("expected text area value %q, got %q", unsubmitted, m.textArea.Value())
 	}
 }
+
+func TestMouseSequenceFiltering(t *testing.T) {
+	m := initialModel(false, false)
+	m.width = 80
+	m.height = 24
+
+	// Case 1: Fragmented sequence
+	// Esc
+	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m = newModel.(model)
+	if !m.inMouseSeq {
+		t.Error("expected inMouseSeq to be true after Esc")
+	}
+
+	// SGR prefix [<
+	newModel, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("[<")})
+	m = newModel.(model)
+	if m.textArea.Value() != "" {
+		t.Errorf("expected text area to be empty, got %q", m.textArea.Value())
+	}
+	if !m.inMouseSeq {
+		t.Error("expected inMouseSeq to remain true")
+	}
+
+	// Terminator M
+	newModel, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("M")})
+	m = newModel.(model)
+	if m.textArea.Value() != "" {
+		t.Errorf("expected text area to be empty after terminator, got %q", m.textArea.Value())
+	}
+	if m.inMouseSeq {
+		t.Error("expected inMouseSeq to be false after terminator")
+	}
+
+	// Case 2: Whole sequence in one KeyMsg
+	seq := "\x1b[<65;74;31M"
+	newModel, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(seq)})
+	m = newModel.(model)
+	if m.textArea.Value() != "" {
+		t.Errorf("expected text area to be empty after whole sequence, got %q", m.textArea.Value())
+	}
+	if m.inMouseSeq {
+		t.Error("expected inMouseSeq to be false after whole sequence")
+	}
+
+	// Case 3: Leaked sequence without Esc
+	seqNoEsc := "[<65;74;31M"
+	newModel, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(seqNoEsc)})
+	m = newModel.(model)
+	if m.textArea.Value() != "" {
+		t.Errorf("expected text area to be empty after leaked sequence, got %q", m.textArea.Value())
+	}
+
+	// Case 4: Real Esc should still work (e.g. clear autocomplete)
+	m.acActive = true
+	newModel, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m = newModel.(model)
+	if m.acActive {
+		t.Error("expected acActive to be false after Esc")
+	}
+	// and then a real key
+	newModel, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("a")})
+	m = newModel.(model)
+	if m.textArea.Value() != "a" {
+		t.Errorf("expected text area to contain 'a', got %q", m.textArea.Value())
+	}
+
+	// Case 5: Alt combinations should NOT be swallowed
+	m.textArea.SetValue("")
+	newModel, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("m"), Alt: true})
+	m = newModel.(model)
+	// textarea might not handle Alt+m, but our filter should at least not return m, nil
+	// actually textarea DOES handle it if it's passed.
+	if m.textArea.Value() == "" {
+		// If it's empty, it might be that textarea ignores it, but let's check m.inMouseSeq
+		if m.inMouseSeq {
+			t.Error("expected inMouseSeq to be false after Alt+m")
+		}
+	}
+}

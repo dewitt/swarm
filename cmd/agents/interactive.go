@@ -611,16 +611,36 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Global intercept for mouse tracking leaking as key events
 	if keyMsg, ok := msg.(tea.KeyMsg); ok {
 		s := keyMsg.String()
-		if m.inMouseSeq {
-			if s == "M" || s == "m" {
-				m.inMouseSeq = false
+
+		// SGR mouse protocol: ESC[<Cb;Cx;CyM or ESC[<Cb;Cx;Cym
+		// These sometimes leak when scrolling quickly. We handle them by swallowing
+		// any key events that look like SGR sequences or their fragments.
+		if (m.inMouseSeq || strings.HasPrefix(s, "\x1b[<") || strings.HasPrefix(s, "[<")) && !keyMsg.Alt {
+			isMouse := true
+			hasTerminator := false
+			// Check if the entire string is "mouse-like" (part of an SGR sequence)
+			for _, r := range s {
+				if r == 'M' || r == 'm' {
+					hasTerminator = true
+					continue
+				}
+				if !((r >= '0' && r <= '9') || r == ';' || r == '<' || r == '[' || r == ' ' || r == '\x1b') {
+					isMouse = false
+					break
+				}
+			}
+
+			// If it's mouse-like, we swallow it. We explicitly avoid swallowing lone
+			// Escape keys so they can still be used for UI navigation.
+			if isMouse && s != "\x1b" && s != "esc" {
+				if hasTerminator {
+					m.inMouseSeq = false
+				} else {
+					m.inMouseSeq = true
+				}
 				return m, nil
 			}
-			// SGR mouse protocol characters: [<0-9;] or space
-			if s == "[" || s == "<" || s == ";" || s == " " || (len(s) == 1 && s[0] >= '0' && s[0] <= '9') {
-				return m, nil
-			}
-			// Unexpected character, stop filtering
+			// If we hit a non-mouse character, stop filtering
 			m.inMouseSeq = false
 		}
 

@@ -50,6 +50,25 @@ func GetGitInfo(dir string) (GitInfo, error) {
 	return GitInfo{Branch: strings.TrimSpace(branch), Modified: modified}, nil
 }
 
+func GetRecentCommits(dir string, n int) ([]string, error) {
+	if dir == "" {
+		dir = "."
+	}
+	out, err := runGitCommand(dir, "log", "-n", fmt.Sprint(n), "--pretty=format:%s")
+	if err != nil {
+		return nil, err
+	}
+	lines := strings.Split(out, "\n")
+	var commits []string
+	for _, l := range lines {
+		l = strings.TrimSpace(l)
+		if l != "" {
+			commits = append(commits, l)
+		}
+	}
+	return commits, nil
+}
+
 type GitCommitArgs struct {
 	Message string `json:"message"`
 	Dir     string `json:"dir"` // Optional

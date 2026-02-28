@@ -53,13 +53,15 @@ var (
 	welcomeBoxStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(borderColor).
-			Padding(1, 2).
+			Padding(1, 4).
+			Height(14).
 			MarginRight(2)
 
 	infoBoxStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(borderColor).
-			Padding(1, 2)
+			Padding(1, 4).
+			Height(14)
 
 	promptStyle = lipgloss.NewStyle().
 			Foreground(googleBlue).
@@ -209,17 +211,6 @@ func renderLogo() string {
 	}
 	return sb.String()
 }
-
-const initialTips = `Recent activity
-1m ago    Initialized project
-8m ago    Updated memory
-2d ago    Added new skills
-
-What's new
-/agents to create subagents
-/docs for API references
-ctrl+c to background or exit
-`
 
 type streamMsg struct {
 	text string
@@ -534,30 +525,48 @@ func doGitTick() tea.Cmd {
 
 func getRecentActivity() string {
 	m := sdk.NewManager()
-	sessions, err := m.ListSessions(context.Background())
-	if err != nil || len(sessions) == 0 {
-		return "Recent activity\n(none yet)\n\nWhat's new\n^O to toggle observe mode\n! to run shell commands\n/plan to brainstorm safely\n/agents to create subagents"
-	}
+	sessions, _ := m.ListSessions(context.Background())
+	commits, _ := sdk.GetRecentCommits(".", 3)
 
 	var sb strings.Builder
-	sb.WriteString("Recent activity\n")
+	sb.WriteString(lipgloss.NewStyle().Bold(true).Foreground(googleBlue).Render("Recent Activity") + "\n")
 
-	count := 0
-	for i := len(sessions) - 1; i >= 0 && count < 3; i-- {
-		s := sessions[i]
-		
-		// Update format to show the summary instead of ID.
-		// "2006-01-02 15:04:05" -> just show time if today, else date.
-		// But let's just show the summary with a max width so it fits.
-		sb.WriteString(fmt.Sprintf("> %s\n", s.Summary))
-		count++
+	hasActivity := false
+	if len(commits) > 0 {
+		for _, c := range commits {
+			if len(c) > 30 {
+				c = c[:27] + "..."
+			}
+			sb.WriteString(lipgloss.NewStyle().Foreground(googleGreen).Render(" git ") + c + "\n")
+		}
+		hasActivity = true
 	}
 
-	sb.WriteString("\nWhat's new\n")
-	sb.WriteString("^O to toggle observe mode\n")
-	sb.WriteString("! to run shell commands\n")
-	sb.WriteString("/plan to brainstorm safely\n")
-	sb.WriteString("/agents to create subagents\n")
+	sessionCount := 0
+	for i := len(sessions) - 1; i >= 0 && sessionCount < 3; i-- {
+		s := sessions[i]
+		summary := s.Summary
+		if len(summary) > 30 {
+			summary = summary[:27] + "..."
+		}
+		sb.WriteString(lipgloss.NewStyle().Foreground(googleYellow).Render(" chat ") + summary + "\n")
+		sessionCount++
+		hasActivity = true
+	}
+
+	if !hasActivity {
+		sb.WriteString("(none yet)\n")
+	}
+
+	// Add spacing to reach a consistent height
+	currentLines := strings.Count(sb.String(), "\n")
+	for i := currentLines; i < 7; i++ {
+		sb.WriteString("\n")
+	}
+
+	sb.WriteString("\n" + lipgloss.NewStyle().Bold(true).Foreground(googleBlue).Render("Quick Tips") + "\n")
+	sb.WriteString(lipgloss.NewStyle().Foreground(tipColor).Render("^O") + " toggle observe  " + lipgloss.NewStyle().Foreground(tipColor).Render("!") + " run shell\n")
+	sb.WriteString(lipgloss.NewStyle().Foreground(tipColor).Render("/plan") + " brainstorm   " + lipgloss.NewStyle().Foreground(tipColor).Render("/agents") + " subagents")
 
 	return sb.String()
 }
@@ -590,7 +599,8 @@ func initialModel(planMode bool, resume bool) model {
 	l.SetFilteringEnabled(true)
 
 	// Create a beautiful splash screen
-	leftBox := welcomeBoxStyle.Render(fmt.Sprintf("%s\n\nWelcome back, %s!", renderLogo(), getUserName()))
+	greeting := fmt.Sprintf("\n\n%s %s!", lipgloss.NewStyle().Foreground(tipColor).Render("Welcome back,"), lipgloss.NewStyle().Bold(true).Render(getUserName()))
+	leftBox := welcomeBoxStyle.Render(renderLogo() + greeting)
 	rightBox := infoBoxStyle.Render(getRecentActivity())
 	welcomeScreen := lipgloss.JoinHorizontal(lipgloss.Top, leftBox, rightBox)
 

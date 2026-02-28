@@ -54,15 +54,12 @@ var (
 	welcomeBoxStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(borderColor).
-			Padding(1, 4).
-			Height(14).
-			MarginRight(2)
+			Padding(1, 4)
 
 	infoBoxStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(borderColor).
-			Padding(1, 4).
-			Height(14)
+			Padding(1, 4)
 
 	promptStyle = lipgloss.NewStyle().
 			Foreground(googleBlue).
@@ -308,6 +305,8 @@ type model struct {
 	agents        []*swarmAgent
 	ticks         int
 	showAgentPanel bool
+
+	welcomeScreen []string
 
 	// Autocomplete state
 	workspaceFiles []string
@@ -612,12 +611,6 @@ func initialModel(planMode bool, resume bool) model {
 	l.SetShowStatusBar(false)
 	l.SetFilteringEnabled(true)
 
-	// Create a beautiful splash screen
-	greeting := fmt.Sprintf("\n\n%s %s!", lipgloss.NewStyle().Foreground(tipColor).Render("Welcome back,"), lipgloss.NewStyle().Bold(true).Render(getUserName()))
-	leftBox := welcomeBoxStyle.Render(renderLogo() + greeting)
-	rightBox := infoBoxStyle.Render(getRecentActivity())
-	welcomeScreen := lipgloss.JoinHorizontal(lipgloss.Top, leftBox, rightBox)
-
 	cwd, _ := os.Getwd()
 	home, _ := os.UserHomeDir()
 	if strings.HasPrefix(cwd, home) {
@@ -639,7 +632,6 @@ func initialModel(planMode bool, resume bool) model {
 	)
 
 	loadedHist := loadHistory()
-
 	branch, modified := getGitInfo()
 
 	// Initialize resident Agent Panel agents
@@ -652,26 +644,32 @@ func initialModel(planMode bool, resume bool) model {
 		{name: "Router", icon: "🧠", status: "Idle", state: "idle", spin: agentSpinner, resident: true, lastActive: time.Now()},
 	}
 
+	// Prepare splash screen components for dynamic rendering in View()
+	greeting := fmt.Sprintf("\n\n%s %s!", lipgloss.NewStyle().Foreground(tipColor).Render("Welcome back,"), lipgloss.NewStyle().Bold(true).Render(getUserName()))
+	logoAndGreeting := renderLogo() + greeting
+	recentActivity := getRecentActivity()
+
 	return model{
-		textArea:      ta,
-		viewport:      vp,
-		spinner:       s,
-		listModel:     l,
-		messages:      []string{welcomeScreen},
-		history:       loadedHist,
-		historyIdx:    len(loadedHist),
-		manager:       sdk.NewManager(sdk.ManagerConfig{ResumeLastSession: resume}),
-		loading:       false,
-		quitting:      false,
-		planMode:      planMode,
-		state:         stateChat,
-		cwd:           cwd,
-		gitBranch:     branch,
-		gitModified:   modified,
-		activeModel:   activeModel,
-		renderer:      renderer,
-		agents:        agents,
+		textArea:       ta,
+		viewport:       vp,
+		spinner:        s,
+		listModel:      l,
+		messages:       []string{"SPLASH_SCREEN"},
+		history:        loadedHist,
+		historyIdx:     len(loadedHist),
+		manager:        sdk.NewManager(sdk.ManagerConfig{ResumeLastSession: resume}),
+		loading:        false,
+		quitting:       false,
+		planMode:       planMode,
+		state:          stateChat,
+		cwd:            cwd,
+		gitBranch:      branch,
+		gitModified:    modified,
+		activeModel:    activeModel,
+		renderer:       renderer,
+		agents:         agents,
 		showAgentPanel: true,
+		welcomeScreen:  []string{logoAndGreeting, recentActivity},
 	}
 }
 
@@ -1624,54 +1622,8 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 }
 
 func (m *model) updateViewport() {
-	var s strings.Builder
-	for _, msg := range m.messages {
-		s.WriteString(msg)
-		s.WriteString("\n\n")
-	}
-	if m.loading {
-		if m.observeMode && len(m.observeLog) > 0 {
-			// Only show the last 10 log entries to prevent the box from taking over the screen
-			displayLogs := m.observeLog
-			if len(displayLogs) > 10 {
-				displayLogs = displayLogs[len(displayLogs)-10:]
-			}
-
-			observeBox := lipgloss.NewStyle().
-				Border(lipgloss.NormalBorder()).
-				BorderForeground(googleYellow).
-				Padding(0, 1).
-				Width(m.viewport.Width - 2).
-				Render(lipgloss.JoinVertical(lipgloss.Left,
-					lipgloss.NewStyle().Foreground(googleYellow).Bold(true).Render("👀 Observing Agent Execution:"),
-					strings.Join(displayLogs, "\n"),
-				))
-			s.WriteString(observeBox)
-			s.WriteString("\n\n")
-		}
-
-		status := "Thinking…"
-		if m.statusMsg != "" {
-			status = m.statusMsg
-		}
-		agentLabel := m.activeAgent
-		if agentLabel == "" {
-			agentLabel = "Router"
-		}
-		s.WriteString(agentMsgStyle.Render(fmt.Sprintf("✦ [%s] ", agentLabel)) + m.spinner.View() + " " + status)
-		s.WriteString("\n\n")
-	}
-	isAtBottom := m.viewport.AtBottom()
-	currentY := m.viewport.YOffset
-
-	m.viewport.SetContent(s.String())
-
-	if isAtBottom {
-		m.viewport.GotoBottom()
-	} else {
-		// Retain scroll position
-		m.viewport.YOffset = currentY
-	}
+	// Logic formerly here is now handled dynamically in View() to support
+	// responsive splash screens and viewport content.
 }
 
 func (m *model) updateInputStyle() {
@@ -1948,6 +1900,58 @@ func (m model) View() string {
 		return "Loading…"
 	}
 
+	// Prepare the dynamic message list
+	var renderedMessages []string
+	for _, msg := range m.messages {
+		if msg == "SPLASH_SCREEN" {
+			// Calculate 2/3 and 1/3 split for responsive splash screen
+			leftWidth := (m.width * 2) / 3
+			rightWidth := m.width - leftWidth - 2 // account for JoinHorizontal gap
+
+			leftBox := welcomeBoxStyle.Copy().Width(leftWidth - 10).Height(12).Render(m.welcomeScreen[0])
+			rightBox := infoBoxStyle.Copy().Width(rightWidth - 10).Height(12).Render(m.welcomeScreen[1])
+			
+			renderedMessages = append(renderedMessages, lipgloss.JoinHorizontal(lipgloss.Top, leftBox, rightBox))
+		} else {
+			renderedMessages = append(renderedMessages, msg)
+		}
+	}
+
+	// Add dynamic status/logs if loading
+	if m.loading {
+		if m.observeMode && len(m.observeLog) > 0 {
+			displayLogs := m.observeLog
+			if len(displayLogs) > 10 {
+				displayLogs = displayLogs[len(displayLogs)-10:]
+			}
+
+			observeBox := lipgloss.NewStyle().
+				Border(lipgloss.NormalBorder()).
+				BorderForeground(googleYellow).
+				Padding(0, 1).
+				Width(m.width - 6).
+				Render(lipgloss.JoinVertical(lipgloss.Left,
+					lipgloss.NewStyle().Foreground(googleYellow).Bold(true).Render("👀 Observing Agent Execution:"),
+					strings.Join(displayLogs, "\n"),
+				))
+			renderedMessages = append(renderedMessages, observeBox)
+		}
+
+		status := "Thinking…"
+		if m.statusMsg != "" {
+			status = m.statusMsg
+		}
+		agentLabel := m.activeAgent
+		if agentLabel == "" {
+			agentLabel = "Router"
+		}
+		renderedMessages = append(renderedMessages, agentMsgStyle.Render(fmt.Sprintf("✦ [%s] ", agentLabel))+m.spinner.View()+" "+status)
+	}
+
+	// Update viewport content dynamically
+	m.viewport.SetContent(strings.Join(renderedMessages, "\n\n"))
+	m.viewport.GotoBottom()
+
 	var mainBody string
 	agentPanelView := ""
 	if m.showAgentPanel {
@@ -1967,16 +1971,12 @@ func (m model) View() string {
 		var acView string
 		if m.acActive && len(m.acMatches) > 0 {
 			var lines []string
-
-			// Account for borders (2), padding (2), and spacing (2) to calculate max width
 			maxMatchWidth := m.width - 6
-
 			for i, match := range m.acMatches {
 				displayMatch := strings.ReplaceAll(match, "\n", " ")
 				if len(displayMatch) > maxMatchWidth && maxMatchWidth > 3 {
 					displayMatch = displayMatch[:maxMatchWidth-3] + "…"
 				}
-
 				if i == m.acIndex {
 					lines = append(lines, lipgloss.NewStyle().Background(borderColor).Render(" "+displayMatch+" "))
 				} else {
@@ -1994,15 +1994,12 @@ func (m model) View() string {
 		inputView := inputBoxStyle.Render(m.textArea.View())
 
 		if acView != "" {
-			// Adjust viewport height to account for autocomplete overlay
 			acHeight := lipgloss.Height(acView)
 			m.viewport.Height = m.height - m.textArea.Height() - 3 - acHeight - agentPanelHeight
-			vpView := m.viewport.View()
-			mainBody = lipgloss.JoinVertical(lipgloss.Left, agentPanelView, vpView, lipgloss.NewStyle().PaddingLeft(1).Render(acView), inputView)
+			mainBody = lipgloss.JoinVertical(lipgloss.Left, agentPanelView, m.viewport.View(), lipgloss.NewStyle().PaddingLeft(1).Render(acView), inputView)
 		} else {
 			m.viewport.Height = m.height - m.textArea.Height() - 3 - agentPanelHeight
-			vpView := m.viewport.View()
-			mainBody = lipgloss.JoinVertical(lipgloss.Left, agentPanelView, vpView, inputView)
+			mainBody = lipgloss.JoinVertical(lipgloss.Left, agentPanelView, m.viewport.View(), inputView)
 		}
 	}
 
@@ -2012,7 +2009,6 @@ func (m model) View() string {
 	w3 := m.width - w1 - w2
 
 	baseStyle := statusBarStyle.Copy()
-
 	p1Style := baseStyle.Copy().Width(w1).Align(lipgloss.Left)
 	p2Style := baseStyle.Copy().Width(w2).Align(lipgloss.Center)
 	p3Style := baseStyle.Copy().Width(w3).Align(lipgloss.Right)
@@ -2045,14 +2041,11 @@ func (m model) View() string {
 	if ctxCount > 0 {
 		ctxStr = fmt.Sprintf(" [%d pinned] ", ctxCount)
 	}
-
 	p3 := p3Style.Render(ctxStr + m.activeModel + " ")
 
 	statusView := lipgloss.JoinHorizontal(lipgloss.Top, p1, p2, p3)
-	// Apply Outer Border to main body
 	boxedBody := appStyle.Width(m.width).Height(m.height).Render(mainBody)
 
-	// Final layout: Boxed Body + Status Bar (outside border)
 	return lipgloss.JoinVertical(lipgloss.Left, boxedBody, statusView)
 }
 

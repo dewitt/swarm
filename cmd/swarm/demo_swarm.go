@@ -11,7 +11,7 @@ import (
 )
 
 var (
-	colorIdle    = lipgloss.Color("#666666") // Gray
+	colorIdle    = lipgloss.Color("#888888") // Lighter Gray
 	colorActive  = lipgloss.Color("#4169E1") // Royal Blue
 	colorSuccess = lipgloss.Color("#34A853") // Green
 	colorWaiting = lipgloss.Color("#FBBC05") // Yellow

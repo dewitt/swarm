@@ -2,7 +2,7 @@
 
 The `agents` project is designed as two distinct layers:
 
-1. **The CLI (`cmd/agents/`)**: A Terminal User Interface and application
+1. **The CLI (`cmd/swarm/`)**: A Terminal User Interface and application
    entry point.
 1. **The Core SDK (`pkg/sdk/`)**: The embeddable intelligence and
    orchestration engine.

@@ -419,7 +419,7 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 
 	// Use persistent SQLite database for sessions
 	home, _ := os.UserHomeDir()
-	dbDir := filepath.Join(home, ".config", "agents")
+	dbDir := filepath.Join(home, ".config", "swarm")
 	os.MkdirAll(dbDir, 0755)
 	dbPath := filepath.Join(dbDir, "sessions.db")
 
@@ -438,7 +438,7 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 	sessionID := ""
 	if len(cfg) > 0 && cfg[0].ResumeLastSession {
 		resp, err := sessionSvc.List(ctx, &session.ListRequest{
-			AppName: "agents-cli",
+			AppName: "swarm-cli",
 			UserID:  "local_user",
 		})
 		if err == nil && len(resp.Sessions) > 0 {
@@ -463,7 +463,7 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 
 	// Create the session record if it doesn't already exist
 	_, _ = sessionSvc.Create(ctx, &session.CreateRequest{
-		AppName:   "agents-cli",
+		AppName:   "swarm-cli",
 		UserID:    "local_user",
 		SessionID: sessionID,
 	})
@@ -540,7 +540,7 @@ func (m *defaultManager) Reload() error {
 	for _, sa := range subAgents {
 		subAgentNames = append(subAgentNames, sa.Name())
 	}
-	routerInstruction := fmt.Sprintf("You are the primary Router Agent for the Agents CLI. Help the user build, test, and deploy AI agents. Keep your answers brief, professional, and use markdown formatting. Use the list_local_files, read_local_file, and grep_search tools if you need to investigate the workspace. If file contents are provided in the prompt (e.g., via @filename references), use that information to satisfy the user's request. You MUST transfer control to specialized sub-agents (available: %s) for any substantial technical work, file modifications, complex investigations, web research, or broad refactoring.\n\nCRITICAL ROUTING RULES: If you delegate to a sub-agent (like a third-party CLI wrapper) and it returns an error stating the tool is unavailable, not installed, or lacks permissions, DO NOT attempt to route to that specific agent again for the current request. Instead, use your own internal tools or route to a different, capable sub-agent to fulfill the request as a fallback. Maintain this short-term memory of unavailable agents to avoid infinite loops.", strings.Join(subAgentNames, ", "))
+	routerInstruction := fmt.Sprintf("You are the primary Router Agent for the Swarm CLI. Help the user build, test, and deploy AI agents. Keep your answers brief, professional, and use markdown formatting. Use the list_local_files, read_local_file, and grep_search tools if you need to investigate the workspace. If file contents are provided in the prompt (e.g., via @filename references), use that information to satisfy the user's request. You MUST transfer control to specialized sub-agents (available: %s) for any substantial technical work, file modifications, complex investigations, web research, or broad refactoring.\n\nCRITICAL ROUTING RULES: If you delegate to a sub-agent (like a third-party CLI wrapper) and it returns an error stating the tool is unavailable, not installed, or lacks permissions, DO NOT attempt to route to that specific agent again for the current request. Instead, use your own internal tools or route to a different, capable sub-agent to fulfill the request as a fallback. Maintain this short-term memory of unavailable agents to avoid infinite loops.", strings.Join(subAgentNames, ", "))
 
 	if memory, err := LoadMemory(); err == nil && memory != "" {
 		routerInstruction += "\n\nUser Global Preferences & Memory:\n" + memory
@@ -564,7 +564,7 @@ func (m *defaultManager) Reload() error {
 	}
 
 	r, err := runner.New(runner.Config{
-		AppName:        "agents-cli",
+		AppName:        "swarm-cli",
 		Agent:          routerAgent,
 		SessionService: m.sessionSvc,
 	})
@@ -640,7 +640,7 @@ func (m *defaultManager) ListModels(ctx context.Context) ([]ModelInfo, error) {
 }
 func (m *defaultManager) ListSessions(ctx context.Context) ([]SessionInfo, error) {
 	resp, err := m.sessionSvc.List(ctx, &session.ListRequest{
-		AppName: "agents-cli",
+		AppName: "swarm-cli",
 		UserID:  m.userID,
 	})
 	if err != nil {
@@ -648,7 +648,7 @@ func (m *defaultManager) ListSessions(ctx context.Context) ([]SessionInfo, error
 	}
 
 	home, _ := os.UserHomeDir()
-	dbPath := filepath.Join(home, ".config", "agents", "sessions.db")
+	dbPath := filepath.Join(home, ".config", "swarm", "sessions.db")
 	db, dbErr := gorm.Open(sqlite.Open(dbPath), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Silent),
 	})
@@ -832,7 +832,7 @@ func (m *defaultManager) Rewind(n int) error {
 	}
 
 	home, _ := os.UserHomeDir()
-	dbPath := filepath.Join(home, ".config", "agents", "sessions.db")
+	dbPath := filepath.Join(home, ".config", "swarm", "sessions.db")
 	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Silent),
 	})

@@ -1,6 +1,6 @@
-# Contributing to Agents CLI
+# Contributing to Swarm CLI
 
-Thank you for your interest in contributing to Agents CLI! We welcome
+Thank you for your interest in contributing to Swarm CLI! We welcome
 contributions to help improve the project.
 
 ## How to Contribute

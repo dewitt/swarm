@@ -26,7 +26,7 @@ its local context and realizes it doesn't natively know the Google Agent
 Engine deployment specifications. It seamlessly downloads the necessary Skill
 from the community registry.
 
-> **Agents CLI:** Loading "Google Agent Engine" deployment skill... I see you
+> **Swarm CLI:** Loading "Google Agent Engine" deployment skill... I see you
 > have a LangGraph agent in Python. I will scaffold a deployment workflow
 > using GitHub Actions that builds your agent into a container and deploys it
 > to Google Agent Engine.
@@ -35,7 +35,7 @@ from the community registry.
 
 The GitOps Agent takes over, generating the required CI/CD files.
 
-> **Agents CLI:** I have generated a
+> **Swarm CLI:** I have generated a
 > `.github/workflows/deploy-agent-engine.yml` file. This workflow requires
 > your Google Cloud project ID and service account credentials to be set as
 > GitHub Secrets (`GCP_PROJECT_ID` and `GCP_SA_KEY`).
@@ -47,7 +47,7 @@ The GitOps Agent takes over, generating the required CI/CD files.
 
 Priya reviews the file and is satisfied.
 
-> **Priya:** Looks good, go ahead and commit it. **Agents CLI:** Committing
+> **Priya:** Looks good, go ahead and commit it. **Swarm CLI:** Committing
 > `.github/workflows/deploy-agent-engine.yml`... Pushing changes to `main`...
 
 ### 5. Monitoring
@@ -55,7 +55,7 @@ Priya reviews the file and is satisfied.
 Because `agents` is integrated with the local repository, it can track the
 GitHub Action it just triggered.
 
-> **Agents CLI:** The deployment workflow has started on GitHub. *\[Spinner:
+> **Swarm CLI:** The deployment workflow has started on GitHub. *\[Spinner:
 > Waiting for deployment...\]* ... Build successful. ... Deployment
 > successful.
 >

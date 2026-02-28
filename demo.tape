@@ -1,6 +1,6 @@
 Output docs/assets/demo.gif
 
-Require ./bin/agents
+Require ./bin/swarm
 
 Set Theme "Catppuccin Latte"
 Set WindowBar Colorful
@@ -11,7 +11,7 @@ Set Height 800
 Set TypingSpeed 75ms
 
 Hide
-Type "export AGENTS_DRY_RUN=true && ./bin/agents"
+Type "export AGENTS_DRY_RUN=true && ./bin/swarm"
 Enter
 Sleep 1s
 Show

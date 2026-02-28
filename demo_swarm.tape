@@ -1,6 +1,6 @@
 Output docs/assets/demo_swarm.gif
 
-Require ./bin/agents
+Require ./bin/swarm
 
 Set Theme "Catppuccin Latte"
 Set WindowBar Colorful
@@ -11,7 +11,7 @@ Set Height 900
 Set TypingSpeed 75ms
 
 Hide
-Type "./bin/agents --demo-swarm"
+Type "./bin/swarm --demo-swarm"
 Enter
 Sleep 1s
 Show

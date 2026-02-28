@@ -26,7 +26,7 @@ behaves in the wild.
 ### Utilizing ADK Session Storage
 
 We currently use the Google ADK's native `session/database` package backed by
-SQLite (`~/.config/agents/sessions.db`). This database naturally stores every
+SQLite (`~/.config/swarm/sessions.db`). This database naturally stores every
 `session.Event`.
 
 - **Tool Traces:** Because the ADK captures the execution of function tools
@@ -47,7 +47,7 @@ Because the TUI owns the terminal screen, standard `fmt.Println` or
 All internal application telemetry (e.g., "Initializing SDK", "Loading skill
 X", "GORM queries") must be routed to a rotating log file, not the terminal.
 
-- **Log Location:** `~/.config/agents/logs/agents.log`
+- **Log Location:** `~/.config/swarm/logs/agents.log`
 - **Structured Logging:** Use Go's `log/slog` package to write structured JSON
   logs to this file. This makes it easier to parse and filter errors later.
 

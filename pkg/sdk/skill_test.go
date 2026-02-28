@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/dewitt/agents/pkg/sdk"
+	"github.com/dewitt/swarm/pkg/sdk"
 	"github.com/stretchr/testify/assert"
 )
 

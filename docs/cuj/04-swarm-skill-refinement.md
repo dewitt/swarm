@@ -31,14 +31,14 @@ The internal Router Agent understands the complexity and the need for safety.
 It first delegates to a GitOps Expert to prepare the workspace, then
 instantiates the Swarm.
 
-> **Agents CLI:** Acknowledged. This is a complex operation requiring external
+> **Swarm CLI:** Acknowledged. This is a complex operation requiring external
 > research and file modifications.
 >
 > **\[GitOps Expert\]:** Creating a new branch
 > `feature/skill-refinements-$(date +%s)` to ensure we do not disrupt your
 > current working tree.
 >
-> **Agents CLI:** Instantiating a Refinement Swarm (Web Researcher, Skill
+> **Swarm CLI:** Instantiating a Refinement Swarm (Web Researcher, Skill
 > Architect, Git Practitioner)...
 
 ### 3. Deep Research & Analysis
@@ -64,7 +64,7 @@ instructions, the Swarm pauses to get Jordan's opinion on a structural change.
 > than keeping them in one massive `SKILL.md` file to reduce context bloat for
 > the LLM.
 >
-> **Agents CLI:** Do you approve this structural refactor for the ADK skill?
+> **Swarm CLI:** Do you approve this structural refactor for the ADK skill?
 > (Y/n)
 
 Jordan presses `Y`.
@@ -87,7 +87,7 @@ files and test the formatting.
 
 The CLI presents the final state to Jordan.
 
-> **Agents CLI:** The swarm has completed the refinement process.
+> **Swarm CLI:** The swarm has completed the refinement process.
 >
 > - We are currently on branch: `feature/skill-refinements-1718293847`
 > - All skills have been updated with the latest web-researched best

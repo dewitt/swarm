@@ -129,7 +129,7 @@ The SDK should expose a long-lived `SessionContext`.
 
 ### Summary of Changes
 
-- Refactor `cmd/agents/interactive.go` to handle queued inputs and visual
+- Refactor `cmd/swarm/interactive.go` to handle queued inputs and visual
   state shifts.
 - Refactor `pkg/sdk/manager.go` to support persistent background runners and
   bidirectional channels.

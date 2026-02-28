@@ -1,4 +1,4 @@
-module github.com/dewitt/agents
+module github.com/dewitt/swarm
 
 go 1.24.4
 

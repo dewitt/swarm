@@ -7,7 +7,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/dewitt/agents/pkg/sdk"
+	"github.com/dewitt/swarm/pkg/sdk"
 	"github.com/spf13/cobra"
 )
 
@@ -37,10 +37,10 @@ var configCmd = &cobra.Command{
 }
 
 var rootCmd = &cobra.Command{
-	Use:   "agents",
-	Short: "A sophisticated CLI for managing, building, and deploying AI agents.",
-	Long: `agents is an advanced, framework-agnostic command-line interface.
-It helps developers quickly scaffold, test, and deploy AI agents into native ecosystems.
+	Use:   "swarm",
+	Short: "A sophisticated CLI for orchestrating AI swarms.",
+	Long: `swarm is an advanced, framework-agnostic command-line interface.
+It helps developers quickly scaffold, test, and deploy AI swarms into native ecosystems.
 When run without arguments, it launches a persistent, interactive terminal session.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		if demoSwarmFlag {

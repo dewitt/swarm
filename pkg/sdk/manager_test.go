@@ -5,7 +5,7 @@ import (
 	"iter"
 	"testing"
 
-	"github.com/dewitt/agents/pkg/sdk"
+	"github.com/dewitt/swarm/pkg/sdk"
 	"google.golang.org/adk/model"
 	"google.golang.org/genai"
 )

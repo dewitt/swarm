@@ -81,7 +81,7 @@ entire 100k line Java codebase to Go."*
 ## 4. The Separation of Concerns: SDK vs. UI
 
 A foundational principle of the `agents` project is the strict separation
-between the core SDK (`pkg/sdk/`) and the Presentation Layer (`cmd/agents/`).
+between the core SDK (`pkg/sdk/`) and the Presentation Layer (`cmd/swarm/`).
 This separation must be rigorously maintained as we build out the Swarm
 Dashboard.
 
@@ -106,7 +106,7 @@ trick.
 ## Architectural Requirements (SDK & UI)
 
 To achieve this, the underlying Go SDK (`pkg/sdk/`) and the Bubble Tea UI
-(`cmd/agents/`) require significant upgrades.
+(`cmd/swarm/`) require significant upgrades.
 
 ### SDK Upgrades: Event-Driven Architecture
 

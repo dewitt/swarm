@@ -1,9 +1,9 @@
-# Agents CLI
+# Swarm CLI
 
 A clean CLI and embeddable SDK for managing, building, and deploying AI agents
 into native ecosystems.
 
-![Agents CLI Demo](docs/assets/demo.gif)
+![Swarm CLI Demo](docs/assets/demo.gif)
 
 ## Features
 
@@ -16,7 +16,7 @@ into native ecosystems.
 - **Swarm Dashboard (Mission Control)**: The UI shifts from a basic chat REPL
   into an air-traffic control layout when swarms are deployed. It visualizes
   concurrent agents working in parallel via live status cards above the main
-  chat. Try it by running `agents --demo-swarm`.
+  chat. Try it by running `swarm --demo-swarm`.
 
   ![Swarm Dashboard Demo](docs/assets/demo_swarm.gif)
 
@@ -48,7 +48,7 @@ into native ecosystems.
 
 - **Global Memory & Configuration**: Teach the agent your preferences once
   using the `/remember` command, and it will persist across all your projects.
-  Check your global settings with `agents config` or `/config`.
+  Check your global settings with `swarm config` or `/config`.
 
 - **Web Fetch & Search**: Native capabilities to search the web and fetch
   up-to-date documentation during task execution using the `web_researcher`
@@ -56,7 +56,7 @@ into native ecosystems.
 
 - **UNIX Piping**: Integrate agents directly into your workflows via
   single-shot prompts and standard input (e.g.,
-  `cat error.log | agents -p "What went wrong?"`).
+  `cat error.log | swarm -p "What went wrong?"`).
 
 - **Dynamic Skills Architecture**: Completely decoupled capabilities adhering
   to the open `agentskills.io` standard (`SKILL.md`). Easily write, share, and
@@ -84,14 +84,14 @@ To build the `agents` binary from source:
 
 ```bash
 # Clone the repository
-git clone https://github.com/dewitt/agents.git
+git clone https://github.com/dewitt/swarm.git
 cd agents
 
 # Build the binary
-go build -o bin/agents ./cmd/agents
+go build -o bin/swarm ./cmd/swarm
 
 # Run the CLI
-./bin/agents
+./bin/swarm
 ```
 
 ## Running the CLI
@@ -100,7 +100,7 @@ Simply running the binary launches the full-screen interactive Terminal User
 Interface (TUI):
 
 ```bash
-./bin/agents
+./bin/swarm
 ```
 
 From here, you can start conversing with the internal Router Agent, scaffold

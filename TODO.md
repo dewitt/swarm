@@ -5,7 +5,7 @@ debt that should be addressed as the project evolves.
 
 ## Pending Migrations
 
-- [ ] **Migrate to Native ADK Skills**: Currently, the `agents` CLI implements
+- [ ] **Migrate to Native ADK Skills**: Currently, the `swarm` CLI implements
   its own custom Skill loader (`pkg/sdk/skill.go`) because the Go ADK does not
   yet natively support Skills. Once the official ADK
   `google.golang.org/adk/skill` (or equivalent) package is released, we must
@@ -14,9 +14,9 @@ debt that should be addressed as the project evolves.
 
 ## Feature Backlog
 
-- [x] **Global Configuration**: Implement the `agents config` command to save
+- [x] **Global Configuration**: Implement the `swarm config` command to save
   global user preferences (like API keys or preferred text editor) to a
-  generic `~/.config/agents/config.yaml` file.
+  generic `~/.config/swarm/config.yaml` file.
 
 - [x] **Advanced Session Management**: Implement the ability to persist,
   suspend, and resume interactive TUI sessions. This includes the ability to
@@ -24,7 +24,7 @@ debt that should be addressed as the project evolves.
 
 - [x] **Third-Party Tool Orchestration**: Develop Skills/Sub-agents that wrap
   external AI CLIs (e.g., `gemini-cli`, `claude-code`) via `bash_execute` so
-  the Agents CLI can act as a master orchestrator for other complex systems.
+  the Swarm CLI can act as a master orchestrator for other complex systems.
 
 - [ ] **Cross-Language SDK Bindings**: Migrate the `pkg/sdk` interfaces to a
   strict Protobuf definition (`/proto`) and implement compilation targets for

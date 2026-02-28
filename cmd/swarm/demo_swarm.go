@@ -366,7 +366,7 @@ func (m demoSwarmModel) View() string {
 		Render(m.vp.View())
 
 	// 3. Status Bar
-	status := statusBarStyle.Width(m.width).Render(" agents (main*)        [Demo Mode] ")
+	status := statusBarStyle.Width(m.width).Render(" swarm (main*)        [Demo Mode] ")
 
 	mainBody := lipgloss.JoinVertical(lipgloss.Left, dashboardBox, vpBox)
 	// Force the main body to be exactly m.height - 1 lines to prevent terminal scrolling

@@ -52,10 +52,10 @@ verify the raw layout, or compare the exact output against a known-good
 ### 3. Headless PTY Execution (Integration Testing)
 
 For full end-to-end testing of the compiled binary, agents must not run
-`bin/agents` directly and hang the shell. Instead, they should:
+`bin/swarm` directly and hang the shell. Instead, they should:
 
 1. Write a test script that attaches a pseudo-terminal (PTY) to the
-   `bin/agents` process.
+   `bin/swarm` process.
 1. Send byte streams (simulating typing).
 1. Capture the stdout buffer.
 1. Analyze the buffer to ensure the UI rendered correctly.

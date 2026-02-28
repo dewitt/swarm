@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/dewitt/agents/pkg/sdk"
+	"github.com/dewitt/swarm/pkg/sdk"
 
 	tea "github.com/charmbracelet/bubbletea"
 )

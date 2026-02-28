@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/dewitt/agents/pkg/sdk"
+	"github.com/dewitt/swarm/pkg/sdk"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -26,7 +26,7 @@ func TestConfigSaveAndLoad(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Verify the file was physically created
-	path := filepath.Join(tempHome, ".config", "agents", "config.yaml")
+	path := filepath.Join(tempHome, ".config", "swarm", "config.yaml")
 	_, err = os.Stat(path)
 	assert.NoError(t, err)
 

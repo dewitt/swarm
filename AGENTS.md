@@ -2,17 +2,17 @@
 
 **Welcome, AI Agent.**
 
-If you are reading this file, you have been assigned to work on the `agents`
+If you are reading this file, you have been assigned to work on the `swarm`
 project. This document serves as your primary context, architectural
 constraint guide, and communication protocol. Whether you are an instance of
-the Gemini CLI, Claude Code, Cursor, or the `agents` CLI itself, you must
+the Gemini CLI, Claude Code, Cursor, or the `swarm` CLI itself, you must
 treat this document as the highest-priority operational directive.
 
 ______________________________________________________________________
 
 ## 1. Project Vision & What This Repository Is
 
-The `agents` project is a framework-agnostic, Go-based CLI and embeddable SDK
+The `swarm` project is a framework-agnostic, Go-based CLI and embeddable SDK
 designed to help developers natively manage, build, test, and deploy AI agents
 from their terminal.
 
@@ -39,7 +39,7 @@ following rules:
    - 3. Does the Google ADK provide it natively?
    - 4. *Only if all else fails*, write custom Go code for it.
 1. **Separation of Concerns:** The CLI (Presentation Layer) and the SDK
-   (Business Logic) must be strictly decoupled. The CLI (`cmd/agents/`) is
+   (Business Logic) must be strictly decoupled. The CLI (`cmd/swarm/`) is
    merely a consumer of the SDK. Do not leak terminal UI logic (e.g.,
    Bubbletea components, ANSI codes) into the core SDK (`pkg/sdk/`).
 1. **Go Standards:** The project is written in Go. You must use idiomatic Go
@@ -59,7 +59,7 @@ ______________________________________________________________________
 
 ## 3. Repository Structure
 
-- `/cmd/agents/`: The entry point for the CLI binary (Cobra, Bubble Tea TUI).
+- `/cmd/swarm/`: The entry point for the CLI binary (Cobra, Bubble Tea TUI).
 - `/pkg/sdk/`: The embeddable Go SDK. Contains the AgentManager, session
   management (SQLite), and the ADK Router logic.
 - `/docs/design/`: High-level and detailed architectural documents. **You must
@@ -124,6 +124,6 @@ leave a clean trail for the next agent:
 
 ______________________________________________________________________
 
-By adhering to this guide, you ensure that the `agents` codebase remains an
+By adhering to this guide, you ensure that the `swarm` codebase remains an
 industry-standard example of clean, multi-agent software engineering. Good
 luck!

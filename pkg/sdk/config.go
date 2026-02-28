@@ -8,21 +8,21 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Config represents the global user configuration for the Agents CLI.
+// Config represents the global user configuration for the Swarm CLI.
 type Config struct {
 	Model string `yaml:"model"`
 	// Additional global preferences (e.g. editor, default skills dir) can go here.
 }
 
 // DefaultConfigPath returns the path to the global configuration file.
-// It creates the ~/.config/agents directory if it does not exist.
+// It creates the ~/.config/swarm directory if it does not exist.
 func DefaultConfigPath() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
 	}
 
-	configDir := filepath.Join(home, ".config", "agents")
+	configDir := filepath.Join(home, ".config", "swarm")
 	if err := os.MkdirAll(configDir, 0755); err != nil {
 		return "", fmt.Errorf("failed to create config directory: %w", err)
 	}
@@ -85,7 +85,7 @@ func MemoryPath() (string, error) {
 		return "", err
 	}
 
-	configDir := filepath.Join(home, ".config", "agents")
+	configDir := filepath.Join(home, ".config", "swarm")
 	if err := os.MkdirAll(configDir, 0755); err != nil {
 		return "", fmt.Errorf("failed to create config directory: %w", err)
 	}

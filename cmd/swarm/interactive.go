@@ -23,7 +23,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/sahilm/fuzzy"
 
-	"github.com/dewitt/agents/pkg/sdk"
+	"github.com/dewitt/swarm/pkg/sdk"
 )
 
 var (
@@ -106,12 +106,11 @@ func renderLogo() string {
 	gtColor := lipgloss.Color("#555555")     // Off-black
 
 	sMainGt := lipgloss.NewStyle().Foreground(gtColor).Bold(true)
-	sMainA := lipgloss.NewStyle().Foreground(googleBlue).Bold(true)
-	sMainG := lipgloss.NewStyle().Foreground(googleRed).Bold(true)
-	sMainE := lipgloss.NewStyle().Foreground(googleYellow).Bold(true)
-	sMainN := lipgloss.NewStyle().Foreground(googleBlue).Bold(true)
-	sMainT := lipgloss.NewStyle().Foreground(googleGreen).Bold(true)
-	sMainS := lipgloss.NewStyle().Foreground(googleRed).Bold(true)
+	sMainS := lipgloss.NewStyle().Foreground(googleBlue).Bold(true)
+	sMainW := lipgloss.NewStyle().Foreground(googleRed).Bold(true)
+	sMainA := lipgloss.NewStyle().Foreground(googleYellow).Bold(true)
+	sMainR := lipgloss.NewStyle().Foreground(googleBlue).Bold(true)
+	sMainM := lipgloss.NewStyle().Foreground(googleGreen).Bold(true)
 	sShadow := lipgloss.NewStyle().Foreground(shadowColor).Bold(true)
 
 	gt := colorize([]string{
@@ -122,69 +121,8 @@ func renderLogo() string {
 		"██╔╝   ",
 		"╚═╝    ",
 		"       ",
-		"       ",
 	}, sMainGt, sShadow)
 
-	a := colorize([]string{
-		" █████╗  ",
-		"██╔══██╗ ",
-		"███████║ ",
-		"██╔══██║ ",
-		"██║  ██║ ",
-		"╚═╝  ╚═╝ ",
-		"         ",
-		"         ",
-	}, sMainA, sShadow)
-
-	// Lowercase g
-	g := colorize([]string{
-		"        ",
-		" █████╗ ",
-		"██╔══██╗",
-		"██║  ██║",
-		"╚██████║",
-		"     ██║",
-		" █████╔╝",
-		" ╚════╝",
-	}, sMainG, sShadow)
-
-	// Lowercase e
-	e := colorize([]string{
-		"        ",
-		" █████╗ ",
-		"██╔══██╗",
-		"███████║",
-		"██╔════╝",
-		"╚██████╗",
-		" ╚═════╝",
-		"        ",
-	}, sMainE, sShadow)
-
-	// Lowercase n
-	n := colorize([]string{
-		"        ",
-		"██████╗ ",
-		"██╔══██╗",
-		"██║  ██║",
-		"██║  ██║",
-		"╚═╝  ╚═╝",
-		"        ",
-		"        ",
-	}, sMainN, sShadow)
-
-	// Lowercase t
-	t := colorize([]string{
-		"  ██╗  ",
-		"██████╗",
-		"╚═██╔═╝",
-		"  ██║  ",
-		"  ██║  ",
-		"  ╚═╝  ",
-		"       ",
-		"       ",
-	}, sMainT, sShadow)
-
-	// Lowercase s
 	s := colorize([]string{
 		"        ",
 		" ██████╗",
@@ -193,19 +131,57 @@ func renderLogo() string {
 		" ╚═══██╗",
 		"██████╔╝",
 		"╚═════╝ ",
-		"        ",
 	}, sMainS, sShadow)
 
+	w := colorize([]string{
+		"        ",
+		"██╗    ██╗",
+		"██║    ██║",
+		"██║ █╗ ██║",
+		"██║███╗██║",
+		"╚███╔███╔╝",
+		" ╚══╝╚══╝ ",
+	}, sMainW, sShadow)
+
+	a := colorize([]string{
+		"        ",
+		" █████╗ ",
+		"██╔══██╗",
+		"███████║",
+		"██╔══██║",
+		"██║  ██║",
+		"╚═╝  ╚═╝",
+	}, sMainA, sShadow)
+
+	r := colorize([]string{
+		"        ",
+		"██████╗ ",
+		"██╔══██╗",
+		"██████╔╝",
+		"██╔══██╗",
+		"██║  ██║",
+		"╚═╝  ╚═╝",
+	}, sMainR, sShadow)
+
+	m := colorize([]string{
+		"        ",
+		"███╗   ███╗",
+		"████╗ ████║",
+		"██╔████╔██║",
+		"██║╚██╔╝██║",
+		"██║ ╚═╝ ██║",
+		"╚═╝     ╚═╝",
+	}, sMainM, sShadow)
+
 	var sb strings.Builder
-	for i := 0; i < 8; i++ {
+	for i := 0; i < 7; i++ {
 		sb.WriteString(gt[i])
-		sb.WriteString(a[i])
-		sb.WriteString(g[i])
-		sb.WriteString(e[i])
-		sb.WriteString(n[i])
-		sb.WriteString(t[i])
 		sb.WriteString(s[i])
-		if i < 7 {
+		sb.WriteString(w[i])
+		sb.WriteString(a[i])
+		sb.WriteString(r[i])
+		sb.WriteString(m[i])
+		if i < 6 {
 			sb.WriteString("\n")
 		}
 	}
@@ -461,7 +437,7 @@ func getHistoryFile() string {
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(home, ".config", "agents", "history.json")
+	return filepath.Join(home, ".config", "swarm", "history.json")
 }
 
 func loadHistory() []string {
@@ -1267,7 +1243,7 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 			buildInfoStr = "Build information not available."
 		}
 		aboutText := lipgloss.JoinVertical(lipgloss.Left,
-			lipgloss.NewStyle().Bold(true).Render("Agents CLI"),
+			lipgloss.NewStyle().Bold(true).Render("Swarm CLI"),
 			"",
 			buildInfoStr,
 		)
@@ -1275,7 +1251,7 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 		m.messages = append(m.messages, lipgloss.JoinHorizontal(lipgloss.Top, icon, aboutText))
 	case "/help":
 		helpText := lipgloss.JoinVertical(lipgloss.Left,
-			lipgloss.NewStyle().Bold(true).Render("Agents CLI Help Menu"),
+			lipgloss.NewStyle().Bold(true).Render("Swarm CLI Help Menu"),
 			"",
 			"  /about       Displays version and build information.",
 

@@ -160,6 +160,6 @@ down the wrong path, a developer shouldn't have to restart their entire
 
 - The UI should support a `/rewind` command that drops the last $N$ turns from
   the conversation history.
-- Sessions should be persisted to disk (`~/.config/agents/sessions/`) so a
+- Sessions should be persisted to disk (`~/.config/swarm/sessions/`) so a
   user can close their laptop, come back the next day, and run
   `agents --resume` to pick up exactly where they left off.

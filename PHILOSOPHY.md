@@ -74,7 +74,7 @@ as the AI it commands.
 We strictly enforce the boundary between the presentation layer and the
 underlying intelligence.
 
-- **UI vs. SDK:** The terminal UI (`cmd/agents/`) must remain a "dumb" client.
+- **UI vs. SDK:** The terminal UI (`cmd/swarm/`) must remain a "dumb" client.
   It handles rendering, input capture, and local configuration logic, but it
   MUST NOT contain LLM prompting logic, system instructions, or tool
   implementations. All intelligence, session management, and orchestration

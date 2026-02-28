@@ -33,7 +33,7 @@ distinct internal agents:
 1. **The Data Engineer:** Focuses on database schema, caching, and state
    management.
 
-> **Agents CLI:** Instantiating a design swarm (Architect, Security Expert,
+> **Swarm CLI:** Instantiating a design swarm (Architect, Security Expert,
 > Data Engineer)... I will now have them collaborate on a markdown document
 > called `system-design.md`.
 
@@ -54,7 +54,7 @@ into the debate without overwhelming them.
 After the swarm concludes its debate, the Router Agent synthesizes the
 agreed-upon points into the requested file.
 
-> **Agents CLI:** The swarm has reached a consensus. I have written the
+> **Swarm CLI:** The swarm has reached a consensus. I have written the
 > complete architecture proposal to `system-design.md`, which includes:
 >
 > - Component diagram definitions (Mermaid JS)

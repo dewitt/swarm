@@ -10,7 +10,7 @@ the next actionable unit of work.
 separation between the CLI and the SDK.
 
 - **Task 1.1:** Initialize the Go module (`go.mod`) and configure the project
-  directory structure (`cmd/agents`, `pkg/sdk`).
+  directory structure (`cmd/swarm`, `pkg/sdk`).
 - **Task 1.2:** Implement the basic CLI routing using a modern Go CLI
   framework (e.g., `cobra` or `bubbletea` for the interactive TUI shell).
 - **Task 1.3:** Define the core SDK interfaces in `pkg/sdk/` (e.g.,

@@ -3,7 +3,7 @@ Set Width 1200
 Set Height 800
 Set TypingSpeed 75ms
 Hide 
-Type "./bin/agents"
+Type "./bin/swarm"
 Enter 1
 Sleep 1s
 Show 

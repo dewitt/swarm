@@ -27,7 +27,7 @@ agents
 
 The CLI launches its interactive interface:
 
-> **Agents CLI:** Welcome to Agents! How can I help you today? **Alex:** I
+> **Swarm CLI:** Welcome to Agents! How can I help you today? **Alex:** I
 > want to build a simple agent that can fetch the current weather using Python
 > and the Google ADK.
 
@@ -36,7 +36,7 @@ The CLI launches its interactive interface:
 The `agents` internal Router Agent understands the intent. It delegates the
 task to the Builder Agent, equipped with the ADK Python Skill.
 
-> **Agents CLI:** Excellent! I'll set up a Google ADK Python project for you.
+> **Swarm CLI:** Excellent! I'll set up a Google ADK Python project for you.
 > *[Spinner: Generating boilerplate...]* I have created the following files:
 >
 > - `requirements.txt` (with `google-adk` and `requests`)
@@ -52,7 +52,7 @@ Alex presses `Enter` to accept.
 
 The CLI executes the shell commands to set up the environment.
 
-> **Agents CLI:** Dependencies installed. You can review the `agent.py` file.
+> **Swarm CLI:** Dependencies installed. You can review the `agent.py` file.
 > It defines a `root_agent` with a tool called `get_weather`. You can run this
 > agent locally using the `agents run` command, or simply ask me to test it
 > right here.
@@ -66,8 +66,8 @@ Alex wants to make sure it works.
 The CLI, acting as an orchestrator, invokes the local Python process defined
 in `agent.yaml`.
 
-> **Agents CLI:** Running local agent... **Agent (Local):** The weather in
+> **Swarm CLI:** Running local agent... **Agent (Local):** The weather in
 > Tokyo is currently clear and 15°C.
 >
-> **Agents CLI:** The local agent successfully executed the `get_weather`
+> **Swarm CLI:** The local agent successfully executed the `get_weather`
 > tool. How else would you like to modify it?

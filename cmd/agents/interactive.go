@@ -880,18 +880,56 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, vpCmd
 	case streamMsg:
 		if strings.HasPrefix(msg.text, "[TOOL_CALL] ") {
-			toolName := strings.TrimPrefix(msg.text, "[TOOL_CALL] ")
+			toolInfo := strings.TrimPrefix(msg.text, "[TOOL_CALL] ")
+			// Split name and args
+			parts := strings.SplitN(toolInfo, " ", 2)
+			toolName := parts[0]
+			toolArgs := ""
+			if len(parts) > 1 {
+				toolArgs = parts[1]
+			}
+
 			m.statusMsg = "Running " + toolName + "…"
 			if m.observeMode {
-				m.observeLog = append(m.observeLog, fmt.Sprintf("[%s] Invoked tool: %s", m.activeAgent, toolName))
+				logEntry := fmt.Sprintf("[%s] Executing %s", m.activeAgent, toolName)
+				if toolArgs != "" {
+					logEntry += " " + lipgloss.NewStyle().Foreground(tipColor).Render(toolArgs)
+				}
+				m.observeLog = append(m.observeLog, logEntry)
 			}
 			m.updateViewport()
+			return m, listenForStream(msg.ch)
+		}
+		if strings.HasPrefix(msg.text, "[TOOL_RESULT] ") {
+			if m.observeMode {
+				resultInfo := strings.TrimPrefix(msg.text, "[TOOL_RESULT] ")
+				parts := strings.SplitN(resultInfo, " ", 2)
+				toolName := parts[0]
+				toolResult := ""
+				if len(parts) > 1 {
+					toolResult = parts[1]
+				}
+				logEntry := fmt.Sprintf("[%s] Completed %s", m.activeAgent, toolName)
+				if toolResult != "" {
+					logEntry += " " + lipgloss.NewStyle().Foreground(tipColor).Render(toolResult)
+				}
+				m.observeLog = append(m.observeLog, logEntry)
+				m.updateViewport()
+			}
+			return m, listenForStream(msg.ch)
+		}
+		if strings.HasPrefix(msg.text, "[THOUGHT] ") {
+			if m.observeMode {
+				thought := strings.TrimPrefix(msg.text, "[THOUGHT] ")
+				m.observeLog = append(m.observeLog, fmt.Sprintf("[%s] 🤔 %s", m.activeAgent, lipgloss.NewStyle().Foreground(tipColor).Italic(true).Render(thought)))
+				m.updateViewport()
+			}
 			return m, listenForStream(msg.ch)
 		}
 		if strings.HasPrefix(msg.text, "[AGENT_HANDOFF] ") {
 			newAgent := strings.TrimSpace(strings.TrimPrefix(msg.text, "[AGENT_HANDOFF] "))
 			if m.observeMode {
-				m.observeLog = append(m.observeLog, fmt.Sprintf("[%s] Delegated task to: %s", m.activeAgent, newAgent))
+				m.observeLog = append(m.observeLog, fmt.Sprintf("[%s] ➡️ Delegated task to: %s", m.activeAgent, lipgloss.NewStyle().Bold(true).Render(newAgent)))
 			}
 			m.activeAgent = newAgent
 			m.statusMsg = ""
@@ -1382,6 +1420,12 @@ func (m *model) updateViewport() {
 	}
 	if m.loading {
 		if m.observeMode && len(m.observeLog) > 0 {
+			// Only show the last 10 log entries to prevent the box from taking over the screen
+			displayLogs := m.observeLog
+			if len(displayLogs) > 10 {
+				displayLogs = displayLogs[len(displayLogs)-10:]
+			}
+
 			observeBox := lipgloss.NewStyle().
 				Border(lipgloss.NormalBorder()).
 				BorderForeground(googleYellow).
@@ -1389,7 +1433,7 @@ func (m *model) updateViewport() {
 				Width(m.viewport.Width - 2).
 				Render(lipgloss.JoinVertical(lipgloss.Left,
 					lipgloss.NewStyle().Foreground(googleYellow).Bold(true).Render("👀 Observing Agent Execution:"),
-					strings.Join(m.observeLog, "\n"),
+					strings.Join(displayLogs, "\n"),
 				))
 			s.WriteString(observeBox)
 			s.WriteString("\n\n")

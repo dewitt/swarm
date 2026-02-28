@@ -2,6 +2,7 @@ package sdk
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -723,14 +724,44 @@ func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan string
 			if event.Content != nil {
 				for _, part := range event.Content.Parts {
 					if part.FunctionCall != nil {
-						// Send ephemeral tool indication to the frontend
-						out <- fmt.Sprintf("[TOOL_CALL] %s", part.FunctionCall.Name)
+						argsStr := ""
+						if part.FunctionCall.Args != nil {
+							b, err := json.Marshal(part.FunctionCall.Args)
+							if err == nil {
+								argsStr = " " + string(b)
+							}
+						}
+						out <- fmt.Sprintf("[TOOL_CALL] %s%s", part.FunctionCall.Name, argsStr)
+					}
+					if part.FunctionResponse != nil {
+						respStr := ""
+						if part.FunctionResponse.Response != nil {
+							b, err := json.Marshal(part.FunctionResponse.Response)
+							if err == nil {
+								// truncate response so it doesn't flood the UI
+								respStr = string(b)
+								if len(respStr) > 200 {
+									respStr = respStr[:200] + "..."
+								}
+								respStr = " " + respStr
+							}
+						}
+						out <- fmt.Sprintf("[TOOL_RESULT] %s%s", part.FunctionResponse.Name, respStr)
+					}
+					// Only stream thoughts if they exist. Wait until final response for actual text.
+					if part.Thought {
+						// Stream the thought snippet. Truncate it if it's too long.
+						thought := part.Text
+						if len(thought) > 150 {
+							thought = thought[:150] + "..."
+						}
+						// Replace newlines with spaces for a single line log
+						thought = strings.ReplaceAll(thought, "\n", " ")
+						out <- fmt.Sprintf("[THOUGHT] %s", thought)
 					}
 				}
 			}
 
-			// If it's a partial event, ignore it for now since the CLI waits for the final chunk.
-			// Once we implement true streaming in the CLI, we can send partial chunks.
 			if !event.Partial && event.IsFinalResponse() {
 				var fullResponse strings.Builder
 
@@ -743,7 +774,7 @@ func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan string
 
 				if event.Content != nil {
 					for _, part := range event.Content.Parts {
-						if part.Text != "" {
+						if part.Text != "" && !part.Thought {
 							fullResponse.WriteString(part.Text)
 						}
 					}

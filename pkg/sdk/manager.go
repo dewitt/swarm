@@ -794,6 +794,7 @@ func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan ChatEv
 		}
 
 		// --- Chat Input Agent (CIA) Pre-processing ---
+		out <- ChatEvent{Type: ChatEventThought, Agent: "Chat Input Agent", Content: "Classifying input…"}
 		ciaInstruction := fmt.Sprintf(`You are the Chat Input Agent (CIA).
 Your job is to classify user input and determine if it should be routed to a specialized sub-agent or the primary router.
 Available agents: %s
@@ -818,6 +819,7 @@ Keep your analysis silent. ONLY output the routing decision.`, strings.Join(m.su
 					target := strings.TrimPrefix(ciaText, "ROUTE TO: ")
 					target = strings.TrimSpace(target)
 					if target != "" {
+						out <- ChatEvent{Type: ChatEventThought, Agent: "Chat Input Agent", Content: "Rerouting to " + target}
 						// Perform a manual handoff by appending a transfer event to the session
 						sessResp, err := m.sessionSvc.Get(ctx, &session.GetRequest{
 							AppName:   "swarm-cli",
@@ -832,6 +834,8 @@ Keep your analysis silent. ONLY output the routing decision.`, strings.Join(m.su
 							out <- ChatEvent{Type: ChatEventHandoff, Content: target}
 						}
 					}
+				} else {
+					out <- ChatEvent{Type: ChatEventThought, Agent: "Chat Input Agent", Content: "Monitoring"}
 				}
 			}
 			break // Only need the first response from CIA

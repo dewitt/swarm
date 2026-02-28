@@ -640,21 +640,14 @@ func initialModel(planMode bool, resume bool) model {
 
 	branch, modified := getGitInfo()
 
-	// Initialize Agent Panel agents
+	// Initialize resident Agent Panel agents
 	agentSpinner := spinner.New()
 	agentSpinner.Spinner = spinner.Dot
 	agentSpinner.Style = lipgloss.NewStyle().Foreground(colorActive)
 
 	agents := []*swarmAgent{
-		{name: "CIA", icon: "🛡️", status: "Monitoring", state: "active", spin: agentSpinner, resident: true, lastActive: time.Now()},
+		{name: "Chat Input Agent", icon: "🛡️", status: "Idle", state: "idle", spin: agentSpinner, resident: true, lastActive: time.Now()},
 		{name: "Router", icon: "🧠", status: "Idle", state: "idle", spin: agentSpinner, resident: true, lastActive: time.Now()},
-		{name: "Investigator", icon: "🔍", status: "Idle", state: "idle", spin: agentSpinner, lastActive: time.Now()},
-		{name: "Web Researcher", icon: "🌐", status: "Idle", state: "idle", spin: agentSpinner, lastActive: time.Now()},
-		{name: "GitOps", icon: "🐙", status: "Idle", state: "idle", spin: agentSpinner, lastActive: time.Now()},
-		{name: "Test Synthesizer", icon: "🧪", status: "Idle", state: "idle", spin: agentSpinner, lastActive: time.Now()},
-		{name: "Security Auditor", icon: "🔐", status: "Idle", state: "idle", spin: agentSpinner, lastActive: time.Now()},
-		{name: "DB Architect", icon: "💾", status: "Idle", state: "idle", spin: agentSpinner, lastActive: time.Now()},
-		{name: "Code Generator", icon: "💻", status: "Idle", state: "idle", spin: agentSpinner, lastActive: time.Now()},
 	}
 
 	return model{
@@ -992,6 +985,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, vpCmd
 	case streamMsg:
 		event := msg.event
+		var agentCmd tea.Cmd
+
 		switch event.Type {
 		case sdk.ChatEventHandoff:
 			newAgentName := strings.TrimSpace(event.Content)
@@ -1001,18 +996,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			// Update AgentPanel
 			if oldA := m.findAgent(m.activeAgent); oldA != nil {
-				oldA.update("success", "")
-				oldA.update("", "Task completed")
+				oldA.update("success", "Task completed")
 			}
-			if newA := m.findAgent(newAgentName); newA != nil {
-				newA.update("active", "")
-				newA.update("", "Analyzing context…")
-			}
+			var newA *swarmAgent
+			newA, agentCmd = m.ensureAgent(newAgentName)
+			newA.update("active", "Analyzing context…")
 
 			m.activeAgent = newAgentName
 			m.statusMsg = ""
 			m.updateViewport()
-			return m, listenForStream(msg.ch)
+			return m, tea.Batch(listenForStream(msg.ch), agentCmd)
 
 		case sdk.ChatEventToolCall:
 			toolInfo := event.Content
@@ -1027,10 +1020,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.statusMsg = "Running " + toolName + "…"
 
 			// Update AgentPanel
-			if a := m.findAgent(m.activeAgent); a != nil {
-				a.update("active", "")
-				a.update("", "Tool: " + toolName)
-			}
+			a, cmd := m.ensureAgent(m.activeAgent)
+			agentCmd = cmd
+			a.update("active", "Tool: "+toolName)
 
 			if m.observeMode {
 				logEntry := fmt.Sprintf("[%s] Executing %s", m.activeAgent, toolName)
@@ -1040,7 +1032,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.observeLog = append(m.observeLog, logEntry)
 			}
 			m.updateViewport()
-			return m, listenForStream(msg.ch)
+			return m, tea.Batch(listenForStream(msg.ch), agentCmd)
 
 		case sdk.ChatEventToolResult:
 			resultInfo := event.Content
@@ -1048,9 +1040,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			toolName := parts[0]
 
 			// Update AgentPanel
-			if a := m.findAgent(m.activeAgent); a != nil {
-				a.update("", "Completed " + toolName)
-			}
+			a, cmd := m.ensureAgent(m.activeAgent)
+			agentCmd = cmd
+			a.update("", "Completed "+toolName)
 
 			if m.observeMode {
 				toolResult := ""
@@ -1064,21 +1056,20 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.observeLog = append(m.observeLog, logEntry)
 				m.updateViewport()
 			}
-			return m, listenForStream(msg.ch)
+			return m, tea.Batch(listenForStream(msg.ch), agentCmd)
 
 		case sdk.ChatEventThought:
 			// Update AgentPanel
-			if a := m.findAgent(event.Agent); a != nil {
-				a.update("active", "")
-				a.update("", event.Content)
-			}
+			a, cmd := m.ensureAgent(event.Agent)
+			agentCmd = cmd
+			a.update("active", event.Content)
 
 			if m.observeMode {
 				thought := event.Content
 				m.observeLog = append(m.observeLog, fmt.Sprintf("[%s] 🤔 %s", event.Agent, lipgloss.NewStyle().Foreground(tipColor).Italic(true).Render(thought)))
 				m.updateViewport()
 			}
-			return m, listenForStream(msg.ch)
+			return m, tea.Batch(listenForStream(msg.ch), agentCmd)
 
 		case sdk.ChatEventFinalResponse:
 			m.statusMsg = ""
@@ -1088,10 +1079,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			// Update AgentPanel
-			if a := m.findAgent(author); a != nil {
-				a.update("success", "")
-				a.update("", "Response ready")
-			}
+			a, cmd := m.ensureAgent(author)
+			agentCmd = cmd
+			a.update("success", "Response ready")
 
 			text := event.Content
 			out := text
@@ -1105,21 +1095,20 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.messages = append(m.messages, badge+"\n"+strings.TrimSpace(out))
 			m.loading = false
 			m.updateViewport()
-			return m, m.dequeueAndRun()
+			return m, tea.Batch(m.dequeueAndRun(), agentCmd)
 
 		case sdk.ChatEventError:
 			m.statusMsg = ""
 
 			// Update AgentPanel
-			if a := m.findAgent(m.activeAgent); a != nil {
-				a.update("error", "")
-				a.update("", "Failed")
-			}
+			a, cmd := m.ensureAgent(m.activeAgent)
+			agentCmd = cmd
+			a.update("error", "Failed")
 
 			m.messages = append(m.messages, errorMsgStyle.Render(fmt.Sprintf("Error: %s", event.Content)))
 			m.loading = false
 			m.updateViewport()
-			return m, m.dequeueAndRun()
+			return m, tea.Batch(m.dequeueAndRun(), agentCmd)
 		}
 
 		return m, listenForStream(msg.ch)
@@ -1723,9 +1712,9 @@ func (m model) renderAgentPanel() string {
 
 	// Determine fidelity based on visible count and terminal width
 	fidelity := "medium"
-	if len(visibleAgents) <= 3 {
+	if len(visibleAgents) <= 8 {
 		fidelity = "high"
-	} else if len(visibleAgents) > 8 {
+	} else if len(visibleAgents) > 16 {
 		fidelity = "low"
 	}
 
@@ -1763,9 +1752,23 @@ func (m model) renderAgentPanel() string {
 		}
 
 		var card string
+		// Fix misalignment by ensuring icons have a trailing space if they are wide
+		displayIcon := a.icon
+		if !strings.HasSuffix(displayIcon, " ") {
+			displayIcon += " "
+		}
+
+		// Map state to human-readable label
+		stateLabel := strings.Title(a.state)
+		if a.state == "idle" {
+			stateLabel = "Ready"
+		} else if a.state == "success" {
+			stateLabel = "Complete"
+		}
+
 		if fidelity == "high" {
-			// 3 columns
-			cardWidth := (m.width - 8) / 3
+			// 4 columns, 2 rows (default vision)
+			cardWidth := (m.width - 8) / 4
 			style = style.Width(cardWidth - 2).Height(3)
 
 			statusText := a.status
@@ -1774,12 +1777,12 @@ func (m model) renderAgentPanel() string {
 			}
 
 			card = lipgloss.JoinVertical(lipgloss.Left,
-				lipgloss.NewStyle().Foreground(color).Bold(true).Render(a.icon+" "+a.name),
+				lipgloss.NewStyle().Foreground(color).Bold(true).Render(displayIcon+a.name),
 				iconStr+lipgloss.NewStyle().Foreground(tipColor).Render(statusText),
-				lipgloss.NewStyle().Foreground(tipColor).Italic(true).Faint(true).Render("Telemetry streaming…"),
+				lipgloss.NewStyle().Foreground(tipColor).Italic(true).Faint(true).Render(stateLabel),
 			)
 		} else if fidelity == "medium" {
-			// 4 columns
+			// 4-6 columns
 			cardWidth := (m.width - 8) / 4
 			style = style.Width(cardWidth - 2).Height(2)
 
@@ -1789,13 +1792,13 @@ func (m model) renderAgentPanel() string {
 			}
 
 			card = lipgloss.JoinVertical(lipgloss.Left,
-				lipgloss.NewStyle().Foreground(color).Bold(true).Render(a.icon+" "+a.name),
+				lipgloss.NewStyle().Foreground(color).Bold(true).Render(displayIcon+a.name),
 				iconStr+lipgloss.NewStyle().Foreground(tipColor).Render(statusText),
 			)
 		} else {
 			// low fidelity: minimalist icon cards
 			style = style.Width(6).Height(1).Padding(0, 1)
-			card = lipgloss.NewStyle().Width(4).Align(lipgloss.Center).Render(a.icon)
+			card = lipgloss.NewStyle().Width(4).Align(lipgloss.Center).Render(displayIcon)
 		}
 
 		cards = append(cards, style.Render(card))
@@ -1803,9 +1806,7 @@ func (m model) renderAgentPanel() string {
 
 	// Layout cards in rows
 	cols := 4
-	if fidelity == "high" {
-		cols = 3
-	} else if fidelity == "low" {
+	if fidelity == "low" {
 		cols = (m.width - 4) / 8 // As many as fit
 		if cols < 1 {
 			cols = 1
@@ -1828,10 +1829,8 @@ func (m model) renderAgentPanel() string {
 		BorderForeground(borderColor).
 		Padding(0, 1).
 		MarginBottom(1).
-		Render(lipgloss.JoinVertical(lipgloss.Left,
-			lipgloss.NewStyle().Bold(true).Render(" Agent Panel"),
-			grid,
-		))
+		Width(m.width - 2). // Force full width
+		Render(grid)
 }
 
 func (m *model) findAgent(name string) *swarmAgent {
@@ -1842,6 +1841,56 @@ func (m *model) findAgent(name string) *swarmAgent {
 		}
 	}
 	return nil
+}
+
+func getAgentIcon(name string) string {
+	name = strings.ToLower(name)
+	switch {
+	case strings.Contains(name, "cia") || strings.Contains(name, "chat_input"):
+		return "🛡️"
+	case strings.Contains(name, "router"):
+		return "🧠"
+	case strings.Contains(name, "investigator") || strings.Contains(name, "codebase"):
+		return "🔍"
+	case strings.Contains(name, "builder") || strings.Contains(name, "generator"):
+		return "⚒ "
+	case strings.Contains(name, "gitops") || strings.Contains(name, "github"):
+		return "🐙"
+	case strings.Contains(name, "researcher") || strings.Contains(name, "web"):
+		return "🌐"
+	case strings.Contains(name, "test"):
+		return "🧪"
+	case strings.Contains(name, "security") || strings.Contains(name, "audit"):
+		return "🔐"
+	case strings.Contains(name, "db") || strings.Contains(name, "architect"):
+		return "💾"
+	case strings.Contains(name, "codex"):
+		return "📖"
+	default:
+		return "🤖"
+	}
+}
+
+func (m *model) ensureAgent(name string) (*swarmAgent, tea.Cmd) {
+	if a := m.findAgent(name); a != nil {
+		return a, nil
+	}
+
+	// Create new dynamic agent
+	s := spinner.New()
+	s.Spinner = spinner.Dot
+	s.Style = lipgloss.NewStyle().Foreground(colorActive)
+
+	newA := &swarmAgent{
+		name:       name,
+		icon:       getAgentIcon(name),
+		status:     "Starting…",
+		state:      "active",
+		spin:       s,
+		lastActive: time.Now(),
+	}
+	m.agents = append(m.agents, newA)
+	return newA, s.Tick
 }
 
 func (m model) View() string {

@@ -49,13 +49,20 @@ func TestNewManager(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	event := <-ch
-	if event.Type != sdk.ChatEventFinalResponse {
-		t.Fatalf("expected final response event, got %v", event.Type)
+	var lastEvent sdk.ChatEvent
+	for event := range ch {
+		lastEvent = event
+		if event.Type == sdk.ChatEventFinalResponse {
+			break
+		}
+	}
+
+	if lastEvent.Type != sdk.ChatEventFinalResponse {
+		t.Fatalf("expected final response event as last event, got %v", lastEvent.Type)
 	}
 
 	expected := "Hello from the mock agent!"
-	if event.Content != expected {
-		t.Fatalf("expected content '%s', got '%s'", expected, event.Content)
+	if lastEvent.Content != expected {
+		t.Fatalf("expected content '%s', got '%s'", expected, lastEvent.Content)
 	}
 }

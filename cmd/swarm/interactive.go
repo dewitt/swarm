@@ -243,6 +243,7 @@ type swarmAgent struct {
 	spin       spinner.Model
 	lastActive time.Time
 	resident   bool
+	telemetry  []string
 }
 
 func (a *swarmAgent) update(state, status string) {
@@ -1044,6 +1045,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a, cmd := m.ensureAgent(m.activeAgent)
 			agentCmd = cmd
 			a.update("", "Completed "+toolName)
+			// Clear telemetry when tool finishes
+			a.telemetry = nil
 
 			if m.observeMode {
 				toolResult := ""
@@ -1058,6 +1061,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.updateViewport()
 			}
 			return m, tea.Batch(listenForStream(msg.ch), agentCmd)
+
+		case sdk.ChatEventTelemetry:
+			// Update AgentPanel telemetry for active agent
+			if a := m.findAgent(m.activeAgent); a != nil {
+				a.telemetry = append(a.telemetry, event.Content)
+				if len(a.telemetry) > 3 {
+					a.telemetry = a.telemetry[len(a.telemetry)-3:]
+				}
+				a.lastActive = time.Now()
+			}
+			return m, listenForStream(msg.ch)
 
 		case sdk.ChatEventThought:
 			// Update AgentPanel
@@ -1768,7 +1782,13 @@ func (m model) renderAgentPanel() string {
 			color = colorError
 		}
 
-		cardStyle := lipgloss.NewStyle().Border(border).BorderForeground(color).Padding(0, 1).Width(cardWidth - 2)
+		// Use a style without the bottom border so we can manually render the status-in-border
+		cardStyle := lipgloss.NewStyle().
+			Border(border).
+			BorderForeground(color).
+			BorderBottom(false).
+			Padding(0, 1).
+			Width(cardWidth - 2)
 
 		iconStr := "  "
 		if a.state == "active" {
@@ -1790,14 +1810,16 @@ func (m model) renderAgentPanel() string {
 
 		contentWidth := cardWidth - 4
 		line1 := renderLine(a.icon, a.name, lipgloss.NewStyle().Foreground(color).Bold(true), contentWidth)
-		line2 := renderLine(iconStr, a.status, lipgloss.NewStyle().Foreground(tipColor), contentWidth)
+		
+		// Prioritize telemetry if active
+		mainText := a.status
+		if len(a.telemetry) > 0 && a.state == "active" {
+			mainText = a.telemetry[len(a.telemetry)-1]
+		}
+		line2 := renderLine(iconStr, mainText, lipgloss.NewStyle().Foreground(tipColor), contentWidth)
 
 		var cardContent string
-		if fidelity == "high" {
-			line3 := renderLine("", stateLabel, lipgloss.NewStyle().Foreground(tipColor).Italic(true).Faint(true), contentWidth)
-			cardContent = lipgloss.JoinVertical(lipgloss.Left, line1, line2, line3)
-			cardStyle = cardStyle.Height(3)
-		} else if fidelity == "medium" {
+		if fidelity == "high" || fidelity == "medium" {
 			cardContent = lipgloss.JoinVertical(lipgloss.Left, line1, line2)
 			cardStyle = cardStyle.Height(2)
 		} else {
@@ -1806,7 +1828,39 @@ func (m model) renderAgentPanel() string {
 			cardContent = lipgloss.NewStyle().Width(4).Align(lipgloss.Center).Render(a.icon)
 		}
 
-		cards = append(cards, cardStyle.Render(cardContent))
+		renderedCard := cardStyle.Render(cardContent)
+
+		// If high/medium fidelity, append the custom bottom border with status label
+		if fidelity == "high" || fidelity == "medium" {
+			// Construct: └─────────── State ─┘
+			label := " " + stateLabel + " "
+			labelLen := runewidth.StringWidth(label)
+			
+			// Total width of the bottom border line must match cardWidth
+			// minus the corner characters (2)
+			remaining := cardWidth - 2 - labelLen
+			
+			leftDashCount := remaining - 2 // Leave at least 2 dashes on the right
+			if leftDashCount < 1 {
+				leftDashCount = 1
+			}
+			rightDashCount := cardWidth - 2 - labelLen - leftDashCount
+			if rightDashCount < 0 {
+				rightDashCount = 0
+			}
+
+			bottomLine := lipgloss.NewStyle().Foreground(color).Render(
+				border.BottomLeft + 
+				strings.Repeat(border.Bottom, leftDashCount) + 
+				label + 
+				strings.Repeat(border.Bottom, rightDashCount) + 
+				border.BottomRight,
+			)
+			
+			renderedCard = lipgloss.JoinVertical(lipgloss.Left, renderedCard, bottomLine)
+		}
+
+		cards = append(cards, renderedCard)
 	}
 
 	var rows []string

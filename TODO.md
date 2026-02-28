@@ -31,7 +31,7 @@ debt that should be addressed as the project evolves.
   C-Shared Libraries (FFI) and WebAssembly to support native Python,
   TypeScript, and Rust wrappers. See `docs/design/09-cross-language-sdk.md`.
 
-- [ ] **Codex Agent** (#20): Add a Codex agent wrapper to delegate to Codex
+- [x] **Codex Agent** (#20): Add a Codex agent wrapper to delegate to Codex
   CLI.
 
 - [ ] **Observe Mode** (#18): Add a `^O` command for observe-mode.
@@ -44,7 +44,7 @@ debt that should be addressed as the project evolves.
 
 ## Known Bugs
 
-- [ ] **Dead-end Tool Calls** (#17): Subagent tool calls can reach a dead end.
+- [x] **Dead-end Tool Calls** (#17): Subagent tool calls can reach a dead end.
 - [ ] **Status Overwrites Name** (#15): Tool and subagent invocation status
   currently overwrites the agent name in the UI.
 - [ ] **Escape Sequences in Prompt** (#3): Strange escape sequences appear in

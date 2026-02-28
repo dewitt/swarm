@@ -18,14 +18,19 @@ into native ecosystems.
 - **Context Referencing (`@`)**: Seamlessly inject files directly into the
   LLM's context window by typing `@` to trigger an inline, fuzzy-filtered
   overlay of your workspace files.
-- **Session Persistence**: Sessions are automatically persisted to a local
-  SQLite database, allowing you to view past activity with `/sessions` and
-  ensuring no context is lost.
+- **Session Persistence & Resumption**: Sessions are automatically persisted
+  to a local SQLite database. View past activity with `/sessions`, rewind the
+  conversation history with `/rewind`, and easily pick up where you left off
+  using the `--resume` flag.
 - **Read-Only Plan Mode**: Use the `/plan` command or `--plan` flag to safely
   brainstorm architecture with the agent explicitly sandboxed from modifying
   your filesystem.
-- **Global Memory**: Teach the agent your preferences once using the
-  `/remember` command, and it will persist across all your projects.
+- **Global Memory & Configuration**: Teach the agent your preferences once
+  using the `/remember` command, and it will persist across all your projects.
+  Check your global settings with `agents config` or `/config`.
+- **Web Fetch & Search**: Native capabilities to search the web and fetch
+  up-to-date documentation during task execution using the `web_researcher`
+  agent.
 - **UNIX Piping**: Integrate agents directly into your workflows via
   single-shot prompts and standard input (e.g.,
   `cat error.log | agents -p "What went wrong?"`).

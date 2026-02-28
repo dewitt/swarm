@@ -78,6 +78,7 @@ UI must solve this.
   terminal session showing:
   - The current active LLM model (e.g., `gemini-2.5-pro`).
   - The number of files currently loaded into the agent's context.
+  - The current Git branch and modification status (e.g., `main*`).
   - Token usage estimates (if applicable).
 - **Context Management:** Users can type `/context` to see a rich list of
   exactly what the agent "knows" right now, and `/drop [file]` to easily evict

@@ -1727,26 +1727,19 @@ func (m model) renderAgentPanel() string {
 	availableWidth := m.width - 4
 	cardWidth := availableWidth / cols
 
-	// Helper to render a line with a fixed-width prefix and proper truncation
+	// Helper to render a perfectly aligned line using two fixed-width columns
 	renderLine := func(prefix string, text string, style lipgloss.Style, width int) string {
-		prefixWidth := runewidth.StringWidth(prefix)
-		padding := 0
-		if prefixWidth < 3 {
-			padding = 3 - prefixWidth
-		}
-		prefixStr := prefix + strings.Repeat(" ", padding)
+		prefixStyle := lipgloss.NewStyle().Width(3).Align(lipgloss.Left)
+		contentStyle := style.Width(width - 3)
 
-		maxTextWidth := width - 3 // prefix is 3
-		if runewidth.StringWidth(text) > maxTextWidth {
-			text = runewidth.Truncate(text, maxTextWidth-1, "…")
-		}
-		// Ensure the text itself is padded to maintain the box width
-		textWidth := runewidth.StringWidth(text)
-		if textWidth < maxTextWidth {
-			text += strings.Repeat(" ", maxTextWidth-textWidth)
+		if runewidth.StringWidth(text) > (width - 3) {
+			text = runewidth.Truncate(text, (width - 3)-1, "…")
 		}
 
-		return prefixStr + style.Render(text)
+		return lipgloss.JoinHorizontal(lipgloss.Left,
+			prefixStyle.Render(prefix),
+			contentStyle.Render(text),
+		)
 	}
 
 	var cards []string
@@ -1764,7 +1757,7 @@ func (m model) renderAgentPanel() string {
 			color = colorError
 		}
 
-		style := lipgloss.NewStyle().Border(border).BorderForeground(color).Padding(0, 1)
+		cardStyle := lipgloss.NewStyle().Border(border).BorderForeground(color).Padding(0, 1).Width(cardWidth - 2)
 
 		iconStr := "  "
 		if a.state == "active" {
@@ -1784,25 +1777,25 @@ func (m model) renderAgentPanel() string {
 			stateLabel = "Complete"
 		}
 
-		var card string
-		contentWidth := cardWidth - 4 // account for border and padding
+		contentWidth := cardWidth - 4
+		line1 := renderLine(a.icon, a.name, lipgloss.NewStyle().Foreground(color).Bold(true), contentWidth)
+		line2 := renderLine(iconStr, a.status, lipgloss.NewStyle().Foreground(tipColor), contentWidth)
+
+		var cardContent string
 		if fidelity == "high" {
-			line1 := renderLine(a.icon, a.name, lipgloss.NewStyle().Foreground(color).Bold(true), contentWidth)
-			line2 := renderLine(iconStr, a.status, lipgloss.NewStyle().Foreground(tipColor), contentWidth)
 			line3 := renderLine("", stateLabel, lipgloss.NewStyle().Foreground(tipColor).Italic(true).Faint(true), contentWidth)
-			card = lipgloss.JoinVertical(lipgloss.Left, line1, line2, line3)
-			style = style.Width(cardWidth - 2).Height(3)
+			cardContent = lipgloss.JoinVertical(lipgloss.Left, line1, line2, line3)
+			cardStyle = cardStyle.Height(3)
 		} else if fidelity == "medium" {
-			line1 := renderLine(a.icon, a.name, lipgloss.NewStyle().Foreground(color).Bold(true), contentWidth)
-			line2 := renderLine(iconStr, a.status, lipgloss.NewStyle().Foreground(tipColor), contentWidth)
-			card = lipgloss.JoinVertical(lipgloss.Left, line1, line2)
-			style = style.Width(cardWidth - 2).Height(2)
+			cardContent = lipgloss.JoinVertical(lipgloss.Left, line1, line2)
+			cardStyle = cardStyle.Height(2)
 		} else {
-			style = style.Width(6).Height(1).Padding(0, 1)
-			card = lipgloss.NewStyle().Width(4).Align(lipgloss.Center).Render(a.icon)
+			// Low fidelity
+			cardStyle = lipgloss.NewStyle().Border(border).BorderForeground(color).Width(6).Height(1).Padding(0, 1)
+			cardContent = lipgloss.NewStyle().Width(4).Align(lipgloss.Center).Render(a.icon)
 		}
 
-		cards = append(cards, style.Render(card))
+		cards = append(cards, cardStyle.Render(cardContent))
 	}
 
 	var rows []string

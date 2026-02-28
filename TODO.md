@@ -45,7 +45,5 @@ debt that should be addressed as the project evolves.
 ## Known Bugs
 
 - [x] **Dead-end Tool Calls** (#17): Subagent tool calls can reach a dead end.
-- [ ] **Status Overwrites Name** (#15): Tool and subagent invocation status
-  currently overwrites the agent name in the UI.
-- [ ] **Escape Sequences in Prompt** (#3): Strange escape sequences appear in
-  the input prompt when scrolling.
+- [x] **Status Overwrites Name** (#15): Tool and subagent invocation status currently overwrites the agent name in the UI.
+- [x] **Escape Sequences in Prompt** (#3): Strange escape sequences appear in the input prompt when scrolling. (Fixed via multiline textarea refactor).

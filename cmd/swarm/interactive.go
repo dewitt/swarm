@@ -84,26 +84,23 @@ var (
 )
 
 func renderLogo() string {
-	// DEC-style logo: each character in its own red box with white text.
+	// DEC-style logo: uniform rectangular boxes, twice as tall as wide visually.
 	chars := []string{">", "s", "w", "a", "r", "m"}
 	decRed := lipgloss.Color("#a9042c")
 	white := lipgloss.Color("#ffffff")
 
 	var boxes []string
-	for i, c := range chars {
+	for _, c := range chars {
+		// Terminal characters are usually ~2:1 aspect ratio.
+		// A 3x3 box in character cells results in a roughly 2:1 visual rectangle.
 		style := lipgloss.NewStyle().
 			Background(decRed).
 			Foreground(white).
-			Padding(0, 1).
-			Bold(true)
-
-		// Small gap between boxes (1 column).
-		// We use a larger gap (2 columns) after the ">" to separate the prompt from the name.
-		if i == 0 {
-			style = style.MarginRight(2)
-		} else if i < len(chars)-1 {
-			style = style.MarginRight(1)
-		}
+			Width(3).
+			Height(3).
+			Align(lipgloss.Center, lipgloss.Center).
+			Bold(true).
+			MarginRight(1) // Minimal "pixel" gap in terminal terms
 
 		boxes = append(boxes, style.Render(c))
 	}

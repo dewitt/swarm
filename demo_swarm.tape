@@ -1,4 +1,5 @@
 Output docs/assets/demo_swarm.gif
+Set Theme "Catppuccin Latte"
 Set FontSize 16
 Set Width 1200
 Set Height 800

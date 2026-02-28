@@ -14,7 +14,6 @@ import (
 var promptFlag string
 var planFlag bool
 var resumeFlag bool
-var demoSwarmFlag bool
 
 var configCmd = &cobra.Command{
 	Use:   "config",
@@ -43,14 +42,6 @@ var rootCmd = &cobra.Command{
 It helps developers quickly scaffold, test, and deploy AI swarms into native ecosystems.
 When run without arguments, it launches a persistent, interactive terminal session.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		if demoSwarmFlag {
-			if err := launchDemoSwarm(); err != nil {
-				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-				os.Exit(1)
-			}
-			return
-		}
-
 		// Check for piped input
 		var pipedData string
 		stat, _ := os.Stdin.Stat()
@@ -106,7 +97,6 @@ func init() {
 	rootCmd.Flags().StringVarP(&promptFlag, "prompt", "p", "", "Run a single-shot prompt and exit")
 	rootCmd.Flags().BoolVar(&planFlag, "plan", false, "Start the agent in read-only plan mode")
 	rootCmd.Flags().BoolVar(&resumeFlag, "resume", false, "Resume the last interactive session")
-	rootCmd.Flags().BoolVar(&demoSwarmFlag, "demo-swarm", false, "Launch the UI demo for the Agent Panel")
 	rootCmd.AddCommand(configCmd)
 }
 func main() {

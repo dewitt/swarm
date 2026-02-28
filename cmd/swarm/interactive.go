@@ -43,6 +43,13 @@ var (
 	statusBg       = lipgloss.AdaptiveColor{Light: "#EBEBEB", Dark: "#1A1A1A"}
 	statusFg       = lipgloss.AdaptiveColor{Light: "#555555", Dark: "#888888"}
 
+	// Agent Panel Colors
+	colorIdle    = lipgloss.Color("#888888") // Lighter Gray
+	colorActive  = lipgloss.Color("#4169E1") // Royal Blue
+	colorSuccess = lipgloss.Color("#34A853") // Green
+	colorWaiting = lipgloss.Color("#FBBC05") // Yellow
+	colorError   = lipgloss.Color("#EA4335") // Red
+
 	// Styles
 	logoStyle = lipgloss.NewStyle().
 			Bold(true)
@@ -1870,12 +1877,14 @@ func (m model) renderAgentPanel() string {
 	}
 
 	var rows []string
+	rowStyle := lipgloss.NewStyle().Width(availableWidth)
 	for i := 0; i < len(cards); i += cols {
 		end := i + cols
 		if end > len(cards) {
 			end = len(cards)
 		}
-		rows = append(rows, lipgloss.JoinHorizontal(lipgloss.Top, cards[i:end]...))
+		row := lipgloss.JoinHorizontal(lipgloss.Top, cards[i:end]...)
+		rows = append(rows, rowStyle.Render(row))
 	}
 
 	grid := lipgloss.JoinVertical(lipgloss.Left, rows...)

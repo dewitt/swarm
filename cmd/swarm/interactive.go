@@ -84,67 +84,100 @@ var (
 )
 
 func renderLogo() string {
-	// Stylized Swarm logo: forest palette with a subtle drop shadow
-	chars := []string{">", "s", "w", "a", "r", "m"}
-	
-	// Dark Slate for ">", shades of Forest for "swarm"
-	colors := []string{
-		"#334155", // > (Dark Slate)
-		"#1b4332", // s
-		"#2d6a4f", // w
-		"#40916c", // a
-		"#52b788", // r
-		"#74c69d", // m
+	sMainGt := lipgloss.NewStyle().Foreground(lipgloss.Color("#334155")).Bold(true)
+	sMainS := lipgloss.NewStyle().Foreground(lipgloss.Color("#1b4332")).Bold(true)
+	sMainW := lipgloss.NewStyle().Foreground(lipgloss.Color("#2d6a4f")).Bold(true)
+	sMainA := lipgloss.NewStyle().Foreground(lipgloss.Color("#40916c")).Bold(true)
+	sMainR := lipgloss.NewStyle().Foreground(lipgloss.Color("#52b788")).Bold(true)
+	sMainM := lipgloss.NewStyle().Foreground(lipgloss.Color("#74c69d")).Bold(true)
+	sShadow := lipgloss.NewStyle().Foreground(lipgloss.Color("#1a1a1a"))
+
+	// Helper to colorize block characters vs line/shadow characters
+	colorize := func(lines []string, mainStyle, shadowStyle lipgloss.Style) []string {
+		var res []string
+		for _, line := range lines {
+			var sb strings.Builder
+			for _, r := range line {
+				if r == '█' || r == '▄' || r == '▀' {
+					sb.WriteString(mainStyle.Render(string(r)))
+				} else if r != ' ' {
+					sb.WriteString(shadowStyle.Render(string(r)))
+				} else {
+					sb.WriteRune(r)
+				}
+			}
+			res = append(res, sb.String())
+		}
+		return res
 	}
 
-	if !lipgloss.HasDarkBackground() {
-		colors = []string{
-			"#1e293b", // > (Very Dark Slate)
-			"#1b4332", // s
-			"#2d6a4f", // w
-			"#40916c", // a
-			"#475569", // r (Slightly more muted in light mode)
-			"#64748b", // m
+	gt := colorize([]string{
+		"██╗    ",
+		"╚██╗   ",
+		" ╚██╗  ",
+		" ██╔╝  ",
+		"██╔╝   ",
+		"╚═╝    ",
+	}, sMainGt, sShadow)
+
+	s := colorize([]string{
+		" ██████╗",
+		"██╔════╝",
+		"╚█████╗ ",
+		" ╚═══██╗",
+		"██████╔╝",
+		"╚═════╝ ",
+	}, sMainS, sShadow)
+
+	w := colorize([]string{
+		"██╗    ██╗",
+		"██║    ██║",
+		"██║ █╗ ██║",
+		"██║███╗██║",
+		"╚███╔███╔╝",
+		" ╚══╝╚══╝ ",
+	}, sMainW, sShadow)
+
+	a := colorize([]string{
+		" █████╗ ",
+		"██╔══██╗",
+		"███████║",
+		"██╔══██║",
+		"██║  ██║",
+		"╚═╝  ╚═╝",
+	}, sMainA, sShadow)
+
+	r := colorize([]string{
+		"██████╗ ",
+		"██╔══██╗",
+		"██████╔╝",
+		"██╔══██╗",
+		"██║  ██║",
+		"╚═╝  ╚═╝",
+	}, sMainR, sShadow)
+
+	m := colorize([]string{
+		"███╗   ███╗",
+		"████╗ ████║",
+		"██╔████╔██║",
+		"██║╚██╔╝██║",
+		"██║ ╚═╝ ██║",
+		"╚═╝     ╚═╝",
+	}, sMainM, sShadow)
+
+	var sb strings.Builder
+	for i := 0; i < 6; i++ {
+		sb.WriteString(gt[i])
+		sb.WriteString(s[i])
+		sb.WriteString(w[i])
+		sb.WriteString(a[i])
+		sb.WriteString(r[i])
+		sb.WriteString(m[i])
+		if i < 5 {
+			sb.WriteString("\n")
 		}
 	}
-
-	var row1 []string // Primary characters
-	var row2 []string // Subtle "shadow" line
-
-	for i, c := range chars {
-		mainColor := lipgloss.Color(colors[i])
-		
-		// Style the primary character
-		charStyle := lipgloss.NewStyle().
-			Foreground(mainColor).
-			Bold(true).
-			Padding(0, 1)
-		
-		// The shadow is a dark block character offset by 1 char to the right
-		// and on the line below.
-		shadowStyle := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#1a1a1a")). // Subtle shadow
-			Padding(0, 1)
-
-		row1 = append(row1, charStyle.Render(c))
-		
-		if i == 0 {
-			// Larger gap after the ">" prompt
-			row1 = append(row1, "  ")
-			row2 = append(row2, "    ")
-		} else {
-			// Subtle gap between letters
-			row1 = append(row1, " ")
-			row2 = append(row2, "  ")
-		}
-
-		// Row 2: Shadow character
-		row2 = append(row2, shadowStyle.Render("▀"))
-	}
-
-	return lipgloss.JoinVertical(lipgloss.Left, 
-		lipgloss.JoinHorizontal(lipgloss.Bottom, row1...),
-		lipgloss.JoinHorizontal(lipgloss.Top, row2...))
+	return sb.String()
 }
 
 type streamMsg struct {

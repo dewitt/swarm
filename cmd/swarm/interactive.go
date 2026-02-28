@@ -21,6 +21,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/mattn/go-runewidth"
 	"github.com/sahilm/fuzzy"
 
 	"github.com/dewitt/swarm/pkg/sdk"
@@ -1700,7 +1701,6 @@ func (m model) renderAgentPanel() string {
 	var visibleAgents []*swarmAgent
 	now := time.Now()
 	for _, a := range m.agents {
-		// Visible if resident, or active/waiting, or has been active in the last 30 seconds
 		if a.resident || a.state == "active" || a.state == "waiting" || now.Sub(a.lastActive) < 30*time.Second {
 			visibleAgents = append(visibleAgents, a)
 		}
@@ -1710,7 +1710,6 @@ func (m model) renderAgentPanel() string {
 		return ""
 	}
 
-	// Determine fidelity based on visible count and terminal width
 	fidelity := "medium"
 	if len(visibleAgents) <= 8 {
 		fidelity = "high"
@@ -1718,7 +1717,6 @@ func (m model) renderAgentPanel() string {
 		fidelity = "low"
 	}
 
-	// Calculate exact card width to ensure alignment
 	cols := 4
 	if fidelity == "low" {
 		cols = (m.width - 4) / 8
@@ -1726,44 +1724,59 @@ func (m model) renderAgentPanel() string {
 			cols = 1
 		}
 	}
-	// Inner width available for cards (subtract Agent Panel borders and padding)
 	availableWidth := m.width - 4
 	cardWidth := availableWidth / cols
 
+	// Helper to render a line with a fixed-width prefix and proper truncation
+	renderLine := func(prefix string, text string, style lipgloss.Style, width int) string {
+		prefixWidth := runewidth.StringWidth(prefix)
+		padding := 0
+		if prefixWidth < 3 {
+			padding = 3 - prefixWidth
+		}
+		prefixStr := prefix + strings.Repeat(" ", padding)
+
+		maxTextWidth := width - 3 // prefix is 3
+		if runewidth.StringWidth(text) > maxTextWidth {
+			text = runewidth.Truncate(text, maxTextWidth-1, "…")
+		}
+		// Ensure the text itself is padded to maintain the box width
+		textWidth := runewidth.StringWidth(text)
+		if textWidth < maxTextWidth {
+			text += strings.Repeat(" ", maxTextWidth-textWidth)
+		}
+
+		return prefixStr + style.Render(text)
+	}
+
 	var cards []string
 	for _, a := range visibleAgents {
-		border := lipgloss.NormalBorder()
 		color := colorIdle
-
-		switch a.state {
-		case "active":
-			border = lipgloss.ThickBorder()
+		border := lipgloss.NormalBorder()
+		if a.state == "active" {
 			color = colorActive
-		case "success":
+			border = lipgloss.ThickBorder()
+		} else if a.state == "success" {
 			color = colorSuccess
-		case "waiting":
+		} else if a.state == "waiting" {
 			color = colorWaiting
-		case "error":
+		} else if a.state == "error" {
 			color = colorError
 		}
 
-		style := lipgloss.NewStyle().
-			Border(border).
-			BorderForeground(color).
-			Padding(0, 1)
+		style := lipgloss.NewStyle().Border(border).BorderForeground(color).Padding(0, 1)
 
 		iconStr := "  "
 		if a.state == "active" {
-			iconStr = a.spin.View() + " "
+			iconStr = a.spin.View()
 		} else if a.state == "success" {
-			iconStr = "✓ "
+			iconStr = "✓"
 		} else if a.state == "error" {
-			iconStr = "✗ "
+			iconStr = "✗"
 		} else if a.state == "waiting" {
-			iconStr = "⧖ "
+			iconStr = "⧖"
 		}
 
-		// Map state to human-readable label
 		stateLabel := strings.Title(a.state)
 		if a.state == "idle" {
 			stateLabel = "Ready"
@@ -1771,55 +1784,20 @@ func (m model) renderAgentPanel() string {
 			stateLabel = "Complete"
 		}
 
-		// Fixed-width prefix column (exactly 3 cells)
-		prefixStyle := lipgloss.NewStyle().Width(3)
-
 		var card string
+		contentWidth := cardWidth - 4 // account for border and padding
 		if fidelity == "high" {
-			style = style.Width(cardWidth - 2).Height(3)
-
-			statusText := a.status
-			maxStatusLen := cardWidth - 7
-			if len(statusText) > maxStatusLen && maxStatusLen > 0 {
-				statusText = statusText[:maxStatusLen] + "…"
-			}
-
-			// Use horizontal joining for each line to guarantee prefix alignment
-			line1 := lipgloss.JoinHorizontal(lipgloss.Left,
-				prefixStyle.Render(a.icon),
-				lipgloss.NewStyle().Foreground(color).Bold(true).Render(a.name),
-			)
-			line2 := lipgloss.JoinHorizontal(lipgloss.Left,
-				prefixStyle.Render(iconStr),
-				lipgloss.NewStyle().Foreground(tipColor).Render(statusText),
-			)
-			line3 := lipgloss.JoinHorizontal(lipgloss.Left,
-				prefixStyle.Render(""),
-				lipgloss.NewStyle().Foreground(tipColor).Italic(true).Faint(true).Render(stateLabel),
-			)
-
+			line1 := renderLine(a.icon, a.name, lipgloss.NewStyle().Foreground(color).Bold(true), contentWidth)
+			line2 := renderLine(iconStr, a.status, lipgloss.NewStyle().Foreground(tipColor), contentWidth)
+			line3 := renderLine("", stateLabel, lipgloss.NewStyle().Foreground(tipColor).Italic(true).Faint(true), contentWidth)
 			card = lipgloss.JoinVertical(lipgloss.Left, line1, line2, line3)
+			style = style.Width(cardWidth - 2).Height(3)
 		} else if fidelity == "medium" {
-			style = style.Width(cardWidth - 2).Height(2)
-
-			statusText := a.status
-			maxStatusLen := cardWidth - 7
-			if len(statusText) > maxStatusLen && maxStatusLen > 0 {
-				statusText = statusText[:maxStatusLen] + "…"
-			}
-
-			line1 := lipgloss.JoinHorizontal(lipgloss.Left,
-				prefixStyle.Render(a.icon),
-				lipgloss.NewStyle().Foreground(color).Bold(true).Render(a.name),
-			)
-			line2 := lipgloss.JoinHorizontal(lipgloss.Left,
-				prefixStyle.Render(iconStr),
-				lipgloss.NewStyle().Foreground(tipColor).Render(statusText),
-			)
-
+			line1 := renderLine(a.icon, a.name, lipgloss.NewStyle().Foreground(color).Bold(true), contentWidth)
+			line2 := renderLine(iconStr, a.status, lipgloss.NewStyle().Foreground(tipColor), contentWidth)
 			card = lipgloss.JoinVertical(lipgloss.Left, line1, line2)
+			style = style.Width(cardWidth - 2).Height(2)
 		} else {
-			// low fidelity: minimalist icon cards
 			style = style.Width(6).Height(1).Padding(0, 1)
 			card = lipgloss.NewStyle().Width(4).Align(lipgloss.Center).Render(a.icon)
 		}
@@ -1843,7 +1821,7 @@ func (m model) renderAgentPanel() string {
 		BorderForeground(borderColor).
 		Padding(0, 1).
 		MarginBottom(1).
-		Width(m.width - 2). // Force full width Agent Panel
+		Width(m.width - 2).
 		Render(grid)
 }
 

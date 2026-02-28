@@ -1718,6 +1718,18 @@ func (m model) renderAgentPanel() string {
 		fidelity = "low"
 	}
 
+	// Calculate exact card width to ensure alignment
+	cols := 4
+	if fidelity == "low" {
+		cols = (m.width - 4) / 8
+		if cols < 1 {
+			cols = 1
+		}
+	}
+	// Inner width available for cards (subtract Agent Panel borders and padding)
+	availableWidth := m.width - 4
+	cardWidth := availableWidth / cols
+
 	var cards []string
 	for _, a := range visibleAgents {
 		border := lipgloss.NormalBorder()
@@ -1751,12 +1763,9 @@ func (m model) renderAgentPanel() string {
 			iconStr = "⧖ "
 		}
 
-		var card string
-		// Fix misalignment by ensuring icons have a trailing space if they are wide
-		displayIcon := a.icon
-		if !strings.HasSuffix(displayIcon, " ") {
-			displayIcon += " "
-		}
+		// Fixed-width emoji container to prevent misalignment
+		iconStyle := lipgloss.NewStyle().Width(2)
+		displayIcon := iconStyle.Render(a.icon)
 
 		// Map state to human-readable label
 		stateLabel := strings.Title(a.state)
@@ -1766,51 +1775,42 @@ func (m model) renderAgentPanel() string {
 			stateLabel = "Complete"
 		}
 
+		var card string
 		if fidelity == "high" {
-			// 4 columns, 2 rows (default vision)
-			cardWidth := (m.width - 8) / 4
 			style = style.Width(cardWidth - 2).Height(3)
 
 			statusText := a.status
-			if len(statusText) > cardWidth-8 && cardWidth > 8 {
-				statusText = statusText[:cardWidth-8] + "…"
+			// Accurate status truncation
+			maxStatusLen := cardWidth - 6
+			if len(statusText) > maxStatusLen && maxStatusLen > 0 {
+				statusText = statusText[:maxStatusLen] + "…"
 			}
 
 			card = lipgloss.JoinVertical(lipgloss.Left,
-				lipgloss.NewStyle().Foreground(color).Bold(true).Render(displayIcon+a.name),
+				lipgloss.NewStyle().Foreground(color).Bold(true).Render(displayIcon+" "+a.name),
 				iconStr+lipgloss.NewStyle().Foreground(tipColor).Render(statusText),
 				lipgloss.NewStyle().Foreground(tipColor).Italic(true).Faint(true).Render(stateLabel),
 			)
 		} else if fidelity == "medium" {
-			// 4-6 columns
-			cardWidth := (m.width - 8) / 4
 			style = style.Width(cardWidth - 2).Height(2)
 
 			statusText := a.status
-			if len(statusText) > cardWidth-8 && cardWidth > 8 {
-				statusText = statusText[:cardWidth-8] + "…"
+			maxStatusLen := cardWidth - 6
+			if len(statusText) > maxStatusLen && maxStatusLen > 0 {
+				statusText = statusText[:maxStatusLen] + "…"
 			}
 
 			card = lipgloss.JoinVertical(lipgloss.Left,
-				lipgloss.NewStyle().Foreground(color).Bold(true).Render(displayIcon+a.name),
+				lipgloss.NewStyle().Foreground(color).Bold(true).Render(displayIcon+" "+a.name),
 				iconStr+lipgloss.NewStyle().Foreground(tipColor).Render(statusText),
 			)
 		} else {
 			// low fidelity: minimalist icon cards
 			style = style.Width(6).Height(1).Padding(0, 1)
-			card = lipgloss.NewStyle().Width(4).Align(lipgloss.Center).Render(displayIcon)
+			card = lipgloss.NewStyle().Width(4).Align(lipgloss.Center).Render(a.icon)
 		}
 
 		cards = append(cards, style.Render(card))
-	}
-
-	// Layout cards in rows
-	cols := 4
-	if fidelity == "low" {
-		cols = (m.width - 4) / 8 // As many as fit
-		if cols < 1 {
-			cols = 1
-		}
 	}
 
 	var rows []string
@@ -1829,7 +1829,7 @@ func (m model) renderAgentPanel() string {
 		BorderForeground(borderColor).
 		Padding(0, 1).
 		MarginBottom(1).
-		Width(m.width - 2). // Force full width
+		Width(m.width - 2).
 		Render(grid)
 }
 

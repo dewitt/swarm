@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"google.golang.org/adk/agent"
 	"google.golang.org/adk/agent/llmagent"
@@ -283,9 +284,11 @@ type defaultManager struct {
 	clientCfg     *genai.ClientConfig
 	pinnedContext map[string]string
 
-	flashModel   model.LLM
-	proModel     model.LLM
-	toolRegistry map[string]tool.Tool
+	flashModel     model.LLM
+	proModel       model.LLM
+	toolRegistry   map[string]tool.Tool
+	ciaAgent       agent.Agent
+	subAgentNames  []string
 }
 
 // ManagerConfig defines configuration for the AgentManager.
@@ -574,6 +577,29 @@ func (m *defaultManager) Reload() error {
 
 	m.run = r
 	m.skills = loadedSkills
+	m.subAgentNames = subAgentNames
+
+	// Initialize the Chat Input Agent (CIA)
+	ciaInstruction := fmt.Sprintf(`You are the Chat Input Agent (CIA).
+Your job is to classify user input and determine if it should be routed to a specialized sub-agent or the primary router.
+Available agents: %s
+
+If the user input is a digression from the current task, or a new general request, output: "ROUTE TO: router_agent"
+If the user input is specifically for one of the specialized agents, output: "ROUTE TO: [agent_name]"
+Otherwise, output: "CONTINUE"
+
+Keep your analysis silent. ONLY output the routing decision.`, strings.Join(subAgentNames, ", "))
+
+	ciaAgent, err := llmagent.New(llmagent.Config{
+		Name:        "chat_input_agent",
+		Model:       m.flashModel,
+		Instruction: ciaInstruction,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create chat input agent: %v", err)
+	}
+	m.ciaAgent = ciaAgent
+
 	return nil
 }
 
@@ -747,6 +773,51 @@ func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan string
 			out <- "[router_agent] This is a deterministic dry-run response."
 			return
 		}
+
+		// --- Chat Input Agent (CIA) Pre-processing ---
+		ciaInstruction := fmt.Sprintf(`You are the Chat Input Agent (CIA).
+Your job is to classify user input and determine if it should be routed to a specialized sub-agent or the primary router.
+Available agents: %s
+
+If the user input is a digression from the current task, or a new general request, output: "ROUTE TO: router_agent"
+If the user input is specifically for one of the specialized agents, output: "ROUTE TO: [agent_name]"
+Otherwise, output: "CONTINUE"
+
+Keep your analysis silent. ONLY output the routing decision.`, strings.Join(m.subAgentNames, ", "))
+
+		ciaRespIter := m.flashModel.GenerateContent(ctx, &model.LLMRequest{
+			Contents: []*genai.Content{genai.NewContentFromText(prompt, genai.Role("user"))},
+			Config: &genai.GenerateContentConfig{
+				SystemInstruction: genai.NewContentFromText(ciaInstruction, genai.Role("system")),
+			},
+		}, false)
+
+		for ciaResp, err := range ciaRespIter {
+			if err == nil && ciaResp.Content != nil && len(ciaResp.Content.Parts) > 0 {
+				ciaText := ciaResp.Content.Parts[0].Text
+				if strings.HasPrefix(ciaText, "ROUTE TO: ") {
+					target := strings.TrimPrefix(ciaText, "ROUTE TO: ")
+					target = strings.TrimSpace(target)
+					if target != "" {
+						// Perform a manual handoff by appending a transfer event to the session
+						sessResp, err := m.sessionSvc.Get(ctx, &session.GetRequest{
+							AppName:   "swarm-cli",
+							UserID:    m.userID,
+							SessionID: m.sessionID,
+						})
+						if err == nil {
+							transferEvent := session.NewEvent(fmt.Sprintf("cia_%d", time.Now().UnixNano()))
+							transferEvent.Author = "chat_input_agent"
+							transferEvent.Actions.TransferToAgent = target
+							_ = m.sessionSvc.AppendEvent(ctx, sessResp.Session, transferEvent)
+							out <- fmt.Sprintf("[AGENT_HANDOFF] %s", target)
+						}
+					}
+				}
+			}
+			break // Only need the first response from CIA
+		}
+		// --- End CIA Pre-processing ---
 
 		events := m.run.Run(ctx, m.userID, m.sessionID, genai.NewContentFromText(prompt, genai.Role("user")), agent.RunConfig{})
 

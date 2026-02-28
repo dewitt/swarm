@@ -28,6 +28,12 @@ into native ecosystems.
   LLM's context window by typing `@` to trigger an inline, fuzzy-filtered
   overlay of your workspace files.
 
+- **Chat Input Agent (CIA)**: A high-speed, lightweight routing layer that
+  pre-processes every user input. It proactively detects digressions and
+  context shifts, rerouting the conversation to the most appropriate agent
+  *before* the message is processed, ensuring the system stays aligned with
+  human topic-switching.
+
 - **Session Persistence & Resumption**: Sessions are automatically persisted
   to a local SQLite database. View past activity with `/sessions`, rewind the
   conversation history with `/rewind`, and easily pick up where you left off

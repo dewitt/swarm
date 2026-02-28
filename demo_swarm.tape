@@ -16,4 +16,4 @@ Enter
 Sleep 1s
 Show
 
-Sleep 25s
+Sleep 30s

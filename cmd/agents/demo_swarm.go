@@ -10,12 +10,20 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+var (
+	colorIdle    = lipgloss.Color("#666666") // Gray
+	colorActive  = lipgloss.Color("#4169E1") // Royal Blue
+	colorSuccess = lipgloss.Color("#34A853") // Green
+	colorWaiting = lipgloss.Color("#FBBC05") // Yellow
+	colorError   = lipgloss.Color("#EA4335") // Red
+)
+
 type demoAgent struct {
 	name   string
-	color  lipgloss.Color
+	icon   string
 	status string
+	state  string // "idle", "active", "success", "waiting", "error"
 	spin   spinner.Model
-	active bool
 }
 
 type demoSwarmModel struct {
@@ -38,27 +46,19 @@ func tickCmd() tea.Cmd {
 func initDemoSwarm() demoSwarmModel {
 	vp := viewport.New(0, 0)
 
-	s1 := spinner.New()
-	s1.Spinner = spinner.Dot
-	s1.Style = lipgloss.NewStyle().Foreground(googleBlue)
-
-	s2 := spinner.New()
-	s2.Spinner = spinner.MiniDot
-	s2.Style = lipgloss.NewStyle().Foreground(googleGreen)
-
-	s3 := spinner.New()
-	s3.Spinner = spinner.Pulse
-	s3.Style = lipgloss.NewStyle().Foreground(googleYellow)
-
-	s4 := spinner.New()
-	s4.Spinner = spinner.Jump
-	s4.Style = lipgloss.NewStyle().Foreground(googleRed)
+	s := spinner.New()
+	s.Spinner = spinner.Dot
+	s.Style = lipgloss.NewStyle().Foreground(colorActive)
 
 	agents := []*demoAgent{
-		{name: "Router Agent", color: googleBlue, status: "Awaiting input...", spin: s1, active: true},
-		{name: "Codebase Investigator", color: googleGreen, status: "Idle", spin: s2, active: false},
-		{name: "Web Researcher", color: googleYellow, status: "Idle", spin: s3, active: false},
-		{name: "GitOps Practitioner", color: googleRed, status: "Idle", spin: s4, active: false},
+		{name: "Router", icon: "🧠", status: "Awaiting input...", state: "waiting", spin: s},
+		{name: "Investigator", icon: "🔍", status: "Idle", state: "idle", spin: s},
+		{name: "Web Researcher", icon: "🌐", status: "Idle", state: "idle", spin: s},
+		{name: "GitOps", icon: "🐙", status: "Idle", state: "idle", spin: s},
+		{name: "Test Synthesizer", icon: "🧪", status: "Idle", state: "idle", spin: s},
+		{name: "Security Auditor", icon: "🛡️", status: "Idle", state: "idle", spin: s},
+		{name: "DB Architect", icon: "🗄️", status: "Idle", state: "idle", spin: s},
+		{name: "Code Generator", icon: "💻", status: "Idle", state: "idle", spin: s},
 	}
 
 	msgs := []string{
@@ -92,12 +92,12 @@ func (m demoSwarmModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		m.vp.Width = msg.Width - 4
-		m.vp.Height = msg.Height - 12 // Leave room for dashboard
+		m.vp.Height = msg.Height - 18 // Leave room for 2 rows of dashboard
 		m.updateVP()
 
 	case spinner.TickMsg:
 		for i, a := range m.agents {
-			if a.spin.ID() == msg.ID {
+			if a.state == "active" {
 				var cmd tea.Cmd
 				m.agents[i].spin, cmd = a.spin.Update(msg)
 				cmds = append(cmds, cmd)
@@ -111,55 +111,76 @@ func (m demoSwarmModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Script the demo
 		switch m.ticks {
 		case 2:
+			m.agents[0].state = "active"
 			m.agents[0].status = "Decomposing task..."
 			m.messages = append(m.messages, agentMsgStyle.Render("✦ [Router] ")+"Decomposing the task into sub-objectives: 1. Audit current codebase 2. Research OAuth patterns 3. Create Git Branch.")
 		case 4:
 			m.agents[0].status = "Provisioning Swarm..."
 		case 6:
-			m.agents[0].status = "Delegating to Investigator"
-			m.agents[0].active = false
-			m.agents[1].active = true
+			m.agents[0].state = "waiting"
+			m.agents[0].status = "Delegated to Investigator"
+			m.agents[1].state = "active"
 			m.agents[1].status = "Running grep_search ('auth.go')"
 		case 8:
 			m.agents[1].status = "Reading src/legacy/auth.go"
 		case 10:
-			m.agents[1].active = false
+			m.agents[1].state = "success"
 			m.agents[1].status = "Completed"
-			m.agents[0].active = true
+			m.agents[0].state = "active"
 			m.agents[0].status = "Synthesizing investigation"
 			m.messages = append(m.messages, agentMsgStyle.Render("✦ [Investigator] ")+"Found 3 files related to legacy auth in `src/legacy/`. Preparing refactor map.")
 		case 12:
-			m.agents[0].status = "Delegating to Web Researcher"
-			m.agents[0].active = false
-			m.agents[2].active = true
-			m.agents[2].status = "Running google_search ('OAuth 2.0 Go standards')"
+			m.agents[0].state = "waiting"
+			m.agents[0].status = "Delegated to Web Researcher"
+			m.agents[2].state = "active"
+			m.agents[2].status = "Running google_search"
 		case 15:
-			m.agents[2].status = "Fetching https://datatracker.ietf.org/doc/html/rfc6749"
+			m.agents[2].status = "Fetching RFC 6749"
 		case 18:
+			m.agents[2].state = "success"
 			m.agents[2].status = "Completed"
-			m.agents[2].active = false
-			m.agents[0].active = true
-			m.agents[0].status = "Delegating to GitOps Practitioner"
+			m.agents[0].state = "active"
+			m.agents[0].status = "Delegating to Dev Swarm"
 			m.messages = append(m.messages, agentMsgStyle.Render("✦ [Web Researcher] ")+"Compiled modern OAuth 2.0 PKCE flow standards for Go implementation.")
 		case 20:
-			m.agents[0].active = false
-			m.agents[3].active = true
-			m.agents[3].status = "Running bash_execute ('git checkout -b refactor/oauth')"
+			m.agents[0].state = "waiting"
+			m.agents[0].status = "Waiting on Dev Swarm"
+			m.agents[6].state = "active"
+			m.agents[6].status = "Designing schema migrations..."
 		case 22:
-			m.agents[3].status = "Executing code changes locally..."
-		case 25:
-			m.agents[3].status = "Running bash_execute ('go test ./...')"
+			m.agents[6].state = "success"
+			m.agents[6].status = "Completed"
+			m.agents[7].state = "active"
+			m.agents[7].status = "Translating logic to Go..."
+		case 24:
+			m.agents[7].status = "Refactoring user routes..."
+		case 26:
+			m.agents[7].state = "success"
+			m.agents[7].status = "Completed"
+			m.agents[4].state = "active"
+			m.agents[5].state = "active"
+			m.agents[4].status = "Generating table tests..."
+			m.agents[5].status = "Auditing Go code for vulnerabilities..."
 		case 28:
-			m.agents[3].status = "Running bash_execute ('git commit -m \"feat: oauth2\"')"
+			m.agents[4].status = "Executing tests: PASS (14/14)"
+			m.agents[5].status = "No vulnerabilities found."
 		case 31:
-			m.agents[3].status = "Running bash_execute ('gh pr create')"
+			m.agents[4].state = "success"
+			m.agents[4].status = "Completed"
+			m.agents[5].state = "success"
+			m.agents[5].status = "Completed"
+			m.agents[3].state = "active"
+			m.agents[3].status = "Running bash ('git commit')"
 		case 34:
+			m.agents[3].status = "Running bash ('gh pr create')"
+		case 37:
+			m.agents[3].state = "success"
 			m.agents[3].status = "Completed"
-			m.agents[3].active = false
-			m.agents[0].active = true
+			m.agents[0].state = "active"
 			m.agents[0].status = "Finalizing"
 			m.messages = append(m.messages, agentMsgStyle.Render("✦ [GitOps] ")+"Created Pull Request #142 for your review.")
-		case 36:
+		case 39:
+			m.agents[0].state = "waiting"
 			m.agents[0].status = "Awaiting input..."
 			m.messages = append(m.messages, agentMsgStyle.Render("✦ [Router] ")+"The swarm has successfully completed the OAuth 2.0 refactoring task. All tests pass, and PR #142 is ready. What would you like to do next?")
 		}
@@ -185,41 +206,73 @@ func (m demoSwarmModel) View() string {
 	}
 
 	// 1. Render Dashboard
-	var cards []string
-	for _, a := range m.agents {
+	var row1 []string
+	var row2 []string
+	for i, a := range m.agents {
 		border := lipgloss.NormalBorder()
-		color := tipColor
-		if a.active {
+		color := colorIdle
+
+		switch a.state {
+		case "active":
 			border = lipgloss.ThickBorder()
-			color = a.color
+			color = colorActive
+		case "success":
+			color = colorSuccess
+		case "waiting":
+			color = colorWaiting
+		case "error":
+			color = colorError
 		}
 
 		style := lipgloss.NewStyle().
 			Border(border).
 			BorderForeground(color).
 			Padding(0, 1).
-			Width((m.width - 10) / 4) // Roughly 4 columns
+			Width((m.width - 12) / 4). // 4 columns per row, account for borders
+			Height(3)                  // Ensure consistent height
 
-		icon := " "
-		if a.active {
-			icon = a.spin.View()
+		iconStr := "  "
+		if a.state == "active" {
+			iconStr = a.spin.View() + " "
+		} else if a.state == "success" {
+			iconStr = "✓ "
+		} else if a.state == "error" {
+			iconStr = "✗ "
+		} else if a.state == "waiting" {
+			iconStr = "⧖ "
+		}
+
+		// Truncate status if it's too long for the box
+		statusText := a.status
+		maxLen := ((m.width - 12) / 4) - 6
+		if len(statusText) > maxLen && maxLen > 0 {
+			statusText = statusText[:maxLen] + "..."
 		}
 
 		card := lipgloss.JoinVertical(lipgloss.Left,
-			lipgloss.NewStyle().Foreground(a.color).Bold(true).Render(a.name),
-			icon+" "+a.status,
+			lipgloss.NewStyle().Foreground(color).Bold(true).Render(a.icon+" "+a.name),
+			iconStr+lipgloss.NewStyle().Foreground(tipColor).Render(statusText),
 		)
-		cards = append(cards, style.Render(card))
+
+		renderedCard := style.Render(card)
+		if i < 4 {
+			row1 = append(row1, renderedCard)
+		} else {
+			row2 = append(row2, renderedCard)
+		}
 	}
 
-	dashboard := lipgloss.JoinHorizontal(lipgloss.Top, cards...)
+	dashboardRow1 := lipgloss.JoinHorizontal(lipgloss.Top, row1...)
+	dashboardRow2 := lipgloss.JoinHorizontal(lipgloss.Top, row2...)
+	dashboardGrid := lipgloss.JoinVertical(lipgloss.Left, dashboardRow1, dashboardRow2)
+
 	dashboardBox := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(borderColor).
 		Padding(0, 1).
 		Render(lipgloss.JoinVertical(lipgloss.Left,
 			lipgloss.NewStyle().Bold(true).Render(" Swarm Dashboard - Mission Control"),
-			dashboard,
+			dashboardGrid,
 		))
 
 	// 2. Render Viewport

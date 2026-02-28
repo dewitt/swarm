@@ -689,6 +689,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeyCtrlJ:
 			m.textArea.InsertString("\n")
 			return m, nil
+		case tea.KeyCtrlL:
+			return m, tea.ClearScreen
 		case tea.KeyCtrlR:
 			if m.state == stateChat && !m.loading {
 				m.acActive = true

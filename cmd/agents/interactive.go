@@ -300,6 +300,8 @@ type model struct {
 
 	statusMsg    string
 	lastResponse string
+	observeMode  bool
+	observeLog   []string
 	activeAgent  string
 
 	// Autocomplete state
@@ -711,6 +713,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeyCtrlJ:
 			m.textArea.InsertString("\n")
 			return m, nil
+		case tea.KeyCtrlO:
+			m.observeMode = !m.observeMode
+			state := "disabled"
+			if m.observeMode {
+				state = "enabled"
+			}
+			m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+fmt.Sprintf("Observe mode %s.", state))
+			m.updateViewport()
+			return m, nil
 		case tea.KeyCtrlL:
 			return m, tea.ClearScreen
 		case tea.KeyCtrlR:
@@ -869,12 +880,20 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, vpCmd
 	case streamMsg:
 		if strings.HasPrefix(msg.text, "[TOOL_CALL] ") {
-			m.statusMsg = "Running " + strings.TrimPrefix(msg.text, "[TOOL_CALL] ") + "…"
+			toolName := strings.TrimPrefix(msg.text, "[TOOL_CALL] ")
+			m.statusMsg = "Running " + toolName + "…"
+			if m.observeMode {
+				m.observeLog = append(m.observeLog, fmt.Sprintf("[%s] Invoked tool: %s", m.activeAgent, toolName))
+			}
 			m.updateViewport()
 			return m, listenForStream(msg.ch)
 		}
 		if strings.HasPrefix(msg.text, "[AGENT_HANDOFF] ") {
-			m.activeAgent = strings.TrimSpace(strings.TrimPrefix(msg.text, "[AGENT_HANDOFF] "))
+			newAgent := strings.TrimSpace(strings.TrimPrefix(msg.text, "[AGENT_HANDOFF] "))
+			if m.observeMode {
+				m.observeLog = append(m.observeLog, fmt.Sprintf("[%s] Delegated task to: %s", m.activeAgent, newAgent))
+			}
+			m.activeAgent = newAgent
 			m.statusMsg = ""
 			m.updateViewport()
 			return m, listenForStream(msg.ch)
@@ -909,12 +928,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.loading = false
 		m.statusMsg = ""
 		m.activeAgent = "Router"
+		m.observeLog = nil
 		m.updateViewport()
 		return m, checkGitStatus()
 
 	case streamErrMsg:
 		m.loading = false
 		m.statusMsg = ""
+		m.observeLog = nil
 		m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Width(m.viewport.Width).Render("Error: "+msg.err.Error()))
 		m.updateViewport()
 		return m, checkGitStatus()
@@ -1137,6 +1158,7 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 			"  /config      Prints the current global configuration.",
 			"  /remember    Saves a global preference (e.g. /remember I use tabs).",
 			"  /copy        Copies the last agent response to the system clipboard.",
+			"  /observe     Toggles observe mode to see real-time agent activity.",
 			"  /rewind [n]  Rewinds the conversation history by n turns (default 1).",
 			"  /plan        Enter read-only plan mode to brainstorm safely.",
 			"  /act         Exit plan mode and allow the agent to execute actions.",
@@ -1266,6 +1288,15 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 	case "/act":
 		m.planMode = false
 		m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"Act Mode enabled. I am fully capable of writing files and executing commands.")
+	case "/observe":
+		m.observeMode = !m.observeMode
+		state := "disabled"
+		if m.observeMode {
+			state = "enabled"
+		}
+		m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+fmt.Sprintf("Observe mode %s.", state))
+		m.updateViewport()
+
 	case "/config":
 		cfg, err := sdk.LoadConfig()
 		if err != nil {
@@ -1350,6 +1381,20 @@ func (m *model) updateViewport() {
 		s.WriteString("\n\n")
 	}
 	if m.loading {
+		if m.observeMode && len(m.observeLog) > 0 {
+			observeBox := lipgloss.NewStyle().
+				Border(lipgloss.NormalBorder()).
+				BorderForeground(googleYellow).
+				Padding(0, 1).
+				Width(m.viewport.Width - 2).
+				Render(lipgloss.JoinVertical(lipgloss.Left,
+					lipgloss.NewStyle().Foreground(googleYellow).Bold(true).Render("👀 Observing Agent Execution:"),
+					strings.Join(m.observeLog, "\n"),
+				))
+			s.WriteString(observeBox)
+			s.WriteString("\n\n")
+		}
+
 		status := "Thinking…"
 		if m.statusMsg != "" {
 			status = m.statusMsg

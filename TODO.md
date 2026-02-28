@@ -34,7 +34,7 @@ debt that should be addressed as the project evolves.
 - [x] **Codex Agent** (#20): Add a Codex agent wrapper to delegate to Codex
   CLI.
 
-- [ ] **Observe Mode** (#18): Add a `^O` command for observe-mode.
+- [x] **Observe Mode** (#18): Add a `^O` command for observe-mode.
 
 - [ ] **Async Interactions Design** (#19): Write a design doc for input
   queueing, interruptions, and async HITL interactions.
@@ -46,4 +46,4 @@ debt that should be addressed as the project evolves.
 
 - [x] **Dead-end Tool Calls** (#17): Subagent tool calls can reach a dead end.
 - [x] **Status Overwrites Name** (#15): Tool and subagent invocation status currently overwrites the agent name in the UI.
-- [x] **Escape Sequences in Prompt** (#3): Strange escape sequences appear in the input prompt when scrolling. (Fixed via multiline textarea refactor).
+- [ ] **Escape Sequences in Prompt** (#3): Strange escape sequences appear in the input prompt when scrolling.

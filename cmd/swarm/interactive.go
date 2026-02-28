@@ -1749,11 +1749,13 @@ func (m model) renderAgentPanel() string {
 		fidelity = "low"
 	}
 
-	// Calculate exact card width
-	availableWidth := m.width - 2
+	// Inner width available for cards (subtract Agent Panel borders(2) and padding(2))
+	availableWidth := m.width - 4
+	if availableWidth < 20 { availableWidth = 20 }
+	
 	cardWidth := availableWidth / cols
 	if fidelity == "low" {
-		cols = (m.width - 4) / 8
+		cols = availableWidth / 8
 		if cols < 1 { cols = 1 }
 		cardWidth = 8
 	}

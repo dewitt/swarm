@@ -740,9 +740,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			if input != "" {
 				if m.state == stateShell {
-					m.messages = append(m.messages, lipgloss.NewStyle().Foreground(googleYellow).Bold(true).Render("! ")+input)
+					m.messages = append(m.messages, lipgloss.NewStyle().Width(m.viewport.Width).Render(lipgloss.NewStyle().Foreground(googleYellow).Bold(true).Render("! ")+input))
 				} else {
-					m.messages = append(m.messages, promptStyle.Render("> ")+input)
+					m.messages = append(m.messages, lipgloss.NewStyle().Width(m.viewport.Width).Render(promptStyle.Render("> ")+input))
 				}
 
 				if len(m.history) == 0 || m.history[len(m.history)-1] != input {
@@ -884,17 +884,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case streamErrMsg:
 		m.loading = false
 		m.statusMsg = ""
-		m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Render("Error: "+msg.err.Error()))
+		m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Width(m.viewport.Width).Render("Error: "+msg.err.Error()))
 		m.updateViewport()
 		return m, nil
 
 	case responseMsg:
 		m.loading = false
 		if msg.err != nil {
-			m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Render("Error: "+msg.err.Error()))
+			m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Width(m.viewport.Width).Render("Error: "+msg.err.Error()))
 		} else if msg.isShell {
 			// Style for shell output - slightly indented and perhaps a different color
-			shellStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#AAAAAA")).PaddingLeft(2)
+			shellStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#AAAAAA")).PaddingLeft(2).Width(m.viewport.Width)
 			m.messages = append(m.messages, shellStyle.Render(msg.text))
 		} else {
 			out := msg.text
@@ -912,7 +912,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.loading = false
 		if msg.err != nil {
 			m.state = stateChat
-			m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Render("Error fetching models: "+msg.err.Error()))
+			m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Width(m.viewport.Width).Render("Error fetching models: "+msg.err.Error()))
 			m.updateViewport()
 			return m, tea.ClearScreen
 		}

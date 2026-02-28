@@ -1964,7 +1964,11 @@ func (m model) View() string {
 	statusHeight := 1
 
 	// Recalculate viewport height to fill remaining space
-	m.viewport.Height = m.height - agentPanelHeight - inputHeight - statusHeight
+	// Subtract 2 for the viewportStyle's own top/bottom borders
+	m.viewport.Height = m.height - agentPanelHeight - inputHeight - statusHeight - 2
+	if m.viewport.Height < 1 {
+		m.viewport.Height = 1
+	}
 	
 	// Output Box (Viewport) with border
 	vpView := viewportStyle.Width(m.width - 2).Height(m.viewport.Height).Render(m.viewport.View())

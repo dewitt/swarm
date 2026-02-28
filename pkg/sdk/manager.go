@@ -778,7 +778,12 @@ func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan ChatEv
 
 		if os.Getenv("AGENTS_DRY_RUN") == "true" {
 			// Provide fast, deterministic mock responses for vhs tape recordings
-			if strings.Contains(strings.ToLower(prompt), "build") || strings.Contains(strings.ToLower(prompt), "test") {
+			lowerPrompt := strings.ToLower(prompt)
+			if strings.Contains(lowerPrompt, "what can you do") {
+				out <- ChatEvent{Type: ChatEventFinalResponse, Agent: "router_agent", Content: "I am an AI Swarm Orchestrator. I can help you investigate codebases, build/test applications, and manage GitOps deployments by coordinating specialized agents."}
+				return
+			}
+			if strings.Contains(lowerPrompt, "build") || strings.Contains(lowerPrompt, "test") {
 				out <- ChatEvent{Type: ChatEventHandoff, Content: "codebase_investigator"}
 				out <- ChatEvent{Type: ChatEventThought, Agent: "codebase_investigator", Content: "Analyzing repository structure…"}
 				time.Sleep(1 * time.Second)

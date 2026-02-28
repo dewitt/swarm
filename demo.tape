@@ -14,14 +14,27 @@ Enter
 Sleep 2s
 Show
 
+Type "Hello, what can you do?"
+Sleep 500ms
+Enter
+Sleep 5s
+
+Type "/skills"
+Sleep 500ms
+Enter
+Sleep 5s
+
+Type "! ls -F"
+Sleep 500ms
+Enter
+Sleep 5s
+
 Type "Build and test this repository"
 Sleep 500ms
 Enter
-
-Sleep 25s
+Sleep 5s
 
 Type "Now deploy it to production"
 Sleep 500ms
 Enter
-
 Sleep 15s

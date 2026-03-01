@@ -20,7 +20,11 @@ Sleep 4s
 Type "How many Go files are in this repository?"
 Sleep 500ms
 Enter
+Sleep 2s
+Hide
 Sleep 20s
+Show
+Sleep 4s
 
 Type "! ls src"
 Sleep 500ms

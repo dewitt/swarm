@@ -780,7 +780,7 @@ func (m *defaultSwarm) executeSpan(ctx context.Context, out chan<- ObservableEve
 						respIter := m.fastModel.GenerateContent(obsCtx, &model.LLMRequest{Contents: []*genai.Content{genai.NewContentFromText(obsPrompt, genai.Role("user"))}}, false)
 						for resp, err := range respIter {
 							if err != nil {
-								fmt.Fprintf(os.Stderr, "[Observer Error] %v\n", err)
+								// Silently ignore transient errors in the background observer loop
 								break
 							}
 							if resp.Content != nil && len(resp.Content.Parts) > 0 {

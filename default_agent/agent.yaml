@@ -1,4 +1,0 @@
-name: "default-agent"
-version: "1.0"
-description: "A default standard python agent created because the task was empty."
-entrypoint: "python agent.py"

@@ -521,6 +521,13 @@ func (m *defaultManager) executeTask(ctx context.Context, out chan<- ChatEvent, 
 	// in the shared session service, especially during parallel execution.
 	taskSessionID := fmt.Sprintf("%s/%s", m.sessionID, task.ID)
 	
+	// Ensure the task session exists in the database
+	_, _ = m.sessionSvc.Create(ctx, &session.CreateRequest{
+		AppName:   "swarm-cli",
+		UserID:    m.userID,
+		SessionID: taskSessionID,
+	})
+
 	taskRunner, _ := runner.New(runner.Config{
 		AppName:        "swarm-cli",
 		Agent:          targetAgent,

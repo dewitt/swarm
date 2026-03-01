@@ -1020,13 +1020,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch event.Type {
 		case sdk.ChatEventHandoff:
 			newAgentName := strings.TrimSpace(event.Content)
+			oldAgentName := event.Agent
+			if oldAgentName == "" {
+				oldAgentName = m.activeAgent
+			}
+
 			if m.observeMode {
-				m.observeLog = append(m.observeLog, fmt.Sprintf("[%s] ➡️ Delegated task to: %s", m.activeAgent, lipgloss.NewStyle().Bold(true).Render(newAgentName)))
+				m.observeLog = append(m.observeLog, fmt.Sprintf("[%s] ➡️ Delegated task to: %s", oldAgentName, lipgloss.NewStyle().Bold(true).Render(newAgentName)))
 			}
 
 			// Update AgentPanel
-			if oldA := m.findAgent(m.activeAgent); oldA != nil {
-				oldA.update("success", "Task completed")
+			if oldA := m.findAgent(oldAgentName); oldA != nil {
+				oldA.update("success", "Task delegated")
 			}
 			var newA *swarmAgent
 			newA, agentCmd = m.ensureAgent(newAgentName)
@@ -1047,15 +1052,21 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				toolArgs = parts[1]
 			}
 
+			// Identify the correct agent from the event
+			targetAgentName := event.Agent
+			if targetAgentName == "" {
+				targetAgentName = m.activeAgent
+			}
+
 			m.statusMsg = "Running " + toolName + "…"
 
 			// Update AgentPanel
-			a, cmd := m.ensureAgent(m.activeAgent)
+			a, cmd := m.ensureAgent(targetAgentName)
 			agentCmd = cmd
 			a.update("active", "Tool: "+toolName)
 
 			if m.observeMode {
-				logEntry := fmt.Sprintf("[%s] Executing %s", m.activeAgent, toolName)
+				logEntry := fmt.Sprintf("[%s] Executing %s", targetAgentName, toolName)
 				if toolArgs != "" {
 					logEntry += " " + lipgloss.NewStyle().Foreground(tipColor).Render(toolArgs)
 				}
@@ -1069,8 +1080,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			parts := strings.SplitN(resultInfo, " ", 2)
 			toolName := parts[0]
 
+			// Identify the correct agent from the event
+			targetAgentName := event.Agent
+			if targetAgentName == "" {
+				targetAgentName = m.activeAgent
+			}
+
 			// Update AgentPanel
-			a, cmd := m.ensureAgent(m.activeAgent)
+			a, cmd := m.ensureAgent(targetAgentName)
 			agentCmd = cmd
 			// Set back to idle to stop spinner, and keep tool name as status
 			a.update("idle", "Completed "+toolName)
@@ -1081,7 +1098,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if len(parts) > 1 {
 					toolResult = parts[1]
 				}
-				logEntry := fmt.Sprintf("[%s] Completed %s", m.activeAgent, toolName)
+				logEntry := fmt.Sprintf("[%s] Completed %s", targetAgentName, toolName)
 				if toolResult != "" {
 					logEntry += " " + lipgloss.NewStyle().Foreground(tipColor).Render(toolResult)
 				}
@@ -1091,8 +1108,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Batch(listenForStream(msg.ch), agentCmd)
 
 		case sdk.ChatEventTelemetry:
+			targetAgentName := event.Agent
+			if targetAgentName == "" {
+				targetAgentName = m.activeAgent
+			}
 			// Update AgentPanel telemetry for active agent
-			if a := m.findAgent(m.activeAgent); a != nil {
+			if a := m.findAgent(targetAgentName); a != nil {
 				a.telemetry = append(a.telemetry, event.Content)
 				if len(a.telemetry) > 3 {
 					a.telemetry = a.telemetry[len(a.telemetry)-3:]
@@ -1165,8 +1186,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case sdk.ChatEventError:
 			m.statusMsg = ""
 
+			targetAgentName := event.Agent
+			if targetAgentName == "" {
+				targetAgentName = m.activeAgent
+			}
+
 			// Update AgentPanel
-			a, cmd := m.ensureAgent(m.activeAgent)
+			a, cmd := m.ensureAgent(targetAgentName)
 			agentCmd = cmd
 			a.update("error", "Failed")
 

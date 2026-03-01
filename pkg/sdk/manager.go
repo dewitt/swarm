@@ -981,29 +981,31 @@ func (m *defaultManager) ExecuteGraph(ctx context.Context, g *ExecutionGraph) (<
 		defer close(out)
 		o := NewOrchestrator(g)
 
-		// A channel to receive completed task IDs
-		completed := make(chan string)
-		// To track running goroutines
+		type completedTask struct {
+			ID     string
+			Result string
+		}
+		completed := make(chan completedTask)
 		activeTasks := 0
 
 		for {
-			// Get ready tasks
 			ready := o.GetReadyTasks()
 			for _, t := range ready {
 				o.MarkActive(t.ID)
 				activeTasks++
 
-				// Launch task in a goroutine
 				go func(task Task) {
-					// We need an agent for this task.
+					var taskResult string
+					defer func() {
+						completed <- completedTask{ID: task.ID, Result: taskResult}
+					}()
+
 					targetAgent, ok := m.agents[task.Agent]
 					if !ok {
 						out <- ChatEvent{Type: ChatEventError, Agent: "Orchestrator", Content: fmt.Sprintf("Agent '%s' not found for task '%s'", task.Agent, task.ID)}
-						completed <- task.ID
 						return
 					}
 
-					// We need an isolated runner for this execution to avoid polluting global session
 					taskSessionID := fmt.Sprintf("%s_%s", m.sessionID, task.ID)
 					_, _ = m.sessionSvc.Create(ctx, &session.CreateRequest{
 						AppName:   "swarm-cli",
@@ -1018,13 +1020,11 @@ func (m *defaultManager) ExecuteGraph(ctx context.Context, g *ExecutionGraph) (<
 					})
 					if err != nil {
 						out <- ChatEvent{Type: ChatEventError, Agent: "Orchestrator", Content: fmt.Sprintf("Failed to init runner for task '%s': %v", task.ID, err)}
-						completed <- task.ID
 						return
 					}
 
 					out <- ChatEvent{Type: ChatEventThought, Agent: targetAgent.Name(), Content: fmt.Sprintf("Starting task: %s", task.Name)}
 
-					// Add telemetry specifically for this task
 					telemetryChan := make(chan string, 100)
 					toolCtx, cancelToolCtx := context.WithCancel(context.WithValue(ctx, telemetryContextKey{}, (chan<- string)(telemetryChan)))
 					defer cancelToolCtx()
@@ -1037,15 +1037,24 @@ func (m *defaultManager) ExecuteGraph(ctx context.Context, g *ExecutionGraph) (<
 						close(telemetryDone)
 					}()
 
-					promptStr := fmt.Sprintf("Task: %s\nInstructions: %s", task.Name, task.Prompt)
+					// Inject results from completed dependencies into the prompt
+					depContext := ""
+					results := o.GetContext()
+					for _, depID := range task.Dependencies {
+						if res, ok := results[depID]; ok {
+							depContext += fmt.Sprintf("\n--- Result from %s ---\n%s\n", depID, res)
+						}
+					}
+
+					promptStr := fmt.Sprintf("Task: %s\nInstructions: %s\n%s", task.Name, task.Prompt, depContext)
 					events := taskRunner.Run(toolCtx, m.userID, taskSessionID, genai.NewContentFromText(promptStr, genai.Role("user")), agent.RunConfig{})
 
+					var fullResponse strings.Builder
 					for event, err := range events {
 						if err != nil {
 							out <- ChatEvent{Type: ChatEventError, Agent: targetAgent.Name(), Content: err.Error()}
 							break
 						}
-                        
 						if event.Content != nil {
 							for _, part := range event.Content.Parts {
 								if part.FunctionCall != nil {
@@ -1064,7 +1073,6 @@ func (m *defaultManager) ExecuteGraph(ctx context.Context, g *ExecutionGraph) (<
 							}
 						}
 						if !event.Partial && event.IsFinalResponse() {
-							var fullResponse strings.Builder
 							if event.Content != nil {
 								for _, part := range event.Content.Parts {
 									if part.Text != "" && !part.Thought {
@@ -1075,31 +1083,48 @@ func (m *defaultManager) ExecuteGraph(ctx context.Context, g *ExecutionGraph) (<
 							out <- ChatEvent{Type: ChatEventFinalResponse, Agent: targetAgent.Name(), Content: fullResponse.String()}
 						}
 					}
+					taskResult = fullResponse.String()
 
 					close(telemetryChan)
 					<-telemetryDone
-
-					completed <- task.ID
 				}(t)
 			}
 
 			if activeTasks == 0 {
 				if o.IsComplete() {
-					break // We are done!
+					break
 				} else {
-					// Deadlock! No active tasks, but graph is not complete.
 					out <- ChatEvent{Type: ChatEventError, Agent: "Orchestrator", Content: "Deadlock detected: No active tasks and unresolved dependencies."}
 					break
 				}
 			}
 
-			// Wait for a task to finish
 			select {
 			case <-ctx.Done():
 				return
-			case doneTaskID := <-completed:
-				o.MarkComplete(doneTaskID)
+			case done := <-completed:
+				o.MarkComplete(done.ID, done.Result)
 				activeTasks--
+
+				// --- Reactive Branching Logic ---
+				// If a task response contains an "Execution Plan" JSON, parse and add it as sub-tasks.
+				if strings.Contains(done.Result, "\"tasks\":") {
+					startIdx := strings.Index(done.Result, "{")
+					endIdx := strings.LastIndex(done.Result, "}")
+					if startIdx != -1 && endIdx != -1 && endIdx > startIdx {
+						jsonStr := done.Result[startIdx : endIdx+1]
+						var subGraph ExecutionGraph
+						if err := json.Unmarshal([]byte(jsonStr), &subGraph); err == nil {
+							for i := range subGraph.Tasks {
+								subGraph.Tasks[i].ParentID = done.ID
+								// Ensure sub-tasks don't clash on IDs
+								subGraph.Tasks[i].ID = fmt.Sprintf("%s_%s", done.ID, subGraph.Tasks[i].ID)
+							}
+							o.AddTasks(subGraph.Tasks...)
+							out <- ChatEvent{Type: ChatEventThought, Agent: "Orchestrator", Content: fmt.Sprintf("Task %s spawned %d sub-tasks.", done.ID, len(subGraph.Tasks))}
+						}
+					}
+				}
 			}
 		}
 	}()

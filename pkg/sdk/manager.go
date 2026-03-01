@@ -669,7 +669,7 @@ func (m *defaultManager) executeTask(ctx context.Context, out chan<- ChatEvent, 
 
 	var full strings.Builder
 	var needsReplan bool
-	activeToolSpans := make(map[string]Task)
+	activeToolSpans := make(map[string][]Task)
 
 	for event, err := range events {
 		if err != nil {
@@ -694,13 +694,16 @@ func (m *defaultManager) executeTask(ctx context.Context, out chan<- ChatEvent, 
 						Attributes: map[string]any{"gen_ai.tool_args": part.FunctionCall.Args},
 					}
 					o.AddTasks(toolTask)
-					activeToolSpans[part.FunctionCall.Name] = toolTask
+					activeToolSpans[part.FunctionCall.Name] = append(activeToolSpans[part.FunctionCall.Name], toolTask)
 				}
 				if part.FunctionResponse != nil {
 					out <- ChatEvent{Type: ChatEventToolResult, Agent: targetAgent.Name(), TaskID: task.ID, Content: part.FunctionResponse.Name}
 					
-					// Record tool span completion
-					if t, ok := activeToolSpans[part.FunctionResponse.Name]; ok {
+					// Record tool span completion (pop from queue)
+					if tasks, ok := activeToolSpans[part.FunctionResponse.Name]; ok && len(tasks) > 0 {
+						t := tasks[0]
+						activeToolSpans[part.FunctionResponse.Name] = tasks[1:]
+						
 						now := time.Now()
 						t.Status = TaskStatusComplete
 						t.EndTime = now.Format(time.RFC3339Nano)
@@ -711,7 +714,6 @@ func (m *defaultManager) executeTask(ctx context.Context, out chan<- ChatEvent, 
 						resJSON, _ := json.Marshal(part.FunctionResponse.Response)
 						t.Attributes["gen_ai.tool_result"] = string(resJSON)
 						o.AddTasks(t) // Update the task in the orchestrator
-						delete(activeToolSpans, part.FunctionResponse.Name)
 					}
 				}
 				if part.Text != "" && !part.Thought {
@@ -727,13 +729,14 @@ func (m *defaultManager) executeTask(ctx context.Context, out chan<- ChatEvent, 
 	obsWg.Wait()
 
 	// Ensure all tool spans are closed (Node Autonomy cleanup)
-	for name, t := range activeToolSpans {
-		now := time.Now()
-		t.Status = TaskStatusFailed
-		t.EndTime = now.Format(time.RFC3339Nano)
-		t.Attributes["gen_ai.tool_result"] = "Tool execution interrupted or incomplete"
-		o.AddTasks(t)
-		delete(activeToolSpans, name)
+	for _, tasks := range activeToolSpans {
+		for _, t := range tasks {
+			now := time.Now()
+			t.Status = TaskStatusFailed
+			t.EndTime = now.Format(time.RFC3339Nano)
+			t.Attributes["gen_ai.tool_result"] = "Tool execution interrupted or incomplete"
+			o.AddTasks(t)
+		}
 	}
 
 	if finalText == "" {

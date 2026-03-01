@@ -234,20 +234,24 @@ ROUTING:
 - If the user input is specifically for one of the specialized sub-agents listed above, output: "ROUTE TO: [agent_name]"
 Otherwise, output: "CONTINUE"
 
-Keep your analysis silent. ONLY output the routing decision.`, strings.Join(subAgentNames, ", "))
-	inputAgent, err := llmagent.New(llmagent.Config{Name: "input_agent", Model: m.flashModel, Instruction: inputInstruction})
-	if err != nil { return err }
-	m.run = r; m.skills = loadedSkills; m.subAgentNames = subAgentNames; m.inputInstruction = inputInstruction; m.inputAgent = inputAgent
+CRITICAL: Do NOT explain your reasoning. Do NOT output anything other than the ROUTE line. Be instant.`, strings.Join(subAgentNames, ", "))
+	m.run = r; m.skills = loadedSkills; m.subAgentNames = subAgentNames; m.inputInstruction = inputInstruction
 	
-	// Initialize Planning Agent for the map
+	// Principle 1 & 2: Mediation agents must exist in the registry for observability
+	inputAgent, _ := llmagent.New(llmagent.Config{Name: "input_agent", Model: m.fastModel, Instruction: inputInstruction})
+	m.inputAgent = inputAgent
+
 	planAgents := append(subAgentNames, "swarm_agent", "planning_agent")
-	planInstruction := fmt.Sprintf("You are the Planning Agent. Decompose request into DAG JSON. TRIVIAL: use immediate_response. COMPLEX: DEEP_PLAN_REQUIRED. Agents: %s", strings.Join(planAgents, ", "))
+	planInstruction := fmt.Sprintf("You are the Planning Agent. Decompose into DAG JSON. TRIVIAL: use immediate_response. Agents: %s", strings.Join(planAgents, ", "))
 	planningAgent, _ := llmagent.New(llmagent.Config{Name: "planning_agent", Model: m.proModel, Instruction: planInstruction})
 
+	outputAgent, _ := llmagent.New(llmagent.Config{Name: "output_agent", Model: m.fastModel, Instruction: "Sanity check agent responses."})
+
 	m.agents = make(map[string]agent.Agent)
-	m.agents[swarmAgent.Name()] = swarmAgent
+	m.agents["swarm_agent"] = swarmAgent
 	m.agents["input_agent"] = inputAgent
 	m.agents["planning_agent"] = planningAgent
+	m.agents["output_agent"] = outputAgent
 	for _, sa := range subAgents { m.agents[sa.Name()] = sa }
 	return nil
 }
@@ -376,7 +380,7 @@ func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan ChatEv
 
 		if strings.HasPrefix(inputResult, "RESPONSE: ") {
 			r := strings.TrimPrefix(inputResult, "RESPONSE: ")
-			if m.runCOA(ctx, out, "Input Agent", r) {
+			if m.runCOA(ctx, out, o, "Input Agent", r) {
 				if m.debugMode {
 					traj := o.GetTrajectory(); traj.TotalDuration = time.Since(swarmStartTime).String()
 					b, _ := json.MarshalIndent(traj, "", "  ")
@@ -402,7 +406,7 @@ func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan ChatEv
 		})
 
 		if graph.ImmediateResponse != "" {
-			if m.runCOA(ctx, out, "Planning Agent", graph.ImmediateResponse) {
+			if m.runCOA(ctx, out, o, "Planning Agent", graph.ImmediateResponse) {
 				if m.debugMode {
 					traj := o.GetTrajectory(); traj.TotalDuration = time.Since(swarmStartTime).String()
 					b, _ := json.MarshalIndent(traj, "", "  ")
@@ -471,7 +475,7 @@ func (m *defaultManager) ExecuteGraphWithOrchestrator(ctx context.Context, o *Or
 						if err != nil { out <- ChatEvent{Type: ChatEventError, Agent: targetAgent.Name(), TaskID: task.ID, Content: err.Error()}; break }
 						if event.Content != nil { for _, part := range event.Content.Parts { if part.FunctionCall != nil { if part.FunctionCall.Name == "request_replan" { needsReplan = true }; out <- ChatEvent{Type: ChatEventToolCall, Agent: targetAgent.Name(), TaskID: task.ID, Content: part.FunctionCall.Name} }; if part.FunctionResponse != nil { out <- ChatEvent{Type: ChatEventToolResult, Agent: targetAgent.Name(), TaskID: task.ID, Content: part.FunctionResponse.Name} }; if part.Text != "" && !part.Thought { full.WriteString(part.Text) } } }
 					}
-					finalText := full.String(); if m.runCOA(ctx, out, targetAgent.Name(), finalText) { out <- ChatEvent{Type: ChatEventFinalResponse, Agent: targetAgent.Name(), TaskID: task.ID, Content: finalText}; taskResult = finalText } else { needsReplan = true; taskResult = "COA rejected." }; close(telemetryChan); <-telemetryDone
+					finalText := full.String(); if m.runCOA(ctx, out, o, targetAgent.Name(), finalText) { out <- ChatEvent{Type: ChatEventFinalResponse, Agent: targetAgent.Name(), TaskID: task.ID, Content: finalText}; taskResult = finalText } else { needsReplan = true; taskResult = "COA rejected." }; close(telemetryChan); <-telemetryDone
 				}(t)
 			}
 			if activeTasks == 0 { if o.IsComplete() { break } else { out <- ChatEvent{Type: ChatEventError, Content: "Deadlock"}; break } }
@@ -501,10 +505,36 @@ func (m *defaultManager) ExecuteGraphWithOrchestrator(ctx context.Context, o *Or
 	return out, o, nil
 }
 
-func (m *defaultManager) runCOA(ctx context.Context, out chan<- ChatEvent, agentName, content string) bool {
+func (m *defaultManager) runCOA(ctx context.Context, out chan<- ChatEvent, o *Orchestrator, agentName, content string) bool {
+	coaStart := time.Now()
 	coaPrompt := fmt.Sprintf("Sanity check worker: %s. Response: %s. If toxic/hallucinating output FIX: [reason]. Else OK.", agentName, content)
 	respIter := m.fastModel.GenerateContent(ctx, &model.LLMRequest{Contents: []*genai.Content{genai.NewContentFromText(coaPrompt, genai.Role("user"))}}, false)
-	approved := true; for resp, err := range respIter { if err == nil && resp.Content != nil && len(resp.Content.Parts) > 0 && strings.HasPrefix(resp.Content.Parts[0].Text, "FIX:") { out <- ChatEvent{Type: ChatEventThought, Agent: "Output Agent", Content: "Rejected: " + resp.Content.Parts[0].Text}; approved = false }; break }
+	
+	approved := true
+	var coaResult string
+	for resp, err := range respIter {
+		if err == nil && resp.Content != nil && len(resp.Content.Parts) > 0 {
+			coaResult = resp.Content.Parts[0].Text
+			if strings.HasPrefix(coaResult, "FIX:") {
+				out <- ChatEvent{Type: ChatEventThought, Agent: "Output Agent", Content: "Rejected: " + coaResult}
+				approved = false
+			}
+		}
+		break
+	}
+
+	// Record Output Agent as a span if we have an orchestrator
+	if o != nil {
+		o.AddTasks(Task{
+			ID: "coa-" + fmt.Sprintf("%d", coaStart.UnixNano()), Name: "Sanity Check: " + agentName,
+			Agent: "output_agent", Status: TaskStatusComplete,
+			StartTime: coaStart.Format(time.RFC3339Nano),
+			EndTime: time.Now().Format(time.RFC3339Nano),
+			Duration: time.Since(coaStart).String(),
+			Attributes: map[string]any{"gen_ai.prompt": coaPrompt, "gen_ai.completion": coaResult},
+		})
+	}
+
 	return approved
 }
 

@@ -1112,6 +1112,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, tea.Batch(listenForStream(msg.ch), agentCmd)
 
+		case sdk.ChatEventObserver:
+			m.messages = append(m.messages, lipgloss.NewStyle().Foreground(googleBlue).Italic(true).Width(m.viewport.Width).Render("👀 "+event.Content))
+			m.updateViewport()
+			return m, listenForStream(msg.ch)
+
+		case sdk.ChatEventReplan:
+			m.messages = append(m.messages, lipgloss.NewStyle().Foreground(googleYellow).Bold(true).Width(m.viewport.Width).Render("🔄 "+event.Content))
+			m.updateViewport()
+			return m, listenForStream(msg.ch)
+
 		case sdk.ChatEventFinalResponse:
 			m.statusMsg = ""
 			author := event.Agent

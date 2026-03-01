@@ -270,9 +270,12 @@ const (
 	ChatEventHandoff      ChatEventType = "handoff"
 	ChatEventToolCall     ChatEventType = "tool_call"
 	ChatEventToolResult   ChatEventType = "tool_result"
-	ChatEventTelemetry    ChatEventType = "telemetry"
-	ChatEventThought      ChatEventType = "thought"
+	ChatEventTelemetry     ChatEventType = "telemetry"
+	ChatEventThought       ChatEventType = "thought"
+	ChatEventObserver      ChatEventType = "observer"
+	ChatEventReplan        ChatEventType = "replan"
 	ChatEventFinalResponse ChatEventType = "final_response"
+
 	ChatEventError        ChatEventType = "error"
 )
 
@@ -439,6 +442,14 @@ func NewManager(cfg ...ManagerConfig) (AgentManager, error) {
 		return nil, fmt.Errorf("failed to create googleSearch tool: %w", err)
 	}
 
+	replanTool, err := functiontool.New(functiontool.Config{
+		Name:        "request_replan",
+		Description: "Requests a global replan of the execution graph based on new discoveries or blocked tasks. Provide a reason and discoveries.",
+	}, requestReplan)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create replanTool: %w", err)
+	}
+
 	toolRegistry := map[string]tool.Tool{
 		"list_local_files": listTool,
 		"read_local_file":  readTool,
@@ -449,6 +460,7 @@ func NewManager(cfg ...ManagerConfig) (AgentManager, error) {
 		"bash_execute":     bashExecute,
 		"web_fetch":        webFetchTool,
 		"google_search":    googleSearchTool,
+		"request_replan":   replanTool,
 	}
 
 	// Use persistent SQLite database for sessions
@@ -552,6 +564,7 @@ func (m *defaultManager) Reload() error {
 		loadedSkills = append(loadedSkills, skill)
 
 		var skillTools []tool.Tool
+		skillTools = append(skillTools, m.toolRegistry["request_replan"])
 		for _, toolName := range skill.Manifest.Tools {
 			if t, ok := m.toolRegistry[toolName]; ok {
 				skillTools = append(skillTools, t)
@@ -984,6 +997,7 @@ func (m *defaultManager) ExecuteGraph(ctx context.Context, g *ExecutionGraph) (<
 		type completedTask struct {
 			ID     string
 			Result string
+			Replan bool
 		}
 		completed := make(chan completedTask)
 		activeTasks := 0
@@ -996,8 +1010,9 @@ func (m *defaultManager) ExecuteGraph(ctx context.Context, g *ExecutionGraph) (<
 
 				go func(task Task) {
 					var taskResult string
+					var needsReplan bool
 					defer func() {
-						completed <- completedTask{ID: task.ID, Result: taskResult}
+						completed <- completedTask{ID: task.ID, Result: taskResult, Replan: needsReplan}
 					}()
 
 					targetAgent, ok := m.agents[task.Agent]
@@ -1031,8 +1046,50 @@ func (m *defaultManager) ExecuteGraph(ctx context.Context, g *ExecutionGraph) (<
 
 					telemetryDone := make(chan struct{})
 					go func() {
+						var lastLines []string
 						for line := range telemetryChan {
 							out <- ChatEvent{Type: ChatEventTelemetry, Agent: targetAgent.Name(), Content: line}
+							
+							// Buffer telemetry for the Observer
+							lastLines = append(lastLines, line)
+							if len(lastLines) > 10 {
+								lastLines = lastLines[1:]
+							}
+
+							// If we've seen a lot of telemetry, trigger an Observer check
+							if len(lastLines) >= 10 {
+								go func(history []string) {
+									obsCtx, obsCancel := context.WithTimeout(ctx, 10*time.Second)
+									defer obsCancel()
+
+									obsPrompt := fmt.Sprintf(`You are the Swarm Observer.
+Monitor the telemetry of the active agent: %s
+Current Task: %s
+Recent Telemetry:
+%s
+
+Determine if the agent is stuck in a loop, repeating the same tool call with the same parameters, or deviating from the original goal.
+If the agent is stuck or deviating, output: "INTERVENE: [Reason]".
+Otherwise, output: "OK".`, targetAgent.Name(), task.Name, strings.Join(history, "\n"))
+
+									respIter := m.flashModel.GenerateContent(obsCtx, &model.LLMRequest{
+										Contents: []*genai.Content{genai.NewContentFromText(obsPrompt, genai.Role("user"))},
+									}, false)
+
+									for resp, err := range respIter {
+										if err == nil && resp.Content != nil && len(resp.Content.Parts) > 0 {
+											text := resp.Content.Parts[0].Text
+											if strings.HasPrefix(text, "INTERVENE:") {
+												out <- ChatEvent{Type: ChatEventObserver, Agent: "Observer", Content: fmt.Sprintf("Intervention requested for %s: %s", targetAgent.Name(), strings.TrimPrefix(text, "INTERVENE:"))}
+												// Here we could force a context cancel, but for now we just observe and report
+											}
+										}
+										break
+									}
+								}(lastLines)
+								// Reset history to avoid continuous checks
+								lastLines = nil
+							}
 						}
 						close(telemetryDone)
 					}()
@@ -1058,6 +1115,9 @@ func (m *defaultManager) ExecuteGraph(ctx context.Context, g *ExecutionGraph) (<
 						if event.Content != nil {
 							for _, part := range event.Content.Parts {
 								if part.FunctionCall != nil {
+									if part.FunctionCall.Name == "request_replan" {
+										needsReplan = true
+									}
 									argsStr := ""
 									if part.FunctionCall.Args != nil {
 										b, err := json.Marshal(part.FunctionCall.Args)
@@ -1106,9 +1166,19 @@ func (m *defaultManager) ExecuteGraph(ctx context.Context, g *ExecutionGraph) (<
 				o.MarkComplete(done.ID, done.Result)
 				activeTasks--
 
-				// --- Reactive Branching Logic ---
-				// If a task response contains an "Execution Plan" JSON, parse and add it as sub-tasks.
-				if strings.Contains(done.Result, "\"tasks\":") {
+				// --- Reactive Branching & Replanning Logic ---
+				if done.Replan {
+					out <- ChatEvent{Type: ChatEventReplan, Agent: "Orchestrator", Content: fmt.Sprintf("Task %s requested a replan. Pivoting swarm…", done.ID)}
+					// Combine the user's original goal with the reason for replanning
+					// (In a real implementation, we'd pull the exact 'reason' arg from the tool call)
+					newGraph, err := m.Plan(ctx, fmt.Sprintf("Pivoting plan based on discovery in task %s: %s", done.ID, done.Result))
+					if err == nil {
+						o.AddTasks(newGraph.Tasks...)
+						out <- ChatEvent{Type: ChatEventThought, Agent: "Orchestrator", Content: fmt.Sprintf("Graph mutated with %d new/updated tasks.", len(newGraph.Tasks))}
+					} else {
+						out <- ChatEvent{Type: ChatEventError, Agent: "Orchestrator", Content: "Replanning failed: " + err.Error()}
+					}
+				} else if strings.Contains(done.Result, "\"tasks\":") {
 					startIdx := strings.Index(done.Result, "{")
 					endIdx := strings.LastIndex(done.Result, "}")
 					if startIdx != -1 && endIdx != -1 && endIdx > startIdx {

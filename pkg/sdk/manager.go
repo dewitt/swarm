@@ -325,6 +325,7 @@ type defaultManager struct {
 
 	flashModel    model.LLM
 	proModel      model.LLM
+	fastModel     model.LLM // 8b model for ultra-fast CIA/COA/Observer tasks
 	toolRegistry  map[string]tool.Tool
 	ciaAgent      agent.Agent
 	subAgentNames []string
@@ -345,11 +346,13 @@ func NewManager(cfg ...ManagerConfig) (AgentManager, error) {
 
 	var flashModel model.LLM
 	var proModel model.LLM
+	var fastModel model.LLM
 	clientConfig := &genai.ClientConfig{}
 
 	if len(cfg) > 0 && cfg[0].Model != nil {
 		flashModel = cfg[0].Model
 		proModel = cfg[0].Model
+		fastModel = cfg[0].Model
 	} else {
 		apiKey := os.Getenv("GOOGLE_API_KEY")
 		if apiKey != "" {
@@ -371,6 +374,10 @@ func NewManager(cfg ...ManagerConfig) (AgentManager, error) {
 		proModel, err = gemini.NewModel(ctx, proModelName, clientConfig)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create pro model: %w", err)
+		}
+		fastModel, err = gemini.NewModel(ctx, "gemini-2.5-flash-8b", clientConfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create fast model: %w", err)
 		}
 	}
 
@@ -536,6 +543,7 @@ func NewManager(cfg ...ManagerConfig) (AgentManager, error) {
 		pinnedContext: make(map[string]string),
 		flashModel:    flashModel,
 		proModel:      proModel,
+		fastModel:     fastModel,
 		toolRegistry:  toolRegistry,
 	}
 
@@ -877,7 +885,7 @@ func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan ChatEv
 
 		// --- 1. Chat Input Agent (CIA) Pre-processing ---
 		out <- ChatEvent{Type: ChatEventThought, Agent: "CIA", Content: "Classifying intent…"}
-		ciaRespIter := m.flashModel.GenerateContent(ctx, &model.LLMRequest{
+		ciaRespIter := m.fastModel.GenerateContent(ctx, &model.LLMRequest{
 			Contents: []*genai.Content{genai.NewContentFromText(prompt, genai.Role("user"))},
 			Config: &genai.GenerateContentConfig{
 				SystemInstruction: genai.NewContentFromText(m.ciaInstruction, genai.Role("system")),
@@ -919,40 +927,42 @@ func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan ChatEv
 			return
 		}
 
-		// Helper to run COA sanity check
-		runCOA := func(content string) {
+		if graph.ImmediateResponse != "" {
+			// Fast COA check for trivial responses
 			coaPrompt := fmt.Sprintf(`You are the Chat Output Agent (COA).
-Sanity check the following response from a swarm agent to the user.
-Goal: Ensure the response is helpful, accurate, and respects the user's time.
-
-Response:
-%s
-
-If the response is clearly wrong, hallucinating, or missing the point, output: "FIX: [Reason and suggestion]".
-Otherwise, output: "OK".`, content)
-
-			coaRespIter := m.flashModel.GenerateContent(ctx, &model.LLMRequest{
+Sanity check this trivial response. If it is toxic, hallucinatory, or completely wrong, output "FIX: [Reason]". Otherwise output "OK".
+Response: %s`, graph.ImmediateResponse)
+			
+			coaRespIter := m.fastModel.GenerateContent(ctx, &model.LLMRequest{
 				Contents: []*genai.Content{genai.NewContentFromText(coaPrompt, genai.Role("user"))},
 			}, false)
-
-			for coaResp, err := range coaRespIter {
-				if err == nil && coaResp.Content != nil && len(coaResp.Content.Parts) > 0 {
+			
+			badResponse := false
+			for coaResp, _ := range coaRespIter {
+				if coaResp.Content != nil && len(coaResp.Content.Parts) > 0 {
 					text := coaResp.Content.Parts[0].Text
 					if strings.HasPrefix(text, "FIX:") {
-						out <- ChatEvent{Type: ChatEventThought, Agent: "COA", Content: "Sanity check failed: " + strings.TrimPrefix(text, "FIX:")}
+						out <- ChatEvent{Type: ChatEventThought, Agent: "COA", Content: "Blocked trivial response: " + strings.TrimPrefix(text, "FIX:")}
+						badResponse = true
 					}
 				}
 				break
 			}
-		}
 
-		if graph.ImmediateResponse != "" {
-			runCOA(graph.ImmediateResponse)
-			if m.debugMode {
-				out <- ChatEvent{Type: ChatEventDebug, Agent: "Orchestrator", Content: "Full Swarm Trajectory: Immediate Response (Trivial Plan)."}
+			if !badResponse {
+				if m.debugMode {
+					out <- ChatEvent{Type: ChatEventDebug, Agent: "Orchestrator", Content: "Full Swarm Trajectory: Immediate Response (Trivial Plan)."}
+				}
+				out <- ChatEvent{Type: ChatEventFinalResponse, Agent: "Architect", Content: graph.ImmediateResponse}
+				return
 			}
-			out <- ChatEvent{Type: ChatEventFinalResponse, Agent: "Architect", Content: graph.ImmediateResponse}
-			return
+			// If bad response, fall through to full swarm planning
+			out <- ChatEvent{Type: ChatEventThought, Agent: "Orchestrator", Content: "Trivial response rejected. Falling back to full swarm planning."}
+			graph, err = m.Plan(ctx, prompt + "\n\n(Note: previous trivial response was rejected. Plan a full task graph.)")
+			if err != nil {
+				out <- ChatEvent{Type: ChatEventError, Agent: "Architect", Content: "Failed to generate fallback plan: " + err.Error()}
+				return
+			}
 		}
 
 		// --- 3. Execute the Reactive Task Pool ---
@@ -963,9 +973,6 @@ Otherwise, output: "OK".`, content)
 		}
 
 		for event := range events {
-			if event.Type == ChatEventFinalResponse {
-				runCOA(event.Content)
-			}
 			out <- event
 		}
 
@@ -1064,7 +1071,7 @@ Determine if the agent is stuck in a loop, repeating the same tool call with the
 If the agent is stuck or deviating, output: "INTERVENE: [Reason]".
 Otherwise, output: "OK".`, targetAgent.Name(), task.Name, strings.Join(history, "\n"))
 
-									respIter := m.flashModel.GenerateContent(obsCtx, &model.LLMRequest{
+									respIter := m.fastModel.GenerateContent(obsCtx, &model.LLMRequest{
 										Contents: []*genai.Content{genai.NewContentFromText(obsPrompt, genai.Role("user"))},
 									}, false)
 
@@ -1132,10 +1139,40 @@ Otherwise, output: "OK".`, targetAgent.Name(), task.Name, strings.Join(history, 
 									}
 								}
 							}
-							out <- ChatEvent{Type: ChatEventFinalResponse, Agent: targetAgent.Name(), Content: fullResponse.String()}
+							
+							finalText := fullResponse.String()
+							
+							// --- Chat Output Agent (COA) Damage Control ---
+							coaPrompt := fmt.Sprintf(`You are the Chat Output Agent (COA).
+Sanity check this worker agent response. If it is toxic, hallucinatory, or completely failed the instructions, output "FIX: [Reason]". Otherwise output "OK".
+Task: %s
+Response: %s`, task.Name, finalText)
+							
+							coaRespIter := m.fastModel.GenerateContent(ctx, &model.LLMRequest{
+								Contents: []*genai.Content{genai.NewContentFromText(coaPrompt, genai.Role("user"))},
+							}, false)
+							
+							badResponse := false
+							for coaResp, _ := range coaRespIter {
+								if coaResp.Content != nil && len(coaResp.Content.Parts) > 0 {
+									text := coaResp.Content.Parts[0].Text
+									if strings.HasPrefix(text, "FIX:") {
+										fixReason := strings.TrimPrefix(text, "FIX:")
+										out <- ChatEvent{Type: ChatEventThought, Agent: "COA", Content: fmt.Sprintf("Intercepted bad response from %s: %s", targetAgent.Name(), fixReason)}
+										needsReplan = true
+										taskResult = "COA rejected response: " + fixReason
+										badResponse = true
+									}
+								}
+								break
+							}
+							
+							if !badResponse {
+								out <- ChatEvent{Type: ChatEventFinalResponse, Agent: targetAgent.Name(), Content: finalText}
+								taskResult = finalText
+							}
 						}
 					}
-					taskResult = fullResponse.String()
 
 					close(telemetryChan)
 					<-telemetryDone

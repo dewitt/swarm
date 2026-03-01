@@ -1144,9 +1144,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			badge := getAgentBadge(author)
 			m.messages = append(m.messages, badge+"\n"+strings.TrimSpace(out))
-			m.loading = false
+			// Do NOT set m.loading = false or dequeue yet. The swarm might still be working!
 			m.updateViewport()
-			return m, tea.Batch(m.dequeueAndRun(), agentCmd)
+			return m, tea.Batch(listenForStream(msg.ch), agentCmd)
 
 		case sdk.ChatEventError:
 			m.statusMsg = ""

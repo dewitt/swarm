@@ -23,7 +23,7 @@ func (m *MockModel) Name() string {
 func (m *MockModel) GenerateContent(ctx context.Context, req *model.LLMRequest, stream bool) iter.Seq2[*model.LLMResponse, error] {
 	return func(yield func(*model.LLMResponse, error) bool) {
 		responseText := m.response
-		
+
 		// If system instruction mentions Planning Agent, return a plan
 		if req.Config != nil && req.Config.SystemInstruction != nil {
 			for _, p := range req.Config.SystemInstruction.Parts {

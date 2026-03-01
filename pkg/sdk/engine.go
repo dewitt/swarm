@@ -30,20 +30,20 @@ const (
 
 // Span (Span) represents a single unit of work aligned with OTel conventions.
 type Span struct {
-	ID           string            `json:"id"`
-	TraceID      string            `json:"trace_id"`
-	ParentID     string            `json:"parent_id,omitempty"`
-	Name         string            `json:"operation_name"`
-	Kind         SpanKind          `json:"kind"`
-	Agent        string            `json:"agent,omitempty"`
-	Attributes   map[string]any    `json:"attributes"` // OTel-style attributes (e.g. gen_ai.prompt)
-	Status       SpanStatus        `json:"status"`
-	StartTime    string            `json:"start_time"`
-	EndTime      string            `json:"end_time,omitempty"`
-	Duration     string            `json:"duration,omitempty"`
-	Dependencies []string          `json:"dependencies,omitempty"`
-	Result       string            `json:"result,omitempty"`
-	Prompt       string            `json:"prompt,omitempty"` // The instructions for the agent
+	ID           string         `json:"id"`
+	TraceID      string         `json:"trace_id"`
+	ParentID     string         `json:"parent_id,omitempty"`
+	Name         string         `json:"operation_name"`
+	Kind         SpanKind       `json:"kind"`
+	Agent        string         `json:"agent,omitempty"`
+	Attributes   map[string]any `json:"attributes"` // OTel-style attributes (e.g. gen_ai.prompt)
+	Status       SpanStatus     `json:"status"`
+	StartTime    string         `json:"start_time"`
+	EndTime      string         `json:"end_time,omitempty"`
+	Duration     string         `json:"duration,omitempty"`
+	Dependencies []string       `json:"dependencies,omitempty"`
+	Result       string         `json:"result,omitempty"`
+	Prompt       string         `json:"prompt,omitempty"` // The instructions for the agent
 }
 
 // ExecutionGraph represents a snapshot of the spans to be executed.
@@ -92,7 +92,7 @@ func (o *Engine) AddSpans(spans ...Span) {
 		if t.Prompt != "" {
 			t.Attributes["gen_ai.prompt"] = t.Prompt
 		}
-		
+
 		// Record the span result if it's already complete
 		if t.Status == SpanStatusComplete {
 			if res, ok := t.Attributes["gen_ai.completion"].(string); ok {
@@ -101,7 +101,7 @@ func (o *Engine) AddSpans(spans ...Span) {
 		}
 
 		o.spans[t.ID] = t
-		
+
 		// Always update status if provided, otherwise default to Pending
 		if t.Status != "" {
 			o.status[t.ID] = t.Status
@@ -167,7 +167,7 @@ func (o *Engine) MarkComplete(spanID string, result string) {
 	defer o.mu.Unlock()
 	o.status[spanID] = SpanStatusComplete
 	o.result[spanID] = result
-	
+
 	t := o.spans[spanID]
 	now := time.Now()
 	t.EndTime = now.Format(time.RFC3339Nano)
@@ -187,7 +187,7 @@ func (o *Engine) MarkComplete(spanID string, result string) {
 func (o *Engine) MarkFailed(spanID string) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
-	
+
 	o.status[spanID] = SpanStatusFailed
 	t := o.spans[spanID]
 	t.Status = SpanStatusFailed
@@ -262,12 +262,12 @@ type Trajectory struct {
 func (o *Engine) GetTrajectory() Trajectory {
 	o.mu.RLock()
 	defer o.mu.RUnlock()
-	
+
 	var spans []Span
 	for _, t := range o.spans {
 		spans = append(spans, t)
 	}
-	
+
 	return Trajectory{
 		TraceID:       o.traceID,
 		Spans:         spans,

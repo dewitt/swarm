@@ -280,7 +280,7 @@ type model struct {
 	history      []string
 	historyIdx   int
 	currentInput string
-	swarm      sdk.Swarm
+	swarm        sdk.Swarm
 	err          error
 	width        int
 	height       int
@@ -305,12 +305,12 @@ type model struct {
 	cancelChat context.CancelFunc
 
 	// Agent Panel state
-	agents        []*swarmAgent
-	ticks         int
+	agents         []*swarmAgent
+	ticks          int
 	showAgentPanel bool
 
-	welcomeScreen []string
-	cachedActivity string
+	welcomeScreen       []string
+	cachedActivity      string
 	lastActivityRefresh time.Time
 
 	// Autocomplete state
@@ -686,7 +686,7 @@ func initialModel(planMode bool, resume bool) (model, error) {
 		messages:       []string{"SPLASH_SCREEN"},
 		history:        loadedHist,
 		historyIdx:     len(loadedHist),
-		swarm:        swarm,
+		swarm:          swarm,
 		loading:        false,
 		quitting:       false,
 		planMode:       planMode,
@@ -1186,7 +1186,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			text := event.Content
-			
+
 			// Fulfill Requirement 1 & 2: Invisible intermediaries
 			if isMediationAgent(author) {
 				// Still update viewport and panel, but don't show text to user
@@ -1723,7 +1723,7 @@ func (m *model) updateViewport() {
 			// SPLASH_SCREEN split: 2/3 Logo, 1/3 Recent Activity
 			leftW := (m.width * 2) / 3
 			rightW := m.width - leftW - 2
-			
+
 			// Refresh activity cache if needed (every 30s or if empty)
 			if m.cachedActivity == "" || time.Since(m.lastActivityRefresh) > 30*time.Second {
 				m.cachedActivity = getRecentActivity(m.swarm, rightW)
@@ -1732,7 +1732,7 @@ func (m *model) updateViewport() {
 
 			left := welcomeBoxStyle.Copy().Width(leftW - 4).Render(m.welcomeScreen[0])
 			right := infoBoxStyle.Copy().Width(rightW - 4).Render(m.cachedActivity)
-			
+
 			renderedMessages = append(renderedMessages, lipgloss.JoinHorizontal(lipgloss.Top, left, right))
 		} else {
 			renderedMessages = append(renderedMessages, msg)
@@ -1841,12 +1841,16 @@ func (m model) renderAgentPanel() string {
 	}
 
 	availableWidth := m.width - 4
-	if availableWidth < 20 { availableWidth = 20 }
-	
+	if availableWidth < 20 {
+		availableWidth = 20
+	}
+
 	cardWidth := availableWidth / cols
 	if fidelity == "low" {
 		cols = availableWidth / 8
-		if cols < 1 { cols = 1 }
+		if cols < 1 {
+			cols = 1
+		}
 		cardWidth = 8
 	}
 
@@ -1904,7 +1908,7 @@ func (m model) renderAgentPanel() string {
 
 		contentWidth := cardWidth - 4
 		line1 := renderLine(a.icon, a.name, lipgloss.NewStyle().Foreground(color).Bold(true), contentWidth)
-		
+
 		mainText := a.status
 		if len(a.telemetry) > 0 && a.state == "active" {
 			mainText = a.telemetry[len(a.telemetry)-1]
@@ -1931,15 +1935,17 @@ func (m model) renderAgentPanel() string {
 			if leftDashCount < 1 {
 				leftDashCount = 1
 				rightDashCount = remaining - leftDashCount
-				if rightDashCount < 0 { rightDashCount = 0 }
+				if rightDashCount < 0 {
+					rightDashCount = 0
+				}
 			}
 
 			bottomLine := lipgloss.NewStyle().Foreground(color).Render(
-				border.BottomLeft + 
-				strings.Repeat(border.Bottom, leftDashCount) + 
-				label + 
-				strings.Repeat(border.Bottom, rightDashCount) + 
-				border.BottomRight,
+				border.BottomLeft +
+					strings.Repeat(border.Bottom, leftDashCount) +
+					label +
+					strings.Repeat(border.Bottom, rightDashCount) +
+					border.BottomRight,
 			)
 			renderedCard = lipgloss.JoinVertical(lipgloss.Left, renderedCard, bottomLine)
 		}
@@ -2039,14 +2045,16 @@ func (m *model) ensureAgent(name string) (*swarmAgent, tea.Cmd) {
 }
 
 func (m model) View() string {
-	if m.width == 0 { return "Loading…" }
+	if m.width == 0 {
+		return "Loading…"
+	}
 
 	agentPanelView := ""
 	if m.showAgentPanel {
 		agentPanelView = m.renderAgentPanel()
 	}
 	agentPanelHeight := lipgloss.Height(agentPanelView)
-	
+
 	// Input Box with border
 	inputView := inputBoxStyle.Width(m.width - 2).Render(m.textArea.View())
 	inputHeight := lipgloss.Height(inputView)
@@ -2060,13 +2068,13 @@ func (m model) View() string {
 	if m.viewport.Height < 1 {
 		m.viewport.Height = 1
 	}
-	
+
 	// Output Box (Viewport) with border
 	vpView := viewportStyle.Width(m.width - 2).Height(m.viewport.Height).Render(m.viewport.View())
-	
+
 	// Main body is just the vertical stack of the three bordered sections
 	mainBody := lipgloss.JoinVertical(lipgloss.Left, agentPanelView, vpView, inputView)
-	
+
 	// Bottom Status Line (no border, full width)
 	w1, w2 := m.width/3, m.width/3
 	w3 := m.width - w1 - w2

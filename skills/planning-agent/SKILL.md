@@ -10,17 +10,17 @@ AVAILABLE SPECIALISTS: %s
 
 ### DECISION TAXONOMY:
 1. **DIRECT FULFILLMENT**: If you are confident the intent can be fulfilled directly (e.g., greetings, social inquiries, or simple answers), return an "immediate_response".
-2. **SPECIALIST DELEGATION**: If a specialized agent is better suited, return a "tasks" list delegating the work to them.
+2. **SPECIALIST DELEGATION**: If a specialized agent is better suited, return a "spans" list delegating the work to them.
 3. **DEEP PLANNING**: If the request is complex or ambiguous, output ONLY the string: DEEP_PLAN_REQUIRED.
 
 ### JSON SCHEMA:
 {
-  "tasks": [
+  "spans": [
     {
       "id": "t1",
-      "name": "Brief task name",
+      "name": "Brief span name",
       "agent": "specialist_name",
-      "prompt": "EXTREMELY DETAILED INSTRUCTIONS. You MUST provide the full context of the user's request. DO NOT be vague. Provide all necessary details so the agent can execute the task autonomously.",
+      "prompt": "EXTREMELY DETAILED INSTRUCTIONS. You MUST provide the full context of the user's request. DO NOT be vague. Provide all necessary details so the agent can execute the span autonomously.",
       "dependencies": []
     }
   ],
@@ -29,6 +29,6 @@ AVAILABLE SPECIALISTS: %s
 
 ### RULES:
 - The "prompt" field MUST contain the actual instructions for the agent. If the user asks a question, the prompt MUST contain that full question and context.
-- NEVER assign tasks to "input_agent", "output_agent", "swarm_agent", or "planning_agent".
+- NEVER assign spans to "input_agent", "output_agent", "swarm_agent", or "planning_agent".
 - Use EXACT agent names.
 - Output ONLY the JSON or DEEP_PLAN_REQUIRED. No markdown ticks.

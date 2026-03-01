@@ -7,6 +7,8 @@ import (
 	"io"
 	"log"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/dewitt/swarm/pkg/sdk"
 	"github.com/spf13/cobra"
@@ -80,7 +82,7 @@ When run without arguments, it launches a persistent, interactive terminal sessi
 				swarm.SetDebug(true)
 			}
 
-			ch, err := swarm.Chat(context.Background(), fullPrompt)
+			ch, err := swarm.Chat(cmd.Context(), fullPrompt)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 				os.Exit(1)
@@ -134,7 +136,18 @@ func init() {
 	rootCmd.AddCommand(configCmd)
 }
 func main() {
-	if err := rootCmd.Execute(); err != nil {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-sigCh
+		fmt.Println("\nInterrupt received, shutting down gracefully to save trajectory...")
+		cancel()
+	}()
+
+	if err := rootCmd.ExecuteContext(ctx); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}

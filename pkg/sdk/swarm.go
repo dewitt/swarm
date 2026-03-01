@@ -458,6 +458,19 @@ func (m *defaultSwarm) Chat(ctx context.Context, prompt string) (<-chan ChatEven
 		swarmStartTime := time.Now()
 		o := NewEngine(nil)
 
+		defer func() {
+			if o != nil {
+				traj := o.GetTrajectory()
+				traj.TotalDuration = time.Since(swarmStartTime).String()
+				m.saveTrajectory(traj)
+
+				if m.debugMode {
+					b, _ := json.MarshalIndent(traj, "", "  ")
+					out <- ChatEvent{Type: ChatEventDebug, Agent: "Swarm", Content: string(b)}
+				}
+			}
+		}()
+
 		// 1. Input Classification (Fast Path / CIA)
 		inputStart := time.Now()
 		out <- ChatEvent{Type: ChatEventThought, Agent: "Input Agent", Content: "Classifying intent…"}
@@ -548,13 +561,7 @@ func (m *defaultSwarm) Chat(ctx context.Context, prompt string) (<-chan ChatEven
 			}
 		}
 
-		// 4. Debug / Trajectory
-		if m.debugMode {
-			traj := o.GetTrajectory()
-			traj.TotalDuration = time.Since(swarmStartTime).String()
-			b, _ := json.MarshalIndent(traj, "", "  ")
-			out <- ChatEvent{Type: ChatEventDebug, Agent: "Swarm", Content: string(b)}
-		}
+		// 4. End of Chat
 	}()
 	return out, nil
 }
@@ -907,4 +914,24 @@ func (m *defaultSwarm) Rewind(n int) error {
 		return m.db.Table("events").Where("session_id = ?", m.sessionID).Delete(nil).Error
 	}
 	return m.db.Table("events").Where("session_id = ? AND timestamp >= ?", m.sessionID, evs[len(evs)-1].Timestamp).Delete(nil).Error
+}
+
+func (m *defaultSwarm) saveTrajectory(traj Trajectory) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return
+	}
+	dir := filepath.Join(home, ".swarm", "trajectories")
+	_ = os.MkdirAll(dir, 0755)
+
+	filename := fmt.Sprintf("%s.json", traj.TraceID)
+	if m.sessionID != "" {
+		filename = fmt.Sprintf("%s_%s.json", m.sessionID, traj.TraceID)
+	}
+	// Sanitize output path
+	filename = strings.ReplaceAll(filename, "/", "_")
+	path := filepath.Join(dir, filename)
+
+	b, _ := json.MarshalIndent(traj, "", "  ")
+	_ = os.WriteFile(path, b, 0644)
 }

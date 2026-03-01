@@ -28,7 +28,8 @@ type Task struct {
 
 // ExecutionGraph represents a snapshot of the tasks to be executed.
 type ExecutionGraph struct {
-	Tasks []Task `json:"tasks"`
+	Tasks             []Task `json:"tasks"`
+	ImmediateResponse string `json:"immediate_response,omitempty"` // Short-circuit for trivial requests
 }
 
 // Orchestrator coordinates the reactive execution of a dynamic Task Pool.

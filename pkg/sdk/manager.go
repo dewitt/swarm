@@ -779,6 +779,8 @@ func (m *defaultManager) Plan(ctx context.Context, prompt string) (*ExecutionGra
 Your job is to take a complex user request and decompose it into a Directed Acyclic Graph (DAG) of tasks to be executed by specialized agents.
 Available agents: %s
 
+TRIVIAL QUERIES: If the user's request is trivial (e.g., "Hello", "How are you?", or simple calculations like "2+2") and does not require specialized agent work, DO NOT generate tasks. Instead, provide the answer in the "immediate_response" field.
+
 You MUST output ONLY valid JSON matching this schema:
 {
   "tasks": [
@@ -789,7 +791,8 @@ You MUST output ONLY valid JSON matching this schema:
       "prompt": "Detailed instructions for the agent",
       "dependencies": ["id_of_another_task"]
     }
-  ]
+  ],
+  "immediate_response": "Optional direct answer for trivial queries"
 }
 Do not wrap the JSON in Markdown code blocks. Just output the raw JSON.`, strings.Join(m.subAgentNames, ", "))
 
@@ -868,6 +871,11 @@ func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan ChatEv
 			return
 		}
 
+		if graph.ImmediateResponse != "" {
+			out <- ChatEvent{Type: ChatEventFinalResponse, Agent: "Architect", Content: graph.ImmediateResponse}
+			return
+		}
+
 		// 2. Execute the Reactive Task Pool
 		// ExecuteGraph handles the parallel execution, telemetry monitoring, and dynamic branching.
 		events, err := m.ExecuteGraph(ctx, graph)
@@ -877,6 +885,32 @@ func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan ChatEv
 		}
 
 		for event := range events {
+			if event.Type == ChatEventFinalResponse {
+				// --- Chat Output Agent (COA) Sanity Check ---
+				coaPrompt := fmt.Sprintf(`You are the Chat Output Agent (COA).
+Sanity check the following response from a swarm agent to the user.
+Goal: Ensure the response is helpful, accurate, and respects the user's time.
+
+Response:
+%s
+
+If the response is clearly wrong, hallucinating, or missing the point, output: "FIX: [Reason and suggestion]".
+Otherwise, output: "OK".`, event.Content)
+
+				coaRespIter := m.flashModel.GenerateContent(ctx, &model.LLMRequest{
+					Contents: []*genai.Content{genai.NewContentFromText(coaPrompt, genai.Role("user"))},
+				}, false)
+
+				for coaResp, err := range coaRespIter {
+					if err == nil && coaResp.Content != nil && len(coaResp.Content.Parts) > 0 {
+						text := coaResp.Content.Parts[0].Text
+						if strings.HasPrefix(text, "FIX:") {
+							out <- ChatEvent{Type: ChatEventThought, Agent: "COA", Content: "Sanity check failed: " + strings.TrimPrefix(text, "FIX:")}
+						}
+					}
+					break
+				}
+			}
 			out <- event
 		}
 	}()

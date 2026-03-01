@@ -280,7 +280,6 @@ func (m *defaultManager) ListSessions(ctx context.Context) ([]SessionInfo, error
 }
 
 func (m *defaultManager) Plan(ctx context.Context, prompt string) (*ExecutionGraph, error) {
-	allAgents := append(m.subAgentNames, "swarm_agent")
 	systemPrompt := fmt.Sprintf(`You are the Swarm Agent, acting as the primary coordinator for this session. Your goal is to determine the most efficient path to fulfill the user's intent.
 
 AVAILABLE SPECIALISTS: %s
@@ -299,9 +298,11 @@ JSON SCHEMA:
 }
 
 RULES:
+- NEVER assign tasks to "input_agent", "output_agent", "swarm_agent", or "planning_agent". Use ONLY the available specialists.
+- Ensure all "dependencies" refer to "id"s that exist within the same "tasks" list.
 - If using "immediate_response", the "tasks" list should be empty or omitted.
 - Use EXACT agent names.
-- Output ONLY the JSON or the DEEP_PLAN_REQUIRED string. No markdown.`, strings.Join(allAgents, ", "))
+- Output ONLY the JSON or the DEEP_PLAN_REQUIRED string. No markdown.`, strings.Join(m.subAgentNames, ", "))
 
 	respIter := m.fastModel.GenerateContent(ctx, &model.LLMRequest{
 		Contents: []*genai.Content{genai.NewContentFromText(prompt, genai.Role("user"))},

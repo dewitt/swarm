@@ -1921,6 +1921,19 @@ func (m model) renderAgentPanel() string {
 
 func (m *model) findAgent(name string) *swarmAgent {
 	name = strings.ToLower(name)
+	// 1. Try exact match
+	for _, a := range m.agents {
+		if strings.ToLower(a.name) == name {
+			return a
+		}
+	}
+	// 2. Try suffix match (e.g., "input_agent" matches "input")
+	for _, a := range m.agents {
+		if strings.HasSuffix(strings.ToLower(a.name), name) || strings.HasSuffix(name, strings.ToLower(a.name)) {
+			return a
+		}
+	}
+	// 3. Try substring match (fallback)
 	for _, a := range m.agents {
 		if strings.Contains(strings.ToLower(a.name), name) || strings.Contains(name, strings.ToLower(a.name)) {
 			return a

@@ -92,13 +92,21 @@ func (o *Orchestrator) AddTasks(tasks ...Task) {
 		if t.Prompt != "" {
 			t.Attributes["gen_ai.prompt"] = t.Prompt
 		}
-		o.tasks[t.ID] = t
-		if _, exists := o.status[t.ID]; !exists {
-			if t.Status != "" {
-				o.status[t.ID] = t.Status
-			} else {
-				o.status[t.ID] = TaskStatusPending
+		
+		// Record the task result if it's already complete
+		if t.Status == TaskStatusComplete {
+			if res, ok := t.Attributes["gen_ai.completion"].(string); ok {
+				o.result[t.ID] = res
 			}
+		}
+
+		o.tasks[t.ID] = t
+		
+		// Always update status if provided, otherwise default to Pending
+		if t.Status != "" {
+			o.status[t.ID] = t.Status
+		} else if _, exists := o.status[t.ID]; !exists {
+			o.status[t.ID] = TaskStatusPending
 		}
 	}
 }

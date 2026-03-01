@@ -245,6 +245,7 @@ func (m *defaultManager) Reload() error {
 
 	m.agents = make(map[string]agent.Agent)
 	var subAgentNames []string
+	var subAgentDescriptions []string
 
 	// 1. Load all skills into agents
 	for _, dir := range skillDirs {
@@ -271,6 +272,7 @@ func (m *defaultManager) Reload() error {
 		if skill.Manifest.Name != "input_agent" && skill.Manifest.Name != "output_agent" && skill.Manifest.Name != "swarm_agent" && skill.Manifest.Name != "planning_agent" {
 			instruction += "\n\nSUB-AGENT MODE: You are being invoked by the Swarm Agent to perform a specific task. Skip all greetings and introductory talk. Focus ONLY on executing the task and providing the results."
 			subAgentNames = append(subAgentNames, skill.Manifest.Name)
+			subAgentDescriptions = append(subAgentDescriptions, fmt.Sprintf("- **%s**: %s", skill.Manifest.Name, skill.Manifest.Description))
 		}
 
 		skillAgent, _ := llmagent.New(llmagent.Config{
@@ -286,15 +288,17 @@ func (m *defaultManager) Reload() error {
 		}
 	}
 
+	specialistsList := strings.Join(subAgentDescriptions, "\n")
+
 	// 2. Specialized Setup for Swarm Agent (assign sub-agents)
 	swarmAgent := m.agents["swarm_agent"]
 	if swarmAgent == nil {
 		return fmt.Errorf("swarm_agent skill not found")
 	}
 
-	// Re-initialize Swarm Agent with sub-agents and dynamically injected specialist names
+	// Re-initialize Swarm Agent with sub-agents and dynamically injected specialist names and descriptions
 	skill, _ := LoadSkill(filepath.Join(skillsPath, "swarm-agent"))
-	instruction := fmt.Sprintf(skill.Instructions, strings.Join(subAgentNames, ", "))
+	instruction := fmt.Sprintf(skill.Instructions, specialistsList)
 	swarmAgent, _ = llmagent.New(llmagent.Config{
 		Name:        "swarm_agent",
 		Model:       m.fastModel,
@@ -350,7 +354,16 @@ func (m *defaultManager) ListSessions(ctx context.Context) ([]SessionInfo, error
 }
 
 func (m *defaultManager) Plan(ctx context.Context, prompt string) (*ExecutionGraph, error) {
-	systemPrompt := fmt.Sprintf(m.planningInstruction, strings.Join(m.subAgentNames, ", "))
+	// Recompile the descriptions since they aren't stored on the struct
+	var descriptions []string
+	for _, name := range m.subAgentNames {
+		if a, ok := m.agents[name]; ok {
+			descriptions = append(descriptions, fmt.Sprintf("- **%s**: %s", name, a.Description()))
+		}
+	}
+	specialistsList := strings.Join(descriptions, "\n")
+
+	systemPrompt := fmt.Sprintf(m.planningInstruction, specialistsList)
 	respIter := m.fastModel.GenerateContent(ctx, &model.LLMRequest{
 		Contents: []*genai.Content{genai.NewContentFromText(prompt, genai.Role("user"))},
 		Config:   &genai.GenerateContentConfig{SystemInstruction: genai.NewContentFromText(systemPrompt, genai.Role("system"))},

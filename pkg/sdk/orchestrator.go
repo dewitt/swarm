@@ -43,7 +43,7 @@ type Task struct {
 	Duration     string            `json:"duration,omitempty"`
 	Dependencies []string          `json:"dependencies,omitempty"`
 	Result       string            `json:"result,omitempty"`
-	Prompt       string            `json:"-"` // Internal use, mapped to attributes in JSON
+	Prompt       string            `json:"prompt,omitempty"` // The instructions for the agent
 }
 
 // ExecutionGraph represents a snapshot of the tasks to be executed.

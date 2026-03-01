@@ -1117,6 +1117,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.updateViewport()
 			return m, listenForStream(msg.ch)
 
+		case sdk.ChatEventDebug:
+			m.messages = append(m.messages, lipgloss.NewStyle().Foreground(lipgloss.Color("241")).Width(m.viewport.Width).Render(event.Content))
+			m.updateViewport()
+			return m, listenForStream(msg.ch)
+
 		case sdk.ChatEventFinalResponse:
 			m.statusMsg = ""
 			author := event.Agent
@@ -1420,6 +1425,7 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 			"  /remember    Saves a global preference (e.g. /remember I use tabs).",
 			"  /copy        Copies the last agent response to the system clipboard.",
 			"  /observe     Toggles observe mode to see real-time agent activity.",
+			"  /debug       Toggles debug mode to see full swarm trajectories.",
 			"  /rewind [n]  Rewinds the conversation history by n turns (default 1).",
 			"  /plan        Enter read-only plan mode to brainstorm safely.",
 			"  /act         Exit plan mode and allow the agent to execute actions.",
@@ -1515,6 +1521,14 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 		} else {
 			m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Render("Failed to load config: "+err.Error()))
 		}
+	case "/debug":
+		enabled := !m.manager.IsDebug()
+		m.manager.SetDebug(enabled)
+		status := "enabled"
+		if !enabled {
+			status = "disabled"
+		}
+		m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+fmt.Sprintf("Debug mode (trajectories) %s.", status))
 	case "/copy":
 		if m.lastResponse != "" {
 			if err := clipboard.WriteAll(m.lastResponse); err != nil {

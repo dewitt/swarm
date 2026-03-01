@@ -244,7 +244,7 @@ type AgentManager interface {
 	// Plan uses the Architect to decompose a complex prompt into an ExecutionGraph.
 	Plan(ctx context.Context, prompt string) (*ExecutionGraph, error)
 	// ExecuteGraph executes an ExecutionGraph in parallel and streams events.
-	ExecuteGraph(ctx context.Context, g *ExecutionGraph) (<-chan ChatEvent, error)
+	ExecuteGraph(ctx context.Context, g *ExecutionGraph) (<-chan ChatEvent, *Orchestrator, error)
 
 	// Chat sends a natural language prompt to the internal Router Agent.
 	// It returns a channel that streams structured events back to the caller.
@@ -261,6 +261,10 @@ type AgentManager interface {
 	ListModels(ctx context.Context) ([]ModelInfo, error)
 	// ListSessions returns metadata about the persisted chat sessions.
 	ListSessions(ctx context.Context) ([]SessionInfo, error)
+
+	// Debug Management
+	SetDebug(enabled bool)
+	IsDebug() bool
 }
 
 // ChatEventType defines the type of event being streamed from Chat.
@@ -274,6 +278,7 @@ const (
 	ChatEventThought       ChatEventType = "thought"
 	ChatEventObserver      ChatEventType = "observer"
 	ChatEventReplan        ChatEventType = "replan"
+	ChatEventDebug         ChatEventType = "debug"
 	ChatEventFinalResponse ChatEventType = "final_response"
 
 	ChatEventError        ChatEventType = "error"
@@ -316,6 +321,7 @@ type defaultManager struct {
 	clientCfg      *genai.ClientConfig
 	pinnedContext  map[string]string
 	ciaInstruction string
+	debugMode      bool
 
 	flashModel    model.LLM
 	proModel      model.LLM
@@ -538,6 +544,14 @@ func NewManager(cfg ...ManagerConfig) (AgentManager, error) {
 	}
 
 	return m, nil
+}
+
+func (m *defaultManager) IsDebug() bool {
+	return m.debugMode
+}
+
+func (m *defaultManager) SetDebug(enabled bool) {
+	m.debugMode = enabled
 }
 
 func (m *defaultManager) Reload() error {
@@ -939,7 +953,7 @@ Otherwise, output: "OK".`, content)
 		}
 
 		// --- 3. Execute the Reactive Task Pool ---
-		events, err := m.ExecuteGraph(ctx, graph)
+		events, orchestrator, err := m.ExecuteGraph(ctx, graph)
 		if err != nil {
 			out <- ChatEvent{Type: ChatEventError, Agent: "Orchestrator", Content: "Failed to start swarm: " + err.Error()}
 			return
@@ -951,16 +965,23 @@ Otherwise, output: "OK".`, content)
 			}
 			out <- event
 		}
+
+		// --- 4. Trajectory Debugging ---
+		if m.debugMode {
+			results := orchestrator.GetContext()
+			b, _ := json.MarshalIndent(results, "", "  ")
+			out <- ChatEvent{Type: ChatEventDebug, Agent: "Orchestrator", Content: "Full Swarm Trajectory (Results):\n" + string(b)}
+		}
 	}()
 
 	return out, nil
 }
 
-func (m *defaultManager) ExecuteGraph(ctx context.Context, g *ExecutionGraph) (<-chan ChatEvent, error) {
+func (m *defaultManager) ExecuteGraph(ctx context.Context, g *ExecutionGraph) (<-chan ChatEvent, *Orchestrator, error) {
 	out := make(chan ChatEvent)
+	o := NewOrchestrator(g)
 	go func() {
 		defer close(out)
-		o := NewOrchestrator(g)
 
 		type completedTask struct {
 			ID     string
@@ -1166,7 +1187,7 @@ Otherwise, output: "OK".`, targetAgent.Name(), task.Name, strings.Join(history, 
 			}
 		}
 	}()
-	return out, nil
+	return out, o, nil
 }
 
 func (m *defaultManager) Rewind(n int) error {

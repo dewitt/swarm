@@ -493,12 +493,13 @@ func (m *defaultManager) Execute(ctx context.Context, g *ExecutionGraph, o *Orch
 					if err == nil {
 						o.AddTasks(newG.Tasks...)
 					}
-				} else if strings.Contains(done.Result, "\"tasks\":") {
-					re := regexp.MustCompile("(?s)\\{.*\\}")
-					match := re.FindString(done.Result)
-					if match != "" {
+				} else if strings.Contains(done.Result, "```json") && strings.Contains(done.Result, "\"tasks\":") {
+					// Strict check for JSON blocks to avoid false positives in markdown text
+					re := regexp.MustCompile("(?s)```json\n(\\{.*\\})\n```")
+					match := re.FindStringSubmatch(done.Result)
+					if len(match) > 1 {
 						var subGraph ExecutionGraph
-						if err := json.Unmarshal([]byte(match), &subGraph); err == nil {
+						if err := json.Unmarshal([]byte(match[1]), &subGraph); err == nil {
 							for i := range subGraph.Tasks {
 								subGraph.Tasks[i].ParentID = done.ID
 								subGraph.Tasks[i].ID = fmt.Sprintf("%s_%s", done.ID, subGraph.Tasks[i].ID)
@@ -674,6 +675,16 @@ func (m *defaultManager) executeTask(ctx context.Context, out chan<- ChatEvent, 
 	<-telemetryDone
 	obsWg.Wait()
 
+	// Ensure all tool spans are closed (Node Autonomy cleanup)
+	for name, t := range activeToolSpans {
+		now := time.Now()
+		t.Status = TaskStatusFailed
+		t.EndTime = now.Format(time.RFC3339Nano)
+		t.Attributes["gen_ai.tool_result"] = "Tool execution interrupted or incomplete"
+		o.AddTasks(t)
+		delete(activeToolSpans, name)
+	}
+
 	if finalText == "" {
 		return "No response emitted by agent.", false
 	}
@@ -734,9 +745,9 @@ func (m *defaultManager) runOutputAgent(ctx context.Context, out chan<- ChatEven
 		break
 	}
 
-	// Update UI card state (optional, can also just be done by concluding the task)
+	// Update UI card state
 	if approved {
-		out <- ChatEvent{Type: ChatEventThought, Agent: "Output Agent", Content: "OK"}
+		out <- ChatEvent{Type: ChatEventFinalResponse, Agent: "Output Agent", Content: "OK"}
 	}
 
 	if o != nil {

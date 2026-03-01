@@ -1128,6 +1128,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			agentCmd = cmd
 			a.update("active", event.Content)
 
+			// Sync active agent for error attribution
+			if event.Agent != "" && !isMediationAgent(event.Agent) {
+				m.activeAgent = event.Agent
+			}
+
 			if m.observeMode {
 				thought := event.Content
 				m.observeLog = append(m.observeLog, fmt.Sprintf("[%s] 🤔 %s", event.Agent, lipgloss.NewStyle().Foreground(tipColor).Italic(true).Render(thought)))

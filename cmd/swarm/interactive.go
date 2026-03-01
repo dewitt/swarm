@@ -197,8 +197,8 @@ func renderLogo() string {
 }
 
 type streamMsg struct {
-	event sdk.ChatEvent
-	ch    <-chan sdk.ChatEvent
+	event sdk.ObservableEvent
+	ch    <-chan sdk.ObservableEvent
 }
 
 type streamDoneMsg struct{}
@@ -1017,209 +1017,132 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		event := msg.event
 		var agentCmd tea.Cmd
 
-		switch event.Type {
-		case sdk.ChatEventHandoff:
-			newAgentName := strings.TrimSpace(event.Content)
-			oldAgentName := event.Agent
-			if oldAgentName == "" {
-				oldAgentName = m.activeAgent
+		switch event.State {
+		case sdk.AgentStateSpawning:
+			targetAgentName := event.AgentName
+			if targetAgentName == "" {
+				targetAgentName = m.activeAgent
 			}
+			a, cmd := m.ensureAgent(targetAgentName)
+			agentCmd = cmd
+			a.update("active", "Initializing...")
 
-			if m.observeMode {
-				m.observeLog = append(m.observeLog, fmt.Sprintf("[%s] ➡️ Delegated span to: %s", oldAgentName, lipgloss.NewStyle().Bold(true).Render(newAgentName)))
-			}
-
-			// Update AgentPanel
-			if oldA := m.findAgent(oldAgentName); oldA != nil {
-				oldA.update("success", "Span delegated")
-			}
-			var newA *swarmAgent
-			newA, agentCmd = m.ensureAgent(newAgentName)
-			newA.update("active", "Analyzing context…")
-
-			// Sync active agent
-			if !isMediationAgent(newAgentName) {
-				m.activeAgent = newAgentName
+			if !isMediationAgent(targetAgentName) {
+				m.activeAgent = targetAgentName
 			}
 			m.statusMsg = ""
 			m.updateViewport()
 			return m, tea.Batch(listenForStream(msg.ch), agentCmd)
 
-		case sdk.ChatEventToolCall:
-			toolInfo := event.Content
-			// Split name and args
-			parts := strings.SplitN(toolInfo, " ", 2)
-			toolName := parts[0]
-			toolArgs := ""
-			if len(parts) > 1 {
-				toolArgs = parts[1]
-			}
-
-			// Identify the correct agent from the event
-			targetAgentName := event.Agent
-			if targetAgentName == "" {
-				targetAgentName = m.activeAgent
-			}
-
-			m.statusMsg = "Running " + toolName + "…"
-
-			// Update AgentPanel
-			a, cmd := m.ensureAgent(targetAgentName)
+		case sdk.AgentStateThinking:
+			a, cmd := m.ensureAgent(event.AgentName)
 			agentCmd = cmd
-			a.update("active", "Tool: "+toolName)
-
-			// Sync active agent
-			if targetAgentName != "" && !isMediationAgent(targetAgentName) {
-				m.activeAgent = targetAgentName
+			if event.Thought != "" {
+				a.update("active", event.Thought)
+			} else {
+				a.update("active", "Thinking...")
 			}
 
-			if m.observeMode {
-				logEntry := fmt.Sprintf("[%s] Executing %s", targetAgentName, toolName)
-				if toolArgs != "" {
-					logEntry += " " + lipgloss.NewStyle().Foreground(tipColor).Render(toolArgs)
-				}
-				m.observeLog = append(m.observeLog, logEntry)
-			}
-			m.updateViewport()
-			return m, tea.Batch(listenForStream(msg.ch), agentCmd)
-
-		case sdk.ChatEventToolResult:
-			resultInfo := event.Content
-			parts := strings.SplitN(resultInfo, " ", 2)
-			toolName := parts[0]
-
-			// Identify the correct agent from the event
-			targetAgentName := event.Agent
-			if targetAgentName == "" {
-				targetAgentName = m.activeAgent
+			if event.AgentName != "" && !isMediationAgent(event.AgentName) {
+				m.activeAgent = event.AgentName
 			}
 
-			// Update AgentPanel
-			a, cmd := m.ensureAgent(targetAgentName)
-			agentCmd = cmd
-			// Set back to idle to stop spinner, and keep tool name as status
-			a.update("idle", "Completed "+toolName)
-			a.telemetry = nil
-
-			if m.observeMode {
-				toolResult := ""
-				if len(parts) > 1 {
-					toolResult = parts[1]
-				}
-				logEntry := fmt.Sprintf("[%s] Completed %s", targetAgentName, toolName)
-				if toolResult != "" {
-					logEntry += " " + lipgloss.NewStyle().Foreground(tipColor).Render(toolResult)
-				}
-				m.observeLog = append(m.observeLog, logEntry)
+			if m.observeMode && event.Thought != "" {
+				m.observeLog = append(m.observeLog, fmt.Sprintf("[%s] 🤔 %s", event.AgentName, lipgloss.NewStyle().Foreground(tipColor).Italic(true).Render(event.Thought)))
 				m.updateViewport()
 			}
 			return m, tea.Batch(listenForStream(msg.ch), agentCmd)
 
-		case sdk.ChatEventTelemetry:
-			targetAgentName := event.Agent
+		case sdk.AgentStateExecuting:
+			targetAgentName := event.AgentName
 			if targetAgentName == "" {
 				targetAgentName = m.activeAgent
 			}
-			// Update AgentPanel telemetry for active agent
-			if a := m.findAgent(targetAgentName); a != nil {
-				a.telemetry = append(a.telemetry, event.Content)
-				if len(a.telemetry) > 3 {
-					a.telemetry = a.telemetry[len(a.telemetry)-3:]
+
+			a, cmd := m.ensureAgent(targetAgentName)
+			agentCmd = cmd
+
+			if event.ObserverSummary != "" {
+				a.update("active", event.ObserverSummary)
+				m.statusMsg = event.ObserverSummary
+				if m.observeMode {
+					m.observeLog = append(m.observeLog, fmt.Sprintf("[%s] 💡 %s", targetAgentName, lipgloss.NewStyle().Foreground(googleBlue).Render(event.ObserverSummary)))
+					m.updateViewport()
 				}
-				a.lastActive = time.Now()
+			} else if event.ToolName != "" {
+				a.update("active", "Tool: "+event.ToolName)
+				m.statusMsg = "Running " + event.ToolName + "…"
+
+				if m.observeMode {
+					logEntry := fmt.Sprintf("[%s] Executing %s", targetAgentName, event.ToolName)
+					if len(event.ToolArgs) > 0 {
+						argsJSON, _ := json.Marshal(event.ToolArgs)
+						logEntry += " " + lipgloss.NewStyle().Foreground(tipColor).Render(string(argsJSON))
+					}
+					m.observeLog = append(m.observeLog, logEntry)
+					m.updateViewport()
+				}
 			}
 
-			// Sync active agent
 			if targetAgentName != "" && !isMediationAgent(targetAgentName) {
 				m.activeAgent = targetAgentName
 			}
-			return m, listenForStream(msg.ch)
-
-		case sdk.ChatEventThought:
-			// Update AgentPanel
-			a, cmd := m.ensureAgent(event.Agent)
-			agentCmd = cmd
-			a.update("active", event.Content)
-
-			// Sync active agent for error attribution
-			if event.Agent != "" && !isMediationAgent(event.Agent) {
-				m.activeAgent = event.Agent
-			}
-
-			if m.observeMode {
-				thought := event.Content
-				m.observeLog = append(m.observeLog, fmt.Sprintf("[%s] 🤔 %s", event.Agent, lipgloss.NewStyle().Foreground(tipColor).Italic(true).Render(thought)))
-				m.updateViewport()
-			}
 			return m, tea.Batch(listenForStream(msg.ch), agentCmd)
 
-		case sdk.ChatEventObserver:
-			m.messages = append(m.messages, lipgloss.NewStyle().Foreground(googleBlue).Italic(true).Width(m.viewport.Width).Render("👀 "+event.Content))
+		case sdk.AgentStateWaiting:
+			m.messages = append(m.messages, lipgloss.NewStyle().Foreground(googleBlue).Italic(true).Width(m.viewport.Width).Render("👀 "+event.ObserverSummary))
 			m.updateViewport()
 			return m, listenForStream(msg.ch)
 
-		case sdk.ChatEventReplan:
-			m.messages = append(m.messages, lipgloss.NewStyle().Foreground(googleYellow).Bold(true).Width(m.viewport.Width).Render("🔄 "+event.Content))
-			m.updateViewport()
-			return m, listenForStream(msg.ch)
-
-		case sdk.ChatEventDebug:
-			m.messages = append(m.messages, lipgloss.NewStyle().Foreground(lipgloss.Color("241")).Width(m.viewport.Width).Render(event.Content))
-			m.updateViewport()
-			return m, listenForStream(msg.ch)
-
-		case sdk.ChatEventFinalResponse:
+		case sdk.AgentStateComplete:
 			m.statusMsg = ""
-			author := event.Agent
+			author := event.AgentName
 			if author == "" {
 				author = "agent"
 			}
-
-			// Update AgentPanel
 			a, cmd := m.ensureAgent(author)
 			agentCmd = cmd
-			a.update("success", "Response ready")
 
-			// Sync active agent
-			if author != "" && !isMediationAgent(author) {
-				m.activeAgent = author
-			}
-
-			text := event.Content
-
-			// Fulfill Requirement 1 & 2: Invisible intermediaries
-			if isMediationAgent(author) {
-				// Still update viewport and panel, but don't show text to user
-				m.updateViewport()
-				return m, tea.Batch(listenForStream(msg.ch), agentCmd)
-			}
-
-			out := text
-			if m.renderer != nil {
-				if rOut, err := m.renderer.Render(text); err == nil {
-					out = rOut
+			if event.FinalContent != "" {
+				a.update("success", "Response ready")
+				if author != "" && !isMediationAgent(author) {
+					m.activeAgent = author
 				}
-			}
 
-			badge := getAgentBadge(author)
-			m.messages = append(m.messages, badge+"\n"+strings.TrimSpace(out))
+				if isMediationAgent(author) {
+					m.updateViewport()
+					return m, tea.Batch(listenForStream(msg.ch), agentCmd)
+				}
+
+				out := event.FinalContent
+				if m.renderer != nil {
+					if rOut, err := m.renderer.Render(out); err == nil {
+						out = rOut
+					}
+				}
+				badge := getAgentBadge(author)
+				m.messages = append(m.messages, badge+"\n"+strings.TrimSpace(out))
+			} else {
+				a.update("idle", "Completed task")
+			}
 			m.updateViewport()
 			return m, tea.Batch(listenForStream(msg.ch), agentCmd)
 
-		case sdk.ChatEventError:
+		case sdk.AgentStateError:
 			m.statusMsg = ""
-
-			targetAgentName := event.Agent
+			targetAgentName := event.AgentName
 			if targetAgentName == "" {
 				targetAgentName = m.activeAgent
 			}
-
-			// Update AgentPanel
 			a, cmd := m.ensureAgent(targetAgentName)
 			agentCmd = cmd
 			a.update("error", "Failed")
 
-			m.messages = append(m.messages, errorMsgStyle.Render(fmt.Sprintf("Error: %s", event.Content)))
+			errMsg := event.FinalContent
+			if event.Error != nil {
+				errMsg = event.Error.Error()
+			}
+			m.messages = append(m.messages, errorMsgStyle.Render(fmt.Sprintf("Error: %s", errMsg)))
 			m.loading = false
 			m.updateViewport()
 			return m, tea.Batch(m.dequeueAndRun(), agentCmd)
@@ -1398,7 +1321,7 @@ func (m *model) dequeueAndRun() tea.Cmd {
 	return m.callSDK(ctx, nextInput)
 }
 
-func listenForStream(ch <-chan sdk.ChatEvent) tea.Cmd {
+func listenForStream(ch <-chan sdk.ObservableEvent) tea.Cmd {
 	return func() tea.Msg {
 		event, ok := <-ch
 		if !ok {

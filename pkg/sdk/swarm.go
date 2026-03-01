@@ -42,24 +42,36 @@ type ModelInfo struct {
 	Version     string
 }
 
-type ChatEventType string
+type AgentState string
 
 const (
-	ChatEventHandoff       ChatEventType = "handoff"
-	ChatEventToolCall      ChatEventType = "tool_call"
-	ChatEventToolResult    ChatEventType = "tool_result"
-	ChatEventTelemetry     ChatEventType = "telemetry"
-	ChatEventThought       ChatEventType = "thought"
-	ChatEventObserver      ChatEventType = "observer"
-	ChatEventReplan        ChatEventType = "replan"
-	ChatEventDebug         ChatEventType = "debug"
-	ChatEventFinalResponse ChatEventType = "final_response"
-	ChatEventError         ChatEventType = "error"
+	AgentStateSpawning  AgentState = "spawning"
+	AgentStateThinking  AgentState = "thinking"
+	AgentStateExecuting AgentState = "executing"
+	AgentStateWaiting   AgentState = "waiting" // Blocked on HITL
+	AgentStateComplete  AgentState = "complete"
+	AgentStateError     AgentState = "error"
 )
 
-type ChatEvent struct {
-	Type                   ChatEventType
-	Agent, SpanID, Content string
+type ObservableEvent struct {
+	Timestamp time.Time
+	AgentName string
+	SpanID    string
+
+	// Core State Update
+	State AgentState
+
+	// Execution Context
+	ToolName string
+	ToolArgs map[string]any
+
+	// Output
+	Thought      string
+	FinalContent string
+	Error        error
+
+	// Observers
+	ObserverSummary string
 }
 
 type Swarm interface {
@@ -67,8 +79,8 @@ type Swarm interface {
 	DropContext(path string)
 	ListContext() []string
 	Plan(ctx context.Context, prompt string) (*ExecutionGraph, error)
-	Execute(ctx context.Context, g *ExecutionGraph, o *Engine) (<-chan ChatEvent, *Engine, error)
-	Chat(ctx context.Context, prompt string) (<-chan ChatEvent, error)
+	Execute(ctx context.Context, g *ExecutionGraph, o *Engine) (<-chan ObservableEvent, *Engine, error)
+	Chat(ctx context.Context, prompt string) (<-chan ObservableEvent, error)
 	Reset()
 	Reload() error
 	Rewind(n int) error
@@ -476,8 +488,8 @@ func (m *defaultSwarm) Plan(ctx context.Context, prompt string) (*ExecutionGraph
 	return &graph, nil
 }
 
-func (m *defaultSwarm) Chat(ctx context.Context, prompt string) (<-chan ChatEvent, error) {
-	out := make(chan ChatEvent, 1000)
+func (m *defaultSwarm) Chat(ctx context.Context, prompt string) (<-chan ObservableEvent, error) {
+	out := make(chan ObservableEvent, 1000)
 	// Record the user's initial prompt in the persistent session
 	m.appendEvent(ctx, "user", prompt)
 
@@ -494,14 +506,14 @@ func (m *defaultSwarm) Chat(ctx context.Context, prompt string) (<-chan ChatEven
 
 				if m.debugMode {
 					b, _ := json.MarshalIndent(traj, "", "  ")
-					out <- ChatEvent{Type: ChatEventDebug, Agent: "Swarm", Content: string(b)}
+					out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm", State: AgentStateComplete, FinalContent: string(b)}
 				}
 			}
 		}()
 
 		// 1. Input Classification (Fast Path / CIA)
 		inputStart := time.Now()
-		out <- ChatEvent{Type: ChatEventThought, Agent: "Input Agent", Content: "Classifying intent…"}
+		out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Input Agent", State: AgentStateThinking, Thought: "Classifying intent…"}
 
 		// Dynamically inject the last active agent to help the CIA detect digressions
 		lastAgentName := "None (Starting new conversation)"
@@ -519,7 +531,7 @@ func (m *defaultSwarm) Chat(ctx context.Context, prompt string) (<-chan ChatEven
 		var inputResult string
 		for resp, err := range inputIter {
 			if err != nil {
-				out <- ChatEvent{Type: ChatEventError, Content: "Input classification failed: " + err.Error()}
+				out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Input Agent", State: AgentStateError, Error: fmt.Errorf("Input classification failed: %w", err)}
 				return
 			}
 			if resp.Content != nil && len(resp.Content.Parts) > 0 {
@@ -537,7 +549,7 @@ func (m *defaultSwarm) Chat(ctx context.Context, prompt string) (<-chan ChatEven
 
 		var target string
 		if strings.HasPrefix(inputResult, "ROUTE TO: swarm_agent") {
-			out <- ChatEvent{Type: ChatEventThought, Agent: "Input Agent", Content: "Rerouting to Swarm Agent…"}
+			out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Input Agent", State: AgentStateExecuting, Thought: "Rerouting to Swarm Agent…"}
 			target = "swarm_agent"
 		} else {
 			target = "swarm_agent"
@@ -545,6 +557,7 @@ func (m *defaultSwarm) Chat(ctx context.Context, prompt string) (<-chan ChatEven
 				target = m.lastAgent
 			}
 		}
+		out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Input Agent", State: AgentStateComplete}
 
 		var graph *ExecutionGraph
 		var err error
@@ -552,13 +565,18 @@ func (m *defaultSwarm) Chat(ctx context.Context, prompt string) (<-chan ChatEven
 		// 2. Swarm Coordination / Planning
 		// If we are starting fresh or rerouting to Swarm Agent, we let it plan.
 		if target == "swarm_agent" {
-			out <- ChatEvent{Type: ChatEventThought, Agent: "Swarm Agent", Content: "Analyzing request…"}
+			out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm Agent", State: AgentStateThinking, Thought: "Analyzing request…"}
 			planStart := time.Now()
 			graph, err = m.Plan(ctx, prompt)
 			if err != nil {
-				out <- ChatEvent{Type: ChatEventError, Content: "Coordination failed: " + err.Error()}
+				out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm Agent", State: AgentStateError, Error: fmt.Errorf("Coordination failed: %w", err)}
 				return
 			}
+
+			if graph != nil && graph.ImmediateResponse == "" {
+				out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm Agent", State: AgentStateComplete}
+			}
+
 			planJSON, _ := json.Marshal(graph)
 			o.AddSpans(Span{
 				ID: "coordination", Name: "Swarm Planning", Agent: "swarm_agent", Status: SpanStatusComplete,
@@ -576,12 +594,12 @@ func (m *defaultSwarm) Chat(ctx context.Context, prompt string) (<-chan ChatEven
 			if m.runOutputAgent(ctx, out, o, "Swarm Agent", graph.ImmediateResponse) {
 				// Record the immediate response in the persistent session
 				m.appendEvent(ctx, "model", graph.ImmediateResponse)
-				out <- ChatEvent{Type: ChatEventFinalResponse, Agent: "Swarm Agent", Content: graph.ImmediateResponse}
+				out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm Agent", State: AgentStateComplete, FinalContent: graph.ImmediateResponse}
 			}
 		} else {
 			events, _, err := m.Execute(ctx, graph, o)
 			if err != nil {
-				out <- ChatEvent{Type: ChatEventError, Content: "Execution failed: " + err.Error()}
+				out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm", State: AgentStateError, Error: fmt.Errorf("Execution failed: %w", err)}
 				return
 			}
 			for event := range events {
@@ -594,11 +612,11 @@ func (m *defaultSwarm) Chat(ctx context.Context, prompt string) (<-chan ChatEven
 	return out, nil
 }
 
-func (m *defaultSwarm) Execute(ctx context.Context, g *ExecutionGraph, o *Engine) (<-chan ChatEvent, *Engine, error) {
+func (m *defaultSwarm) Execute(ctx context.Context, g *ExecutionGraph, o *Engine) (<-chan ObservableEvent, *Engine, error) {
 	if o == nil {
 		o = NewEngine(g)
 	}
-	out := make(chan ChatEvent, 1000)
+	out := make(chan ObservableEvent, 1000)
 	if g != nil {
 		o.AddSpans(g.Spans...)
 	}
@@ -635,7 +653,7 @@ func (m *defaultSwarm) Execute(ctx context.Context, g *ExecutionGraph, o *Engine
 				if o.IsComplete() {
 					break Loop
 				} else {
-					out <- ChatEvent{Type: ChatEventError, Agent: "Swarm", Content: "Deadlock detected in execution graph."}
+					out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm", State: AgentStateError, Error: fmt.Errorf("Deadlock detected in execution graph")}
 					break Loop
 				}
 			}
@@ -653,11 +671,11 @@ func (m *defaultSwarm) Execute(ctx context.Context, g *ExecutionGraph, o *Engine
 				// Handle dynamic replanning or subgraph expansion
 				if done.Replan {
 					if replanCount >= maxReplans {
-						out <- ChatEvent{Type: ChatEventError, Agent: "Swarm", Content: "Maximum replan attempts reached. Halting loop."}
+						out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm", State: AgentStateError, Error: fmt.Errorf("Maximum replan attempts reached. Halting loop")}
 						continue
 					}
 					replanCount++
-					out <- ChatEvent{Type: ChatEventThought, Agent: "Swarm", Content: fmt.Sprintf("Replanning effort %d/%d…", replanCount, maxReplans)}
+					out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm", State: AgentStateThinking, Thought: fmt.Sprintf("Replanning effort %d/%d…", replanCount, maxReplans)}
 					newG, err := m.Plan(ctx, "Pivot: "+done.Result)
 					if err == nil {
 						o.AddSpans(newG.Spans...)
@@ -686,10 +704,10 @@ func (m *defaultSwarm) Execute(ctx context.Context, g *ExecutionGraph, o *Engine
 	return out, o, nil
 }
 
-func (m *defaultSwarm) executeSpan(ctx context.Context, out chan<- ChatEvent, o *Engine, span Span) (string, SpanStatus, bool) {
+func (m *defaultSwarm) executeSpan(ctx context.Context, out chan<- ObservableEvent, o *Engine, span Span) (string, SpanStatus, bool) {
 	targetAgent, ok := m.agents[span.Agent]
 	if !ok {
-		out <- ChatEvent{Type: ChatEventError, Agent: "Swarm", SpanID: span.ID, Content: "Agent not found: " + span.Agent}
+		out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm", SpanID: span.ID, State: AgentStateError, Error: fmt.Errorf("Agent not found: %s", span.Agent)}
 		return "Agent not found", SpanStatusFailed, false
 	}
 
@@ -710,7 +728,7 @@ func (m *defaultSwarm) executeSpan(ctx context.Context, out chan<- ChatEvent, o 
 		SessionService: m.sessionSvc,
 	})
 
-	out <- ChatEvent{Type: ChatEventThought, Agent: targetAgent.Name(), SpanID: span.ID, Content: "Starting…"}
+	out <- ObservableEvent{Timestamp: time.Now(), AgentName: targetAgent.Name(), SpanID: span.ID, State: AgentStateSpawning, Thought: "Starting…"}
 
 	// Telemetry and Observation
 	telemetryChan := make(chan string, 100)
@@ -723,30 +741,70 @@ func (m *defaultSwarm) executeSpan(ctx context.Context, out chan<- ChatEvent, o 
 	go func() {
 		defer close(telemetryDone)
 		defer obsWg.Done()
-		var lastLines []string
-		for line := range telemetryChan {
-			out <- ChatEvent{Type: ChatEventTelemetry, Agent: targetAgent.Name(), SpanID: span.ID, Content: line}
-			lastLines = append(lastLines, line)
-			if len(lastLines) >= 10 {
-				obsWg.Add(1)
-				go func(history []string) {
-					defer obsWg.Done()
-					obsCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-					defer cancel()
-					obsPrompt := fmt.Sprintf("Monitor: %s. Telemetry: %s. If loop output INTERVENE: [reason]. Else OK.", targetAgent.Name(), strings.Join(history, "\n"))
-					respIter := m.fastModel.GenerateContent(obsCtx, &model.LLMRequest{Contents: []*genai.Content{genai.NewContentFromText(obsPrompt, genai.Role("user"))}}, false)
-					for resp, err := range respIter {
-						if err == nil && resp.Content != nil && len(resp.Content.Parts) > 0 {
-							text := resp.Content.Parts[0].Text
-							if strings.HasPrefix(text, "INTERVENE:") {
-								out <- ChatEvent{Type: ChatEventObserver, Agent: "Observer", SpanID: span.ID, Content: text}
-								cancel() // Forcefully halt the agent interaction loop
+		var history []string
+		var newLines bool
+
+		baseInterval := 2 * time.Second
+		interval := baseInterval
+		maxInterval := 60 * time.Second
+		timer := time.NewTimer(interval)
+		defer timer.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case line, ok := <-telemetryChan:
+				if !ok {
+					return
+				}
+				history = append(history, line)
+				if len(history) > 100 {
+					history = history[len(history)-100:]
+				}
+				newLines = true
+			case <-timer.C:
+				if newLines {
+					newLines = false
+
+					histCopy := make([]string, len(history))
+					copy(histCopy, history)
+					obsWg.Add(1)
+					go func(hist []string) {
+						defer obsWg.Done()
+						obsCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+						defer cancel()
+
+						obsPrompt := fmt.Sprintf("Monitor: %s. Recent Telemetry:\n%s\n\nTask: Output a concise 3-8 word phrase summarizing the current activity (e.g., 'Searching for authentication logic...' or 'Running unit tests...'). If you detect an infinite loop or severe error, output 'INTERVENE: [reason]'.", targetAgent.Name(), strings.Join(hist, "\n"))
+
+						respIter := m.fastModel.GenerateContent(obsCtx, &model.LLMRequest{Contents: []*genai.Content{genai.NewContentFromText(obsPrompt, genai.Role("user"))}}, false)
+						for resp, err := range respIter {
+							if err != nil {
+								fmt.Fprintf(os.Stderr, "[Observer Error] %v\n", err)
+								break
 							}
+							if resp.Content != nil && len(resp.Content.Parts) > 0 {
+								text := strings.TrimSpace(resp.Content.Parts[0].Text)
+								if strings.HasPrefix(text, "INTERVENE:") {
+									out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Observer", SpanID: span.ID, State: AgentStateWaiting, ObserverSummary: text}
+								} else {
+									text = strings.TrimSuffix(text, ".")
+									out <- ObservableEvent{Timestamp: time.Now(), AgentName: targetAgent.Name(), SpanID: span.ID, State: AgentStateExecuting, ObserverSummary: text}
+								}
+							}
+							break
 						}
-						break
+					}(histCopy)
+
+					interval = interval * 2
+					if interval > maxInterval {
+						interval = maxInterval
 					}
-				}(lastLines)
-				lastLines = nil
+				} else {
+					// No new lines this cycle. Reset backoff so next burst is summarized quickly.
+					interval = baseInterval
+				}
+				timer.Reset(interval)
 			}
 		}
 	}()
@@ -799,7 +857,7 @@ func (m *defaultSwarm) executeSpan(ctx context.Context, out chan<- ChatEvent, o 
 
 	for event, err := range events {
 		if err != nil {
-			out <- ChatEvent{Type: ChatEventThought, Agent: targetAgent.Name(), SpanID: span.ID, Content: "Error encountered: " + err.Error()}
+			out <- ObservableEvent{Timestamp: time.Now(), AgentName: targetAgent.Name(), SpanID: span.ID, State: AgentStateError, Error: fmt.Errorf("Error encountered: %w", err)}
 			full.WriteString("\n\nERROR: " + err.Error())
 			needsReplan = true
 			break
@@ -811,7 +869,7 @@ func (m *defaultSwarm) executeSpan(ctx context.Context, out chan<- ChatEvent, o 
 					if part.FunctionCall.Name == "request_replan" {
 						needsReplan = true
 					}
-					out <- ChatEvent{Type: ChatEventToolCall, Agent: targetAgent.Name(), SpanID: span.ID, Content: part.FunctionCall.Name}
+					out <- ObservableEvent{Timestamp: time.Now(), AgentName: targetAgent.Name(), SpanID: span.ID, State: AgentStateExecuting, ToolName: part.FunctionCall.Name, ToolArgs: part.FunctionCall.Args}
 
 					// Record tool span start
 					toolStart := time.Now()
@@ -826,7 +884,7 @@ func (m *defaultSwarm) executeSpan(ctx context.Context, out chan<- ChatEvent, o 
 					activeToolSpans[part.FunctionCall.Name] = append(activeToolSpans[part.FunctionCall.Name], toolTask)
 				}
 				if part.FunctionResponse != nil {
-					out <- ChatEvent{Type: ChatEventToolResult, Agent: targetAgent.Name(), SpanID: span.ID, Content: part.FunctionResponse.Name}
+					out <- ObservableEvent{Timestamp: time.Now(), AgentName: targetAgent.Name(), SpanID: span.ID, State: AgentStateThinking, ToolName: part.FunctionResponse.Name}
 
 					// Record tool span completion (pop from queue)
 					if spans, ok := activeToolSpans[part.FunctionResponse.Name]; ok && len(spans) > 0 {
@@ -847,7 +905,7 @@ func (m *defaultSwarm) executeSpan(ctx context.Context, out chan<- ChatEvent, o 
 				}
 				if part.Thought {
 					if !thoughtBroadcasted {
-						out <- ChatEvent{Type: ChatEventThought, Agent: targetAgent.Name(), SpanID: span.ID, Content: "Thinking deeply..."}
+						out <- ObservableEvent{Timestamp: time.Now(), AgentName: targetAgent.Name(), SpanID: span.ID, State: AgentStateThinking, Thought: "Thinking deeply..."}
 						thoughtBroadcasted = true
 					}
 				} else if part.Text != "" {
@@ -883,7 +941,7 @@ func (m *defaultSwarm) executeSpan(ctx context.Context, out chan<- ChatEvent, o 
 	// If there was a hard error, skip Output Agent and immediately return with failed status and replan flag
 	if strings.Contains(finalText, "\n\nERROR: ") && needsReplan {
 		m.appendEvent(ctx, "model", fmt.Sprintf("[%s]: %s", targetAgent.Name(), finalText))
-		out <- ChatEvent{Type: ChatEventFinalResponse, Agent: targetAgent.Name(), SpanID: span.ID, Content: finalText}
+		out <- ObservableEvent{Timestamp: time.Now(), AgentName: targetAgent.Name(), SpanID: span.ID, State: AgentStateError, FinalContent: finalText}
 		return finalText, SpanStatusFailed, true
 	}
 
@@ -891,11 +949,11 @@ func (m *defaultSwarm) executeSpan(ctx context.Context, out chan<- ChatEvent, o 
 	if m.runOutputAgent(ctx, out, o, targetAgent.Name(), finalText) {
 		// Record the response in the main conversation history
 		m.appendEvent(ctx, "model", fmt.Sprintf("[%s]: %s", targetAgent.Name(), finalText))
-		out <- ChatEvent{Type: ChatEventFinalResponse, Agent: targetAgent.Name(), SpanID: span.ID, Content: finalText}
+		out <- ObservableEvent{Timestamp: time.Now(), AgentName: targetAgent.Name(), SpanID: span.ID, State: AgentStateComplete, FinalContent: finalText}
 		return finalText, SpanStatusComplete, needsReplan
 	}
 
-	out <- ChatEvent{Type: ChatEventThought, Agent: "Swarm", SpanID: span.ID, Content: "Output Agent rejected the response as problematic."}
+	out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm", SpanID: span.ID, State: AgentStateThinking, Thought: "Output Agent rejected the response as problematic."}
 	return "Output Agent rejected response.", SpanStatusComplete, true
 }
 
@@ -917,7 +975,7 @@ func (m *defaultSwarm) appendEvent(ctx context.Context, author, content string) 
 	})
 }
 
-func (m *defaultSwarm) runOutputAgent(ctx context.Context, out chan<- ChatEvent, o *Engine, agentName, content string) bool {
+func (m *defaultSwarm) runOutputAgent(ctx context.Context, out chan<- ObservableEvent, o *Engine, agentName, content string) bool {
 	coaStart := time.Now()
 	coaPrompt := fmt.Sprintf("Sanity check worker: %s. Response: %s. RULE: Output ONLY 'OK' or 'FIX: [reason]'.", agentName, content)
 	respIter := m.fastModel.GenerateContent(ctx, &model.LLMRequest{
@@ -931,7 +989,7 @@ func (m *defaultSwarm) runOutputAgent(ctx context.Context, out chan<- ChatEvent,
 		if err == nil && resp.Content != nil && len(resp.Content.Parts) > 0 {
 			res = resp.Content.Parts[0].Text
 			if strings.HasPrefix(res, "FIX:") {
-				out <- ChatEvent{Type: ChatEventThought, Agent: "Output Agent", Content: "Rejected: " + res}
+				out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Output Agent", State: AgentStateError, Thought: "Rejected: " + res}
 				approved = false
 			}
 		}
@@ -940,7 +998,7 @@ func (m *defaultSwarm) runOutputAgent(ctx context.Context, out chan<- ChatEvent,
 
 	// Update UI card state
 	if approved {
-		out <- ChatEvent{Type: ChatEventFinalResponse, Agent: "Output Agent", Content: "OK"}
+		out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Output Agent", State: AgentStateComplete, FinalContent: "OK"}
 	}
 
 	if o != nil {

@@ -90,27 +90,31 @@ When run without arguments, it launches a persistent, interactive terminal sessi
 
 			var lastTrajectory string
 			for event := range ch {
-				if event.Type == sdk.ChatEventFinalResponse && !trajectoryFlag {
-					fmt.Printf("[%s] %s\n", event.Agent, event.Content)
-				} else if event.Type == sdk.ChatEventError {
-					fmt.Fprintf(os.Stderr, "Error: %s\n", event.Content)
-				} else if event.Type == sdk.ChatEventDebug {
-					lastTrajectory = event.Content
+				if event.State == sdk.AgentStateComplete && event.AgentName == "Swarm" {
+					lastTrajectory = event.FinalContent
 					if trajectoryFlag {
-						fmt.Println(event.Content)
+						fmt.Println(event.FinalContent)
+					}
+					continue
+				}
+
+				if event.State == sdk.AgentStateComplete && event.FinalContent != "" && !trajectoryFlag {
+					fmt.Printf("[%s] %s\n", event.AgentName, event.FinalContent)
+				} else if event.State == sdk.AgentStateError {
+					if event.Error != nil {
+						fmt.Fprintf(os.Stderr, "Error: %s\n", event.Error.Error())
+					} else if event.FinalContent != "" {
+						fmt.Fprintf(os.Stderr, "Error: %s\n", event.FinalContent)
 					}
 				} else if !trajectoryFlag {
-					switch event.Type {
-					case sdk.ChatEventThought:
-						fmt.Fprintf(os.Stderr, "[%s] 🤔 %s\n", event.Agent, event.Content)
-					case sdk.ChatEventToolCall:
-						fmt.Fprintf(os.Stderr, "[%s] 🛠️  Executing: %s\n", event.Agent, event.Content)
-					case sdk.ChatEventHandoff:
-						fmt.Fprintf(os.Stderr, "[%s] ➡️  Delegating to: %s\n", event.Agent, event.Content)
-					case sdk.ChatEventObserver:
-						fmt.Fprintf(os.Stderr, "[%s] 👀 %s\n", event.Agent, event.Content)
-					case sdk.ChatEventReplan:
-						fmt.Fprintf(os.Stderr, "[%s] 🔄 %s\n", event.Agent, event.Content)
+					if event.State == sdk.AgentStateThinking && event.Thought != "" {
+						fmt.Fprintf(os.Stderr, "[%s] 🤔 %s\n", event.AgentName, event.Thought)
+					} else if event.State == sdk.AgentStateExecuting && event.ObserverSummary != "" {
+						fmt.Fprintf(os.Stderr, "[%s] 💡 %s\n", event.AgentName, event.ObserverSummary)
+					} else if event.State == sdk.AgentStateExecuting && event.ToolName != "" {
+						fmt.Fprintf(os.Stderr, "[%s] 🛠️  Executing: %s\n", event.AgentName, event.ToolName)
+					} else if event.State == sdk.AgentStateWaiting && event.ObserverSummary != "" {
+						fmt.Fprintf(os.Stderr, "[%s] 👀 %s\n", event.AgentName, event.ObserverSummary)
 					}
 				}
 			}

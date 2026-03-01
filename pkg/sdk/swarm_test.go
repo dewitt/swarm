@@ -85,8 +85,8 @@ func TestNewSwarm(t *testing.T) {
 
 	var finalResponses []string
 	for event := range ch {
-		if event.Type == sdk.ChatEventFinalResponse {
-			finalResponses = append(finalResponses, event.Content)
+		if event.State == sdk.AgentStateComplete && event.FinalContent != "" {
+			finalResponses = append(finalResponses, event.FinalContent)
 		}
 	}
 
@@ -121,18 +121,15 @@ func TestChat_TrivialResponse(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	var events []sdk.ChatEvent
+	var events []sdk.ObservableEvent
 	for event := range ch {
 		events = append(events, event)
 	}
 
 	foundFinal := false
 	for _, e := range events {
-		if e.Type == sdk.ChatEventFinalResponse {
+		if e.State == sdk.AgentStateComplete && e.FinalContent != "" {
 			foundFinal = true
-			if e.Content == "" {
-				t.Error("expected non-empty final response content")
-			}
 		}
 	}
 

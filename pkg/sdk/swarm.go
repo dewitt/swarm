@@ -4,7 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"iter"
 	"math/rand"
+	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -119,6 +122,25 @@ func NewSwarm(cfg ...SwarmConfig) (Swarm, error) {
 		if apiKey := os.Getenv("GOOGLE_API_KEY"); apiKey != "" {
 			clientConfig.APIKey = apiKey
 		}
+
+		// Configure a robust, fast-failing HTTP client to prevent network deadlocks
+		// (e.g., HTTP/2 silent connection drops or endless flow waiting).
+		clientConfig.HTTPClient = &http.Client{
+			Transport: &http.Transport{
+				Proxy: http.ProxyFromEnvironment,
+				DialContext: (&net.Dialer{
+					Timeout:   10 * time.Second,
+					KeepAlive: 30 * time.Second,
+				}).DialContext,
+				ForceAttemptHTTP2:     true,
+				MaxIdleConns:          100,
+				IdleConnTimeout:       90 * time.Second,
+				TLSHandshakeTimeout:   10 * time.Second,
+				ExpectContinueTimeout: 1 * time.Second,
+				ResponseHeaderTimeout: 120 * time.Second, // Max 2 min wait for first byte
+			},
+		}
+
 		userCfg, _ := LoadConfig()
 		proModelName := "gemini-3.1-pro-preview"
 		if userCfg != nil && userCfg.Model != "" && userCfg.Model != "auto" {
@@ -137,7 +159,13 @@ func NewSwarm(cfg ...SwarmConfig) (Swarm, error) {
 		if err != nil {
 			return nil, err
 		}
+
+		// Wrap models with a forced, hard timeout per request to prevent hanging on writeRequest
+		flashModel = &timeoutModel{underlying: flashModel, timeout: 3 * time.Minute}
+		proModel = &timeoutModel{underlying: proModel, timeout: 5 * time.Minute}
+		fastModel = &timeoutModel{underlying: fastModel, timeout: 3 * time.Minute}
 	}
+
 	listTool, _ := functiontool.New(functiontool.Config{Name: "list_local_files"}, listLocalFiles)
 	readTool, _ := functiontool.New(functiontool.Config{Name: "read_local_file"}, readLocalFile)
 	grepTool, _ := functiontool.New(functiontool.Config{Name: "grep_search"}, grepSearch)
@@ -589,6 +617,7 @@ func (m *defaultSwarm) Execute(ctx context.Context, g *ExecutionGraph, o *Engine
 		replanCount := 0
 		const maxReplans = 3
 
+	Loop:
 		for {
 			ready := o.GetReadySpans()
 			for _, t := range ready {
@@ -604,16 +633,16 @@ func (m *defaultSwarm) Execute(ctx context.Context, g *ExecutionGraph, o *Engine
 
 			if activeSpans == 0 {
 				if o.IsComplete() {
-					break
+					break Loop
 				} else {
 					out <- ChatEvent{Type: ChatEventError, Agent: "Swarm", Content: "Deadlock detected in execution graph."}
-					break
+					break Loop
 				}
 			}
 
 			select {
 			case <-ctx.Done():
-				return
+				break Loop
 			case done := <-completed:
 				if done.Status == SpanStatusComplete {
 					o.MarkComplete(done.ID, done.Result)
@@ -634,7 +663,6 @@ func (m *defaultSwarm) Execute(ctx context.Context, g *ExecutionGraph, o *Engine
 						o.AddSpans(newG.Spans...)
 					}
 				} else if strings.Contains(done.Result, "```json") && strings.Contains(done.Result, "\"spans\":") {
-					// Strict check for JSON blocks to avoid false positives in markdown text
 					re := regexp.MustCompile("(?s)```json\n(\\{.*\\})\n```")
 					match := re.FindStringSubmatch(done.Result)
 					if len(match) > 1 {
@@ -650,6 +678,8 @@ func (m *defaultSwarm) Execute(ctx context.Context, g *ExecutionGraph, o *Engine
 				}
 			}
 		}
+
+		// Wait for all remaining active spans to recognize the context cancellation and gracefully exit
 		wg.Wait()
 	}()
 
@@ -934,4 +964,27 @@ func (m *defaultSwarm) saveTrajectory(traj Trajectory) {
 
 	b, _ := json.MarshalIndent(traj, "", "  ")
 	_ = os.WriteFile(path, b, 0644)
+}
+
+// timeoutModel wraps a model.LLM to enforce a strict per-request execution timeout
+type timeoutModel struct {
+	underlying model.LLM
+	timeout    time.Duration
+}
+
+func (t *timeoutModel) Name() string {
+	return t.underlying.Name()
+}
+
+func (t *timeoutModel) GenerateContent(ctx context.Context, req *model.LLMRequest, stream bool) iter.Seq2[*model.LLMResponse, error] {
+	return func(yield func(*model.LLMResponse, error) bool) {
+		timeoutCtx, cancel := context.WithTimeout(ctx, t.timeout)
+		defer cancel()
+
+		for resp, err := range t.underlying.GenerateContent(timeoutCtx, req, stream) {
+			if !yield(resp, err) {
+				return
+			}
+		}
+	}
 }

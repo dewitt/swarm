@@ -137,7 +137,7 @@ func NewSwarm(cfg ...SwarmConfig) (Swarm, error) {
 				IdleConnTimeout:       90 * time.Second,
 				TLSHandshakeTimeout:   10 * time.Second,
 				ExpectContinueTimeout: 1 * time.Second,
-				ResponseHeaderTimeout: 45 * time.Second, // Max 45s wait for first byte (fail fast)
+				ResponseHeaderTimeout: 15 * time.Second, // Max 15s wait for first byte (fail fast)
 			},
 		}
 
@@ -161,9 +161,9 @@ func NewSwarm(cfg ...SwarmConfig) (Swarm, error) {
 		}
 
 		// Wrap models with a forced, hard timeout per request to prevent hanging on writeRequest
-		flashModel = &timeoutModel{underlying: flashModel, timeout: 60 * time.Second}
-		proModel = &timeoutModel{underlying: proModel, timeout: 2 * time.Minute}
-		fastModel = &timeoutModel{underlying: fastModel, timeout: 3 * time.Minute}
+		flashModel = &timeoutModel{underlying: flashModel, timeout: 30 * time.Second}
+		proModel = &timeoutModel{underlying: proModel, timeout: 60 * time.Second}
+		fastModel = &timeoutModel{underlying: fastModel, timeout: 30 * time.Second}
 	}
 
 	listTool, _ := functiontool.New(functiontool.Config{Name: "list_local_files"}, listLocalFiles)

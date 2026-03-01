@@ -948,6 +948,9 @@ Otherwise, output: "OK".`, content)
 
 		if graph.ImmediateResponse != "" {
 			runCOA(graph.ImmediateResponse)
+			if m.debugMode {
+				out <- ChatEvent{Type: ChatEventDebug, Agent: "Orchestrator", Content: "Full Swarm Trajectory: Immediate Response (Trivial Plan)."}
+			}
 			out <- ChatEvent{Type: ChatEventFinalResponse, Agent: "Architect", Content: graph.ImmediateResponse}
 			return
 		}

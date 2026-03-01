@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"google.golang.org/adk/agent"
@@ -893,7 +894,11 @@ func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan ChatEv
 		}, false)
 
 		for ciaResp, err := range ciaRespIter {
-			if err == nil && ciaResp.Content != nil && len(ciaResp.Content.Parts) > 0 {
+			if err != nil {
+				out <- ChatEvent{Type: ChatEventError, Agent: "CIA", Content: "Classification failed: " + err.Error()}
+				break
+			}
+			if ciaResp.Content != nil && len(ciaResp.Content.Parts) > 0 {
 				ciaText := ciaResp.Content.Parts[0].Text
 				if strings.HasPrefix(ciaText, "ROUTE TO: ") {
 					target := strings.TrimPrefix(ciaText, "ROUTE TO: ")
@@ -906,7 +911,7 @@ func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan ChatEv
 							UserID:    m.userID,
 							SessionID: m.sessionID,
 						})
-						if err == nil {
+						if err == nil && sessResp != nil && sessResp.Session != nil {
 							transferEvent := session.NewEvent(fmt.Sprintf("cia_%d", time.Now().UnixNano()))
 							transferEvent.Author = "cia"
 							transferEvent.Actions.TransferToAgent = target
@@ -938,7 +943,11 @@ Response: %s`, graph.ImmediateResponse)
 			}, false)
 			
 			badResponse := false
-			for coaResp, _ := range coaRespIter {
+			for coaResp, err := range coaRespIter {
+				if err != nil {
+					out <- ChatEvent{Type: ChatEventError, Agent: "COA", Content: "Sanity check failed: " + err.Error()}
+					break
+				}
 				if coaResp.Content != nil && len(coaResp.Content.Parts) > 0 {
 					text := coaResp.Content.Parts[0].Text
 					if strings.HasPrefix(text, "FIX:") {
@@ -998,16 +1007,19 @@ func (m *defaultManager) ExecuteGraph(ctx context.Context, g *ExecutionGraph) (<
 			Result string
 			Replan bool
 		}
-		completed := make(chan completedTask)
+		completed := make(chan completedTask, 100) // Buffered to prevent worker deadlocks
 		activeTasks := 0
+		var wg sync.WaitGroup
 
 		for {
 			ready := o.GetReadyTasks()
 			for _, t := range ready {
 				o.MarkActive(t.ID)
 				activeTasks++
+				wg.Add(1)
 
 				go func(task Task) {
+					defer wg.Done()
 					var taskResult string
 					var needsReplan bool
 					defer func() {
@@ -1044,7 +1056,9 @@ func (m *defaultManager) ExecuteGraph(ctx context.Context, g *ExecutionGraph) (<
 					defer cancelToolCtx()
 
 					telemetryDone := make(chan struct{})
+					wg.Add(1)
 					go func() {
+						defer wg.Done()
 						var lastLines []string
 						for line := range telemetryChan {
 							out <- ChatEvent{Type: ChatEventTelemetry, Agent: targetAgent.Name(), Content: line}
@@ -1057,7 +1071,9 @@ func (m *defaultManager) ExecuteGraph(ctx context.Context, g *ExecutionGraph) (<
 
 							// If we've seen a lot of telemetry, trigger an Observer check
 							if len(lastLines) >= 10 {
+								wg.Add(1)
 								go func(history []string) {
+									defer wg.Done()
 									obsCtx, obsCancel := context.WithTimeout(ctx, 10*time.Second)
 									defer obsCancel()
 
@@ -1076,11 +1092,14 @@ Otherwise, output: "OK".`, targetAgent.Name(), task.Name, strings.Join(history, 
 									}, false)
 
 									for resp, err := range respIter {
-										if err == nil && resp.Content != nil && len(resp.Content.Parts) > 0 {
+										if err != nil {
+											out <- ChatEvent{Type: ChatEventError, Agent: "Observer", Content: "Monitoring failed: " + err.Error()}
+											break
+										}
+										if resp.Content != nil && len(resp.Content.Parts) > 0 {
 											text := resp.Content.Parts[0].Text
 											if strings.HasPrefix(text, "INTERVENE:") {
 												out <- ChatEvent{Type: ChatEventObserver, Agent: "Observer", Content: fmt.Sprintf("Intervention requested for %s: %s", targetAgent.Name(), strings.TrimPrefix(text, "INTERVENE:"))}
-												// Here we could force a context cancel, but for now we just observe and report
 											}
 										}
 										break
@@ -1153,7 +1172,11 @@ Response: %s`, task.Name, finalText)
 							}, false)
 							
 							badResponse := false
-							for coaResp, _ := range coaRespIter {
+							for coaResp, err := range coaRespIter {
+								if err != nil {
+									out <- ChatEvent{Type: ChatEventError, Agent: "COA", Content: "Sanity check failed: " + err.Error()}
+									break
+								}
 								if coaResp.Content != nil && len(coaResp.Content.Parts) > 0 {
 									text := coaResp.Content.Parts[0].Text
 									if strings.HasPrefix(text, "FIX:") {
@@ -1198,8 +1221,6 @@ Response: %s`, task.Name, finalText)
 				// --- Reactive Branching & Replanning Logic ---
 				if done.Replan {
 					out <- ChatEvent{Type: ChatEventReplan, Agent: "Orchestrator", Content: fmt.Sprintf("Task %s requested a replan. Pivoting swarm…", done.ID)}
-					// Combine the user's original goal with the reason for replanning
-					// (In a real implementation, we'd pull the exact 'reason' arg from the tool call)
 					newGraph, err := m.Plan(ctx, fmt.Sprintf("Pivoting plan based on discovery in task %s: %s", done.ID, done.Result))
 					if err == nil {
 						o.AddTasks(newGraph.Tasks...)
@@ -1216,7 +1237,6 @@ Response: %s`, task.Name, finalText)
 						if err := json.Unmarshal([]byte(jsonStr), &subGraph); err == nil {
 							for i := range subGraph.Tasks {
 								subGraph.Tasks[i].ParentID = done.ID
-								// Ensure sub-tasks don't clash on IDs
 								subGraph.Tasks[i].ID = fmt.Sprintf("%s_%s", done.ID, subGraph.Tasks[i].ID)
 							}
 							o.AddTasks(subGraph.Tasks...)
@@ -1226,6 +1246,7 @@ Response: %s`, task.Name, finalText)
 				}
 			}
 		}
+		wg.Wait()
 	}()
 	return out, o, nil
 }

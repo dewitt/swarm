@@ -26,7 +26,7 @@ debt that should be addressed as the project evolves.
   external AI CLIs (e.g., `gemini-cli`, `claude-code`) via `bash_execute` so
   the Swarm CLI can act as a master orchestrator for other complex systems.
 
-- [x] **Router Agent Oversight** (#25): Implemented via Chat Input Agent (CIA)
+- [x] **Input Agent Oversight** (#25): Implemented as a failsafe for the human-in-the-loop.
   to detect intent shifts and handle transitions.
   See `docs/design/16-chat-input-agent.md`.
 

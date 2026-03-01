@@ -219,23 +219,17 @@ func (m *defaultManager) Reload() error {
 		subAgents = append(subAgents, skillAgent)
 	}
 	var subAgentNames []string; for _, sa := range subAgents { subAgentNames = append(subAgentNames, sa.Name()) }
-	swarmInstruction := fmt.Sprintf("You are the Swarm Agent. Persona of this app. NODE AUTONOMY: Respond directly or orchestrate. Use Planning Agent for complex graphs. Sub-agents: %s", strings.Join(subAgentNames, ", "))
+	swarmInstruction := fmt.Sprintf("You are the Swarm Agent, the primary coordinator and persona of this application. Your job is to understand the user's goals and either fulfill them directly using your tools or coordinate with specialized sub-agents. You have full node autonomy to decide the best path. Sub-agents available: %s", strings.Join(subAgentNames, ", "))
 	swarmAgent, _ := llmagent.New(llmagent.Config{Name: "swarm_agent", Model: m.flashModel, Instruction: swarmInstruction, Tools: []tool.Tool{m.toolRegistry["list_local_files"], m.toolRegistry["read_local_file"], m.toolRegistry["grep_search"]}, SubAgents: subAgents})
-	inputInstruction := fmt.Sprintf(`You are the Input Agent.
-Your job is to take the user's keystrokes and classify their intent.
-Available agents: %s
 
-TRIVIAL QUERIES: If the user input is a greeting (e.g. "Hello"), social inquiry, or meta-question about the app, you MUST output: "ROUTE TO: swarm_agent".
+	inputInstruction := `You are the Input Agent. Your job is to act as a failsafe for the human-in-the-loop.
+If the user's input is a greeting, a meta-question about the app, or a clear shift in topic away from the current context, you MUST output: "ROUTE TO: swarm_agent".
+Otherwise, output: "CONTINUE".
 
-ROUTING RULES:
-- For a new request, digression, or greeting, output: "ROUTE TO: swarm_agent"
-- For a specific technical task matching a sub-agent, output: "ROUTE TO: [agent_name]"
-- Otherwise, output: "CONTINUE"
-
-CRITICAL: ONLY output the ROUTE line. Do NOT output "ROUTE TO: None" or any other text. Be instant.`, strings.Join(subAgentNames, ", "))
+Be instant. Only output the ROUTE or CONTINUE line.`
 
 	inputAgent, _ := llmagent.New(llmagent.Config{Name: "input_agent", Model: m.fastModel, Instruction: inputInstruction})
-	planningAgent, _ := llmagent.New(llmagent.Config{Name: "planning_agent", Model: m.proModel, Instruction: "Plan DAGs."})
+	planningAgent, _ := llmagent.New(llmagent.Config{Name: "planning_agent", Model: m.proModel, Instruction: "You are the Planning Agent. Decompose complex requests into a Directed Acyclic Graph (DAG) of tasks."})
 	outputInstruction := `You are the Output Agent. Your job is to sanity check responses before they are shown to the human. 
 RULE: Output ONLY 'OK' or 'FIX: [reason]'. 
 Do not be helpful. Do not explain. Just OK or FIX.
@@ -338,39 +332,46 @@ func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan ChatEv
 			Duration: time.Since(inputStart).String(), Attributes: map[string]any{"gen_ai.prompt": prompt, "gen_ai.completion": inputResult},
 		})
 
-		var graph *ExecutionGraph
-		var err error
-
-		if strings.HasPrefix(inputResult, "ROUTE TO: ") {
-			target := strings.TrimSpace(strings.TrimPrefix(inputResult, "ROUTE TO: "))
-			if target != "" {
-				out <- ChatEvent{Type: ChatEventThought, Agent: "Input Agent", Content: "Routing directly to " + target}
-				graph = &ExecutionGraph{Tasks: []Task{{ID: "t1", Name: "Fulfill", Agent: target, Prompt: prompt}}}
+		var target string
+		if strings.HasPrefix(inputResult, "ROUTE TO: swarm_agent") {
+			out <- ChatEvent{Type: ChatEventThought, Agent: "Input Agent", Content: "Rerouting to Swarm Agent…"}
+			target = "swarm_agent"
+		} else {
+			target = "swarm_agent"
+			if m.lastAgent != "" {
+				target = m.lastAgent
 			}
 		}
 
-		// 2. Planning (if no direct route)
-		if graph == nil {
-			out <- ChatEvent{Type: ChatEventThought, Agent: "Planning Agent", Content: "Generating execution plan…"}
+		var graph *ExecutionGraph
+		var err error
+
+		// 2. Swarm Coordination / Planning
+		// If we are starting fresh or rerouting to Swarm Agent, we let it plan.
+		if target == "swarm_agent" {
+			out <- ChatEvent{Type: ChatEventThought, Agent: "Swarm Agent", Content: "Analyzing request…"}
 			planStart := time.Now()
 			graph, err = m.Plan(ctx, prompt)
 			if err != nil {
-				out <- ChatEvent{Type: ChatEventError, Content: "Planning failed: " + err.Error()}
+				out <- ChatEvent{Type: ChatEventError, Content: "Coordination failed: " + err.Error()}
 				return
 			}
 			planJSON, _ := json.Marshal(graph)
 			o.AddTasks(Task{
-				ID: "planning", Name: "Graph Generation", Agent: "planning_agent", Status: TaskStatusComplete,
+				ID: "coordination", Name: "Swarm Planning", Agent: "swarm_agent", Status: TaskStatusComplete,
 				Kind: SpanKindPlanner,
 				StartTime: planStart.Format(time.RFC3339Nano), EndTime: time.Now().Format(time.RFC3339Nano),
 				Duration: time.Since(planStart).String(), Attributes: map[string]any{"gen_ai.prompt": prompt, "gen_ai.completion": string(planJSON)},
 			})
+		} else {
+			// Direct execution with specialized agent (Node Autonomy)
+			graph = &ExecutionGraph{Tasks: []Task{{ID: "t1", Name: "Fulfill", Agent: target, Prompt: prompt}}}
 		}
 
 		// 3. Execution
 		if graph.ImmediateResponse != "" {
-			if m.runOutputAgent(ctx, out, o, "Planning Agent", graph.ImmediateResponse) {
-				out <- ChatEvent{Type: ChatEventFinalResponse, Agent: "Planning Agent", Content: graph.ImmediateResponse}
+			if m.runOutputAgent(ctx, out, o, "Swarm Agent", graph.ImmediateResponse) {
+				out <- ChatEvent{Type: ChatEventFinalResponse, Agent: "Swarm Agent", Content: graph.ImmediateResponse}
 			}
 		} else {
 			events, _, err := m.Execute(ctx, graph, o)

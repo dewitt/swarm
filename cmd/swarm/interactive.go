@@ -458,8 +458,15 @@ func getUserName() string {
 }
 
 func getAgentBadge(author string) string {
-	if author == "router_agent" || author == "agent" {
-		return lipgloss.NewStyle().Foreground(googleBlue).Render("❖ Router")
+	author = strings.ToLower(author)
+	if author == "swarm_agent" || author == "swarm" || author == "agent" || author == "router_agent" {
+		return lipgloss.NewStyle().Foreground(googleBlue).Render("❖ Swarm")
+	} else if author == "input_agent" || author == "input" {
+		return lipgloss.NewStyle().Foreground(googleYellow).Render("⚙ Input")
+	} else if author == "output_agent" || author == "output" {
+		return lipgloss.NewStyle().Foreground(googleRed).Render("🛡 Output")
+	} else if author == "planning_agent" || author == "planning" {
+		return lipgloss.NewStyle().Foreground(googleGreen).Render("📋 Planning")
 	} else if author == "builder_agent" {
 		return lipgloss.NewStyle().Foreground(googleYellow).Render("⚒ Builder")
 	} else if author == "gitops_agent" {
@@ -1174,7 +1181,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case streamDoneMsg:
 		m.loading = false
 		m.statusMsg = ""
-		m.activeAgent = "Router"
+		m.activeAgent = "Swarm"
 		m.observeLog = nil
 		m.updateViewport()
 		return m, m.dequeueAndRun()
@@ -1329,7 +1336,7 @@ func (m *model) dequeueAndRun() tea.Cmd {
 	for _, a := range m.agents {
 		a.update("idle", "Idle")
 	}
-	if r := m.findAgent("Router"); r != nil {
+	if r := m.findAgent("Swarm"); r != nil {
 		r.update("active", "Processing input…")
 	}
 
@@ -1709,7 +1716,7 @@ func (m *model) updateViewport() {
 		}
 		agentLabel := m.activeAgent
 		if agentLabel == "" {
-			agentLabel = "Router"
+			agentLabel = "Swarm"
 		}
 		renderedMessages = append(renderedMessages, agentMsgStyle.Render(fmt.Sprintf("✦ [%s] ", agentLabel))+m.spinner.View()+" "+status)
 	}
@@ -1934,12 +1941,12 @@ func getAgentIcon(name string) string {
 	switch {
 	case strings.Contains(name, "input"):
 		return "⚙" // Gear (1-cell reliable)
-	case strings.Contains(name, "router") || strings.Contains(name, "swarm"):
+	case strings.Contains(name, "swarm"):
 		return "◈" // Diamond (1-cell reliable)
-	case strings.Contains(name, "architect"):
-		return "🏛" // Temple/Architect
 	case strings.Contains(name, "output"):
 		return "🛡" // Shield
+	case strings.Contains(name, "planning"):
+		return "📋" // Clipboard
 	case strings.Contains(name, "investigator") || strings.Contains(name, "codebase"):
 		return "🔎" // Magnifying glass (usually 2-cell)
 	default:

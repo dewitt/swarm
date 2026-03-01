@@ -26,9 +26,9 @@ into native ecosystems.
   LLM's context window by typing `@` to trigger an inline, fuzzy-filtered
   overlay of your workspace files.
 
-- **Chat Input Agent (CIA)**: A high-speed, lightweight routing layer that
+- **Input Agent**: A high-speed, lightweight routing layer that
   pre-processes every user input. It proactively detects digressions and
-  context shifts, rerouting the conversation to the most appropriate agent
+  context shifts, rerouting the conversation to the Swarm Agent
   *before* the message is processed, ensuring the system stays aligned with
   human topic-switching.
 
@@ -73,7 +73,7 @@ into native ecosystems.
   (like GitHub Actions) and integrates directly with your native ecosystem.
 
 - **Agent Swarms**: The core SDK is powered by the Google Agent Development
-  Kit (ADK) and orchestrates a swarm of specialized internal agents (Router,
+  Kit (ADK) and orchestrates a swarm of specialized internal agents (Swarm Agent,
   Builder, Deployment) using a cascading model architecture (fast models for
   routing, reasoning models for execution). Agent responses are attributed
   with colorful badges in the chat log.
@@ -107,7 +107,7 @@ Interface (TUI):
 ./bin/swarm
 ```
 
-From here, you can start conversing with the internal Router Agent, scaffold
+From here, you can start conversing with the internal Swarm Agent, scaffold
 new projects, or deploy existing agents.
 
 ## Documentation & Philosophy

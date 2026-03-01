@@ -27,7 +27,7 @@ func (m *MockModel) GenerateContent(ctx context.Context, req *model.LLMRequest, 
 		// If system instruction mentions Planning Agent, return a plan
 		if req.Config != nil && req.Config.SystemInstruction != nil {
 			for _, p := range req.Config.SystemInstruction.Parts {
-				if p.Text != "" && (contains(p.Text, "Planning Agent") || contains(p.Text, "Architect") || contains(p.Text, "DAG")) {
+				if p.Text != "" && (contains(p.Text, "Planning Agent") || contains(p.Text, "DAG")) {
 					userPrompt := strings.ToLower(req.Contents[0].Parts[0].Text)
 					if contains(userPrompt, "hello") {
 						responseText = `{"immediate_response": "Hello from trivial plan!"}`
@@ -115,7 +115,7 @@ func TestChat_TrivialResponse(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	// Trivial prompt that should trigger ImmediateResponse in our MockModel's Architect mode
+	// Trivial prompt that should trigger ImmediateResponse in our MockModel's Planning mode
 	ch, err := manager.Chat(ctx, "Hello")
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)

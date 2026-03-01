@@ -27,15 +27,6 @@ import (
 	"gorm.io/gorm/logger"
 )
 
-type AgentManifest struct {
-	Name        string   `yaml:"name"`
-	Framework   string   `yaml:"framework"`
-	Language    string   `yaml:"language"`
-	Entrypoint  string   `yaml:"entrypoint,omitempty"`
-	Description string   `yaml:"description,omitempty"`
-	Tools       []string `yaml:"tools,omitempty"`
-}
-
 type SessionInfo struct {
 	ID        string
 	UpdatedAt string
@@ -69,7 +60,6 @@ type ChatEvent struct {
 }
 
 type Swarm interface {
-	Discover(ctx context.Context, dir string) (*AgentManifest, error)
 	AddContext(path string) error
 	DropContext(path string)
 	ListContext() []string

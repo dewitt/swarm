@@ -215,7 +215,11 @@ func (m *defaultManager) Reload() error {
 		loadedSkills = append(loadedSkills, skill); var skillTools []tool.Tool; skillTools = append(skillTools, m.toolRegistry["request_replan"])
 		for _, toolName := range skill.Manifest.Tools { if t, ok := m.toolRegistry[toolName]; ok { skillTools = append(skillTools, t) } }
 		targetModel := m.proModel; if skill.Manifest.Model == "flash" { targetModel = m.flashModel }
-		skillAgent, _ := llmagent.New(llmagent.Config{Name: skill.Manifest.Name, Model: targetModel, Description: skill.Manifest.Description, Instruction: skill.Instructions, Tools: skillTools})
+		
+		// Ensure sub-agents skip greetings and introductory talk
+		instruction := skill.Instructions + "\n\nSUB-AGENT MODE: You are being invoked by the Swarm Agent to perform a specific task. Skip all greetings and introductory talk. Focus ONLY on executing the task and providing the results."
+		
+		skillAgent, _ := llmagent.New(llmagent.Config{Name: skill.Manifest.Name, Model: targetModel, Description: skill.Manifest.Description, Instruction: instruction, Tools: skillTools})
 		subAgents = append(subAgents, skillAgent)
 	}
 	var subAgentNames []string; for _, sa := range subAgents { subAgentNames = append(subAgentNames, sa.Name()) }
@@ -598,12 +602,13 @@ func (m *defaultManager) executeTask(ctx context.Context, out chan<- ChatEvent, 
 		}
 	}
 
-	promptStr := task.Prompt
+	promptStr := fmt.Sprintf("TASK: %s\nINSTRUCTIONS: %s", task.Name, task.Prompt)
+	
 	if len(historyParts) > 0 {
-		promptStr = "### CONVERSATION HISTORY\n" + strings.Join(historyParts, "\n") + "\n\n" + promptStr
+		promptStr = promptStr + "\n\n### CONVERSATION HISTORY (FOR CONTEXT)\n" + strings.Join(historyParts, "\n")
 	}
 	if len(contextParts) > 0 {
-		promptStr = promptStr + "\n\n### CONTEXT FROM PREVIOUS TASKS\n" + strings.Join(contextParts, "\n\n")
+		promptStr = promptStr + "\n\n### RESULTS FROM PREVIOUS TASKS\n" + strings.Join(contextParts, "\n\n")
 	}
 
 	// Execute with the unique taskSessionID

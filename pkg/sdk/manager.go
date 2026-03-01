@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"iter"
 	"math/rand"
 	"net/http"
 	"os"
@@ -109,21 +108,45 @@ type ChatEvent struct { Type ChatEventType; Agent, TaskID, Content string }
 
 type AgentManager interface {
 	Discover(ctx context.Context, dir string) (*AgentManifest, error)
-	AddContext(path string) error; DropContext(path string); ListContext() []string
+	AddContext(path string) error
+	DropContext(path string)
+	ListContext() []string
 	Plan(ctx context.Context, prompt string) (*ExecutionGraph, error)
-	ExecuteGraph(ctx context.Context, g *ExecutionGraph) (<-chan ChatEvent, *Orchestrator, error)
-	ExecuteGraphWithOrchestrator(ctx context.Context, o *Orchestrator, g *ExecutionGraph) (<-chan ChatEvent, *Orchestrator, error)
+	Execute(ctx context.Context, g *ExecutionGraph, o *Orchestrator) (<-chan ChatEvent, *Orchestrator, error)
 	Chat(ctx context.Context, prompt string) (<-chan ChatEvent, error)
-	Reset(); Reload() error; Rewind(n int) error; Skills() []*Skill
-	ListModels(ctx context.Context) ([]ModelInfo, error); ListSessions(ctx context.Context) ([]SessionInfo, error)
-	SetDebug(enabled bool); IsDebug() bool; Explain(ctx context.Context, traj Trajectory) (string, error)
+	Reset()
+	Reload() error
+	Rewind(n int) error
+	Skills() []*Skill
+	ListModels(ctx context.Context) ([]ModelInfo, error)
+	ListSessions(ctx context.Context) ([]SessionInfo, error)
+	SetDebug(enabled bool)
+	IsDebug() bool
+	Explain(ctx context.Context, traj Trajectory) (string, error)
 }
 
 type telemetryContextKey struct{}
 
 type defaultManager struct {
-	run *runner.Runner; db *gorm.DB; sessionSvc session.Service; userID string; sessionID string; skills []*Skill; clientCfg *genai.ClientConfig; pinnedContext map[string]string; inputInstruction string; coaInstruction string; debugMode bool
-	flashModel model.LLM; proModel model.LLM; fastModel model.LLM; toolRegistry map[string]tool.Tool; inputAgent agent.Agent; subAgentNames []string; agents map[string]agent.Agent
+	run              *runner.Runner
+	db               *gorm.DB
+	sessionSvc       session.Service
+	userID           string
+	sessionID        string
+	skills           []*Skill
+	clientCfg        *genai.ClientConfig
+	pinnedContext    map[string]string
+	inputInstruction string
+	coaInstruction   string
+	debugMode        bool
+	flashModel       model.LLM
+	proModel         model.LLM
+	fastModel        model.LLM
+	toolRegistry     map[string]tool.Tool
+	inputAgent       agent.Agent
+	subAgentNames    []string
+	agents           map[string]agent.Agent
+	lastAgent        string // Tracks the last agent to respond
 }
 
 type ManagerConfig struct { Model model.LLM; ResumeLastSession bool }
@@ -172,36 +195,6 @@ func NewManager(cfg ...ManagerConfig) (AgentManager, error) {
 	if err := m.Reload(); err != nil { return nil, err }
 	return m, nil
 }
-
-type MemorySessionService struct { mu sync.RWMutex; sessions map[string]*memSession }
-type memSession struct { id string; events []*session.Event; state map[string]any; updatedAt time.Time }
-type memEvents []*session.Event
-func (e memEvents) All() iter.Seq[*session.Event] { return func(yield func(*session.Event) bool) { for _, ev := range e { if !yield(ev) { return } } } }
-func (e memEvents) Len() int { return len(e) }
-func (e memEvents) At(i int) *session.Event { return e[i] }
-type memState struct { mu *sync.RWMutex; data map[string]any }
-func (s memState) Get(k string) (any, error) { s.mu.RLock(); defer s.mu.RUnlock(); v, ok := s.data[k]; if !ok { return nil, session.ErrStateKeyNotExist }; return v, nil }
-func (s memState) Set(k string, v any) error { s.mu.Lock(); defer s.mu.Unlock(); s.data[k] = v; return nil }
-func (s memState) All() iter.Seq2[string, any] { return func(yield func(string, any) bool) { s.mu.RLock(); defer s.mu.RUnlock(); for k, v := range s.data { if !yield(k, v) { return } } } }
-func (s *memSession) ID() string { return s.id }
-func (s *memSession) AppName() string { return "swarm-cli" }
-func (s *memSession) UserID() string { return "local_user" }
-func (s *memSession) LastUpdateTime() time.Time { return s.updatedAt }
-func (s *memSession) Events() session.Events { return memEvents(s.events) }
-func (s *memSession) State() session.State { return memState{mu: &sync.RWMutex{}, data: s.state} }
-func (s *memSession) Metadata() map[string]string { return nil }
-func NewMemorySessionService() *MemorySessionService { return &MemorySessionService{sessions: make(map[string]*memSession)} }
-func (s *MemorySessionService) Create(ctx context.Context, req *session.CreateRequest) (*session.CreateResponse, error) {
-	s.mu.Lock(); defer s.mu.Unlock(); sess := &memSession{id: req.SessionID, state: make(map[string]any), updatedAt: time.Now()}; s.sessions[req.SessionID] = sess; return &session.CreateResponse{Session: sess}, nil
-}
-func (s *MemorySessionService) Get(ctx context.Context, req *session.GetRequest) (*session.GetResponse, error) {
-	s.mu.RLock(); defer s.mu.RUnlock(); sess, ok := s.sessions[req.SessionID]; if !ok { return nil, fmt.Errorf("not found") }; return &session.GetResponse{Session: sess}, nil
-}
-func (s *MemorySessionService) AppendEvent(ctx context.Context, sess session.Session, event *session.Event) error {
-	s.mu.Lock(); defer s.mu.Unlock(); ms, ok := s.sessions[sess.ID()]; if !ok { return fmt.Errorf("not found") }; ms.events = append(ms.events, event); ms.updatedAt = time.Now(); return nil
-}
-func (s *MemorySessionService) List(ctx context.Context, req *session.ListRequest) (*session.ListResponse, error) { return &session.ListResponse{}, nil }
-func (s *MemorySessionService) Delete(ctx context.Context, req *session.DeleteRequest) error { s.mu.Lock(); defer s.mu.Unlock(); delete(s.sessions, req.SessionID); return nil }
 
 func (m *defaultManager) IsDebug() bool { return m.debugMode }
 func (m *defaultManager) SetDebug(enabled bool) { m.debugMode = enabled }
@@ -293,93 +286,169 @@ func (m *defaultManager) Plan(ctx context.Context, prompt string) (*ExecutionGra
 func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan ChatEvent, error) {
 	out := make(chan ChatEvent, 1000)
 	go func() {
-		defer close(out); swarmStartTime := time.Now(); o := NewOrchestrator(nil)
-		inputStart := time.Now(); out <- ChatEvent{Type: ChatEventThought, Agent: "Input Agent", Content: "Classifying…"}
-		inputIter := m.fastModel.GenerateContent(ctx, &model.LLMRequest{Contents: []*genai.Content{genai.NewContentFromText(prompt, genai.Role("user"))}, Config: &genai.GenerateContentConfig{SystemInstruction: genai.NewContentFromText(m.inputInstruction, genai.Role("system"))}}, false)
-		var inputResult string; for resp, err := range inputIter { if err != nil { out <- ChatEvent{Type: ChatEventError, Content: err.Error()}; return }; if resp.Content != nil && len(resp.Content.Parts) > 0 { inputResult = resp.Content.Parts[0].Text }; break }
-		o.AddTasks(Task{ID: "input", Name: "Classification", Agent: "input_agent", Status: TaskStatusComplete, StartTime: inputStart.Format(time.RFC3339Nano), EndTime: time.Now().Format(time.RFC3339Nano), Duration: time.Since(inputStart).String(), Attributes: map[string]any{"gen_ai.prompt": prompt, "gen_ai.completion": inputResult}})
+		defer close(out)
+		swarmStartTime := time.Now()
+		o := NewOrchestrator(nil)
+
+		// 1. Input Classification (Fast Path / CIA)
+		inputStart := time.Now()
+		out <- ChatEvent{Type: ChatEventThought, Agent: "Input Agent", Content: "Classifying intent…"}
+
+		// Dynamically inject the last active agent to help the CIA detect digressions
+		lastAgentName := "None (Starting new conversation)"
+		if m.lastAgent != "" {
+			lastAgentName = m.lastAgent
+		}
+		
+		dynamicInstruction := m.inputInstruction + fmt.Sprintf("\n\nCURRENT CONTEXT: The last agent to respond was: %s.", lastAgentName)
+
+		inputIter := m.fastModel.GenerateContent(ctx, &model.LLMRequest{
+			Contents: []*genai.Content{genai.NewContentFromText(prompt, genai.Role("user"))},
+			Config:   &genai.GenerateContentConfig{SystemInstruction: genai.NewContentFromText(dynamicInstruction, genai.Role("system"))},
+		}, false)
+
+		var inputResult string
+		for resp, err := range inputIter {
+			if err != nil {
+				out <- ChatEvent{Type: ChatEventError, Content: "Input classification failed: " + err.Error()}
+				return
+			}
+			if resp.Content != nil && len(resp.Content.Parts) > 0 {
+				inputResult = resp.Content.Parts[0].Text
+			}
+			break
+		}
+
+		o.AddTasks(Task{
+			ID: "input", Name: "Classification", Agent: "input_agent", Status: TaskStatusComplete,
+			Kind: SpanKindPlanner,
+			StartTime: inputStart.Format(time.RFC3339Nano), EndTime: time.Now().Format(time.RFC3339Nano),
+			Duration: time.Since(inputStart).String(), Attributes: map[string]any{"gen_ai.prompt": prompt, "gen_ai.completion": inputResult},
+		})
+
+		var graph *ExecutionGraph
+		var err error
+
 		if strings.HasPrefix(inputResult, "ROUTE TO: ") {
 			target := strings.TrimSpace(strings.TrimPrefix(inputResult, "ROUTE TO: "))
 			if target != "" {
-				out <- ChatEvent{Type: ChatEventThought, Agent: "Input Agent", Content: "Routing to " + target}
-				events, _, err := m.ExecuteGraphWithOrchestrator(ctx, o, &ExecutionGraph{Tasks: []Task{{ID: "t1", Name: "Fulfill", Agent: target, Prompt: prompt, Dependencies: []string{}}}})
-				if err != nil { out <- ChatEvent{Type: ChatEventError, Content: err.Error()}; return }; for event := range events { out <- event }
-				if m.debugMode { traj := o.GetTrajectory(); traj.TotalDuration = time.Since(swarmStartTime).String(); b, _ := json.MarshalIndent(traj, "", "  "); out <- ChatEvent{Type: ChatEventDebug, Agent: "Orchestrator", Content: string(b)} }; return
+				out <- ChatEvent{Type: ChatEventThought, Agent: "Input Agent", Content: "Routing directly to " + target}
+				graph = &ExecutionGraph{Tasks: []Task{{ID: "t1", Name: "Fulfill", Agent: target, Prompt: prompt}}}
 			}
 		}
-		out <- ChatEvent{Type: ChatEventThought, Agent: "Planning Agent", Content: "Planning…"}
-		planStart := time.Now(); graph, err := m.Plan(ctx, prompt); if err != nil { out <- ChatEvent{Type: ChatEventError, Content: err.Error()}; return }
-		planJSON, _ := json.Marshal(graph); o.AddTasks(Task{ID: "planning", Name: "Graph Generation", Agent: "planning_agent", Status: TaskStatusComplete, StartTime: planStart.Format(time.RFC3339Nano), EndTime: time.Now().Format(time.RFC3339Nano), Duration: time.Since(planStart).String(), Attributes: map[string]any{"gen_ai.prompt": prompt, "gen_ai.completion": string(planJSON)}})
+
+		// 2. Planning (if no direct route)
+		if graph == nil {
+			out <- ChatEvent{Type: ChatEventThought, Agent: "Planning Agent", Content: "Generating execution plan…"}
+			planStart := time.Now()
+			graph, err = m.Plan(ctx, prompt)
+			if err != nil {
+				out <- ChatEvent{Type: ChatEventError, Content: "Planning failed: " + err.Error()}
+				return
+			}
+			planJSON, _ := json.Marshal(graph)
+			o.AddTasks(Task{
+				ID: "planning", Name: "Graph Generation", Agent: "planning_agent", Status: TaskStatusComplete,
+				Kind: SpanKindPlanner,
+				StartTime: planStart.Format(time.RFC3339Nano), EndTime: time.Now().Format(time.RFC3339Nano),
+				Duration: time.Since(planStart).String(), Attributes: map[string]any{"gen_ai.prompt": prompt, "gen_ai.completion": string(planJSON)},
+			})
+		}
+
+		// 3. Execution
 		if graph.ImmediateResponse != "" {
 			if m.runCOA(ctx, out, o, "Planning Agent", graph.ImmediateResponse) {
-				if m.debugMode { traj := o.GetTrajectory(); traj.TotalDuration = time.Since(swarmStartTime).String(); b, _ := json.MarshalIndent(traj, "", "  "); out <- ChatEvent{Type: ChatEventDebug, Agent: "Orchestrator", Content: string(b)} }
-				out <- ChatEvent{Type: ChatEventFinalResponse, Agent: "Planning Agent", Content: graph.ImmediateResponse}; return
+				out <- ChatEvent{Type: ChatEventFinalResponse, Agent: "Planning Agent", Content: graph.ImmediateResponse}
+			}
+		} else {
+			events, _, err := m.Execute(ctx, graph, o)
+			if err != nil {
+				out <- ChatEvent{Type: ChatEventError, Content: "Execution failed: " + err.Error()}
+				return
+			}
+			for event := range events {
+				out <- event
 			}
 		}
-		events, _, err := m.ExecuteGraphWithOrchestrator(ctx, o, graph); if err != nil { out <- ChatEvent{Type: ChatEventError, Content: err.Error()}; return }; for event := range events { out <- event }
-		if m.debugMode { traj := o.GetTrajectory(); traj.TotalDuration = time.Since(swarmStartTime).String(); b, _ := json.MarshalIndent(traj, "", "  "); out <- ChatEvent{Type: ChatEventDebug, Agent: "Orchestrator", Content: string(b)} }
+
+		// 4. Debug / Trajectory
+		if m.debugMode {
+			traj := o.GetTrajectory()
+			traj.TotalDuration = time.Since(swarmStartTime).String()
+			b, _ := json.MarshalIndent(traj, "", "  ")
+			out <- ChatEvent{Type: ChatEventDebug, Agent: "Orchestrator", Content: string(b)}
+		}
 	}()
 	return out, nil
 }
 
-func (m *defaultManager) ExecuteGraph(ctx context.Context, g *ExecutionGraph) (<-chan ChatEvent, *Orchestrator, error) { return m.ExecuteGraphWithOrchestrator(ctx, NewOrchestrator(g), g) }
-func (m *defaultManager) ExecuteGraphWithOrchestrator(ctx context.Context, o *Orchestrator, g *ExecutionGraph) (<-chan ChatEvent, *Orchestrator, error) {
-	out := make(chan ChatEvent, 1000); memSvc := NewMemorySessionService(); if g != nil { o.AddTasks(g.Tasks...) }
+
+func (m *defaultManager) Execute(ctx context.Context, g *ExecutionGraph, o *Orchestrator) (<-chan ChatEvent, *Orchestrator, error) {
+	if o == nil {
+		o = NewOrchestrator(g)
+	}
+	out := make(chan ChatEvent, 1000)
+	if g != nil {
+		o.AddTasks(g.Tasks...)
+	}
+
 	go func() {
-		defer close(out); type completedTask struct { ID, Result string; Replan bool }; completed := make(chan completedTask, 100); activeTasks := 0; var wg sync.WaitGroup
+		defer close(out)
+		type completedTask struct {
+			ID     string
+			Result string
+			Replan bool
+		}
+		completed := make(chan completedTask, 100)
+		activeTasks := 0
+		var wg sync.WaitGroup
+
 		for {
-			ready := o.GetReadyTasks(); for _, t := range ready {
-				o.MarkActive(t.ID); activeTasks++; wg.Add(1)
+			ready := o.GetReadyTasks()
+			for _, t := range ready {
+				o.MarkActive(t.ID)
+				activeTasks++
+				wg.Add(1)
 				go func(task Task) {
-					defer wg.Done(); var taskResult string; var needsReplan bool; defer func() { completed <- completedTask{ID: task.ID, Result: taskResult, Replan: needsReplan} }()
-					targetAgent, ok := m.agents[task.Agent]; if !ok { out <- ChatEvent{Type: ChatEventError, Agent: "Orchestrator", TaskID: task.ID, Content: "Agent not found"}; return }
-					sessResp, _ := memSvc.Create(ctx, &session.CreateRequest{AppName: "swarm-cli", UserID: "local_user", SessionID: task.ID})
-					taskRunner, _ := runner.New(runner.Config{AppName: "swarm-cli", Agent: targetAgent, SessionService: memSvc})
-					out <- ChatEvent{Type: ChatEventThought, Agent: targetAgent.Name(), TaskID: task.ID, Content: "Starting…"}
-					telemetryChan := make(chan string, 100); toolCtx, cancel := context.WithCancel(context.WithValue(ctx, telemetryContextKey{}, (chan<- string)(telemetryChan))); defer cancel(); telemetryDone := make(chan struct{}); wg.Add(1)
-					go func() {
-						defer wg.Done(); var lastLines []string
-						for line := range telemetryChan {
-							out <- ChatEvent{Type: ChatEventTelemetry, Agent: targetAgent.Name(), TaskID: task.ID, Content: line}; lastLines = append(lastLines, line)
-							if len(lastLines) >= 10 {
-								wg.Add(1); go func(history []string) {
-									defer wg.Done(); obsCtx, _ := context.WithTimeout(ctx, 10*time.Second); obsPrompt := fmt.Sprintf("Monitor: %s. Telemetry: %s. If loop output INTERVENE: [reason]. Else OK.", targetAgent.Name(), strings.Join(history, "\n"))
-									respIter := m.fastModel.GenerateContent(obsCtx, &model.LLMRequest{Contents: []*genai.Content{genai.NewContentFromText(obsPrompt, genai.Role("user"))}}, false)
-									for resp, err := range respIter { if err == nil && resp.Content != nil && len(resp.Content.Parts) > 0 && strings.HasPrefix(resp.Content.Parts[0].Text, "INTERVENE:") { out <- ChatEvent{Type: ChatEventObserver, Agent: "Observer", TaskID: task.ID, Content: resp.Content.Parts[0].Text} }; break }
-								}(lastLines); lastLines = nil
-							}
-						}
-						close(telemetryDone)
-					}();
-					promptStr := fmt.Sprintf("Task: %s. Instructions: %s", task.Name, task.Prompt); events := taskRunner.Run(toolCtx, m.userID, sessResp.Session.ID(), genai.NewContentFromText(promptStr, genai.Role("user")), agent.RunConfig{})
-					var full strings.Builder
-					for event, err := range events {
-						if err != nil { out <- ChatEvent{Type: ChatEventError, Agent: targetAgent.Name(), TaskID: task.ID, Content: err.Error()}; break }
-						if event.Content != nil { for _, part := range event.Content.Parts { if part.FunctionCall != nil { if part.FunctionCall.Name == "request_replan" { needsReplan = true }; out <- ChatEvent{Type: ChatEventToolCall, Agent: targetAgent.Name(), TaskID: task.ID, Content: part.FunctionCall.Name} }; if part.FunctionResponse != nil { out <- ChatEvent{Type: ChatEventToolResult, Agent: targetAgent.Name(), TaskID: task.ID, Content: part.FunctionResponse.Name} }; if part.Text != "" && !part.Thought { full.WriteString(part.Text) } } }
-					}
-					finalText := full.String()
-					if finalText != "" {
-						if m.runCOA(ctx, out, o, targetAgent.Name(), finalText) {
-							out <- ChatEvent{Type: ChatEventFinalResponse, Agent: targetAgent.Name(), TaskID: task.ID, Content: finalText}
-							taskResult = finalText
-						} else {
-							needsReplan = true
-							taskResult = "COA rejected response."
-						}
-					} else {
-						taskResult = "No response emitted by agent."
-					}
-					close(telemetryChan); <-telemetryDone
+					defer wg.Done()
+					result, needsReplan := m.executeTask(ctx, out, o, task)
+					completed <- completedTask{ID: task.ID, Result: result, Replan: needsReplan}
 				}(t)
 			}
-			if activeTasks == 0 { if o.IsComplete() { break } else { out <- ChatEvent{Type: ChatEventError, Content: "Deadlock"}; break } }
+
+			if activeTasks == 0 {
+				if o.IsComplete() {
+					break
+				} else {
+					out <- ChatEvent{Type: ChatEventError, Agent: "Orchestrator", Content: "Deadlock detected in execution graph."}
+					break
+				}
+			}
+
 			select {
-			case <-ctx.Done(): return
-			case done := <-completed: o.MarkComplete(done.ID, done.Result); activeTasks--
-				if done.Replan { newG, err := m.Plan(ctx, "Pivot: "+done.Result); if err == nil { o.AddTasks(newG.Tasks...) } } else if strings.Contains(done.Result, "\"tasks\":") {
-					re := regexp.MustCompile("(?s)\\{.*\\}"); match := re.FindString(done.Result); if match != "" {
-						var subGraph ExecutionGraph; if err := json.Unmarshal([]byte(match), &subGraph); err == nil {
-							for i := range subGraph.Tasks { subGraph.Tasks[i].ParentID = done.ID; subGraph.Tasks[i].ID = fmt.Sprintf("%s_%s", done.ID, subGraph.Tasks[i].ID) }; o.AddTasks(subGraph.Tasks...)
+			case <-ctx.Done():
+				return
+			case done := <-completed:
+				o.MarkComplete(done.ID, done.Result)
+				activeTasks--
+
+				// Handle dynamic replanning or subgraph expansion
+				if done.Replan {
+					newG, err := m.Plan(ctx, "Pivot: "+done.Result)
+					if err == nil {
+						o.AddTasks(newG.Tasks...)
+					}
+				} else if strings.Contains(done.Result, "\"tasks\":") {
+					re := regexp.MustCompile("(?s)\\{.*\\}")
+					match := re.FindString(done.Result)
+					if match != "" {
+						var subGraph ExecutionGraph
+						if err := json.Unmarshal([]byte(match), &subGraph); err == nil {
+							for i := range subGraph.Tasks {
+								subGraph.Tasks[i].ParentID = done.ID
+								subGraph.Tasks[i].ID = fmt.Sprintf("%s_%s", done.ID, subGraph.Tasks[i].ID)
+							}
+							o.AddTasks(subGraph.Tasks...)
 						}
 					}
 				}
@@ -387,8 +456,160 @@ func (m *defaultManager) ExecuteGraphWithOrchestrator(ctx context.Context, o *Or
 		}
 		wg.Wait()
 	}()
+
 	return out, o, nil
 }
+
+func (m *defaultManager) executeTask(ctx context.Context, out chan<- ChatEvent, o *Orchestrator, task Task) (string, bool) {
+	targetAgent, ok := m.agents[task.Agent]
+	if !ok {
+		out <- ChatEvent{Type: ChatEventError, Agent: "Orchestrator", TaskID: task.ID, Content: "Agent not found: " + task.Agent}
+		return "Agent not found", false
+	}
+
+	// Use the persistent session service and the manager's current session ID
+	// this ensures that the agent has access to the conversation history.
+	taskRunner, _ := runner.New(runner.Config{
+		AppName:        "swarm-cli",
+		Agent:          targetAgent,
+		SessionService: m.sessionSvc,
+	})
+
+	out <- ChatEvent{Type: ChatEventThought, Agent: targetAgent.Name(), TaskID: task.ID, Content: "Starting…"}
+
+	// Telemetry and Observation
+	telemetryChan := make(chan string, 100)
+	taskCtx, cancel := context.WithCancel(context.WithValue(ctx, telemetryContextKey{}, (chan<- string)(telemetryChan)))
+	defer cancel()
+
+	telemetryDone := make(chan struct{})
+	var obsWg sync.WaitGroup
+	obsWg.Add(1)
+	go func() {
+		defer close(telemetryDone)
+		defer obsWg.Done()
+		var lastLines []string
+		for line := range telemetryChan {
+			out <- ChatEvent{Type: ChatEventTelemetry, Agent: targetAgent.Name(), TaskID: task.ID, Content: line}
+			lastLines = append(lastLines, line)
+			if len(lastLines) >= 10 {
+				obsWg.Add(1)
+				go func(history []string) {
+					defer obsWg.Done()
+					obsCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+					defer cancel()
+					obsPrompt := fmt.Sprintf("Monitor: %s. Telemetry: %s. If loop output INTERVENE: [reason]. Else OK.", targetAgent.Name(), strings.Join(history, "\n"))
+					respIter := m.fastModel.GenerateContent(obsCtx, &model.LLMRequest{Contents: []*genai.Content{genai.NewContentFromText(obsPrompt, genai.Role("user"))}}, false)
+					for resp, err := range respIter {
+						if err == nil && resp.Content != nil && len(resp.Content.Parts) > 0 {
+							text := resp.Content.Parts[0].Text
+							if strings.HasPrefix(text, "INTERVENE:") {
+								out <- ChatEvent{Type: ChatEventObserver, Agent: "Observer", TaskID: task.ID, Content: text}
+								cancel() // Forcefully halt the agent interaction loop
+							}
+						}
+						break
+					}
+				}(lastLines)
+				lastLines = nil
+			}
+		}
+	}()
+
+	// Inject results from dependencies into the prompt (Node Autonomy)
+	contextMap := o.GetContext()
+	var contextParts []string
+	for _, depID := range task.Dependencies {
+		if res, ok := contextMap[depID]; ok {
+			contextParts = append(contextParts, fmt.Sprintf("Output from previous task (%s):\n%s", depID, res))
+		}
+	}
+
+	promptStr := task.Prompt
+	if len(contextParts) > 0 {
+		promptStr = promptStr + "\n\n### CONTEXT FROM PREVIOUS TASKS\n" + strings.Join(contextParts, "\n\n")
+	}
+
+	// We use the same sessionID for all agents in the swarm so they share context
+	events := taskRunner.Run(taskCtx, m.userID, m.sessionID, genai.NewContentFromText(promptStr, genai.Role("user")), agent.RunConfig{})
+
+	var full strings.Builder
+	var needsReplan bool
+	activeToolSpans := make(map[string]Task)
+
+	for event, err := range events {
+		if err != nil {
+			out <- ChatEvent{Type: ChatEventError, Agent: targetAgent.Name(), TaskID: task.ID, Content: err.Error()}
+			break
+		}
+		if event.Content != nil {
+			for _, part := range event.Content.Parts {
+				if part.FunctionCall != nil {
+					if part.FunctionCall.Name == "request_replan" {
+						needsReplan = true
+					}
+					out <- ChatEvent{Type: ChatEventToolCall, Agent: targetAgent.Name(), TaskID: task.ID, Content: part.FunctionCall.Name}
+					
+					// Record tool span start
+					toolStart := time.Now()
+					toolID := fmt.Sprintf("%s-tool-%s-%d", task.ID, part.FunctionCall.Name, toolStart.UnixNano())
+					toolTask := Task{
+						ID: toolID, ParentID: task.ID, TraceID: task.TraceID,
+						Name: part.FunctionCall.Name, Kind: SpanKindTool, Status: TaskStatusActive,
+						StartTime: toolStart.Format(time.RFC3339Nano),
+						Attributes: map[string]any{"gen_ai.tool_args": part.FunctionCall.Args},
+					}
+					o.AddTasks(toolTask)
+					activeToolSpans[part.FunctionCall.Name] = toolTask
+				}
+				if part.FunctionResponse != nil {
+					out <- ChatEvent{Type: ChatEventToolResult, Agent: targetAgent.Name(), TaskID: task.ID, Content: part.FunctionResponse.Name}
+					
+					// Record tool span completion
+					if t, ok := activeToolSpans[part.FunctionResponse.Name]; ok {
+						now := time.Now()
+						t.Status = TaskStatusComplete
+						t.EndTime = now.Format(time.RFC3339Nano)
+						if t.StartTime != "" {
+							start, _ := time.Parse(time.RFC3339Nano, t.StartTime)
+							t.Duration = now.Sub(start).String()
+						}
+						resJSON, _ := json.Marshal(part.FunctionResponse.Response)
+						t.Attributes["gen_ai.tool_result"] = string(resJSON)
+						o.AddTasks(t) // Update the task in the orchestrator
+						delete(activeToolSpans, part.FunctionResponse.Name)
+					}
+				}
+				if part.Text != "" && !part.Thought {
+					full.WriteString(part.Text)
+				}
+			}
+		}
+	}
+
+	finalText := full.String()
+	close(telemetryChan)
+	<-telemetryDone
+	obsWg.Wait()
+
+	if finalText == "" {
+		return "No response emitted by agent.", false
+	}
+
+	// Update the global state of the last agent to respond
+	m.lastAgent = targetAgent.Name()
+
+	// Output Sanity Check (COA)
+	if m.runCOA(ctx, out, o, targetAgent.Name(), finalText) {
+		out <- ChatEvent{Type: ChatEventFinalResponse, Agent: targetAgent.Name(), TaskID: task.ID, Content: finalText}
+		return finalText, needsReplan
+	}
+
+	out <- ChatEvent{Type: ChatEventThought, Agent: "Orchestrator", TaskID: task.ID, Content: "COA rejected response, requesting replan."}
+	return "COA rejected response.", true
+}
+
+
 
 func (m *defaultManager) runCOA(ctx context.Context, out chan<- ChatEvent, o *Orchestrator, agentName, content string) bool {
 	coaStart := time.Now(); coaPrompt := fmt.Sprintf("Sanity check worker: %s. Response: %s. RULE: Output ONLY 'OK' or 'FIX: [reason]'.", agentName, content)

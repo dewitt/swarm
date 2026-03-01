@@ -21,10 +21,22 @@ func (m *MockModel) Name() string {
 
 func (m *MockModel) GenerateContent(ctx context.Context, req *model.LLMRequest, stream bool) iter.Seq2[*model.LLMResponse, error] {
 	return func(yield func(*model.LLMResponse, error) bool) {
+		responseText := m.response
+		
+		// If system instruction mentions Architect, return a plan
+		if req.Config != nil && req.Config.SystemInstruction != nil {
+			for _, p := range req.Config.SystemInstruction.Parts {
+				if p.Text != "" && (contains(p.Text, "Architect") || contains(p.Text, "DAG")) {
+					responseText = `{"tasks": [{"id": "t1", "name": "Test Task", "agent": "router_agent", "prompt": "do it", "dependencies": []}]}`
+					break
+				}
+			}
+		}
+
 		resp := &model.LLMResponse{
 			Content: &genai.Content{
 				Parts: []*genai.Part{
-					{Text: m.response},
+					{Text: responseText},
 				},
 				Role: "model",
 			},
@@ -32,6 +44,15 @@ func (m *MockModel) GenerateContent(ctx context.Context, req *model.LLMRequest, 
 		}
 		yield(resp, nil)
 	}
+}
+
+func contains(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
 }
 
 func TestNewManager(t *testing.T) {
@@ -52,20 +73,26 @@ func TestNewManager(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	var lastEvent sdk.ChatEvent
+	var finalResponses []string
 	for event := range ch {
-		lastEvent = event
 		if event.Type == sdk.ChatEventFinalResponse {
-			break
+			finalResponses = append(finalResponses, event.Content)
 		}
 	}
 
-	if lastEvent.Type != sdk.ChatEventFinalResponse {
-		t.Fatalf("expected final response event as last event, got %v", lastEvent.Type)
+	if len(finalResponses) == 0 {
+		t.Fatalf("expected at least one final response")
 	}
 
 	expected := "Hello from the mock agent!"
-	if lastEvent.Content != expected {
-		t.Fatalf("expected content '%s', got '%s'", expected, lastEvent.Content)
+	found := false
+	for _, r := range finalResponses {
+		if r == expected {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected content '%s' in responses, got %v", expected, finalResponses)
 	}
 }

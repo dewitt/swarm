@@ -858,131 +858,27 @@ func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan ChatEv
 			prompt = strings.Join(contextDocs, "\n\n") + "\n\nUser Prompt:\n" + prompt
 		}
 
-		// --- Chat Input Agent (CIA) Pre-processing ---
-		out <- ChatEvent{Type: ChatEventThought, Agent: "Chat Input Agent", Content: "Classifying input…"}
-
-		ciaRespIter := m.flashModel.GenerateContent(ctx, &model.LLMRequest{
-			Contents: []*genai.Content{genai.NewContentFromText(prompt, genai.Role("user"))},
-			Config: &genai.GenerateContentConfig{
-				SystemInstruction: genai.NewContentFromText(m.ciaInstruction, genai.Role("system")),
-			},
-		}, false)
-
-		for ciaResp, err := range ciaRespIter {
-			if err == nil && ciaResp.Content != nil && len(ciaResp.Content.Parts) > 0 {
-				ciaText := ciaResp.Content.Parts[0].Text
-				if strings.HasPrefix(ciaText, "ROUTE TO: ") {
-					target := strings.TrimPrefix(ciaText, "ROUTE TO: ")
-					target = strings.TrimSpace(target)
-					if target != "" && target != "router_agent" {
-						out <- ChatEvent{Type: ChatEventThought, Agent: "Chat Input Agent", Content: "Rerouting to " + target}
-						// Perform a manual handoff by appending a transfer event to the session
-						sessResp, err := m.sessionSvc.Get(ctx, &session.GetRequest{
-							AppName:   "swarm-cli",
-							UserID:    m.userID,
-							SessionID: m.sessionID,
-						})
-						if err == nil {
-							transferEvent := session.NewEvent(fmt.Sprintf("cia_%d", time.Now().UnixNano()))
-							transferEvent.Author = "chat_input_agent"
-							transferEvent.Actions.TransferToAgent = target
-							_ = m.sessionSvc.AppendEvent(ctx, sessResp.Session, transferEvent)
-							out <- ChatEvent{Type: ChatEventHandoff, Content: target}
-						}
-					}
-				} else {
-					out <- ChatEvent{Type: ChatEventThought, Agent: "Chat Input Agent", Content: "Monitoring"}
-				}
-			}
-			break // Only need the first response from CIA
+		// --- Byzantine Swarm Orchestration ---
+		
+		// 1. Initial Plan (Hypothesis)
+		out <- ChatEvent{Type: ChatEventThought, Agent: "Architect", Content: "Planning swarm execution…"}
+		graph, err := m.Plan(ctx, prompt)
+		if err != nil {
+			out <- ChatEvent{Type: ChatEventError, Agent: "Architect", Content: "Failed to generate execution plan: " + err.Error()}
+			return
 		}
-		// --- End CIA Pre-processing ---
 
-		// Setup telemetry channel for tools
-		telemetryChan := make(chan string, 100)
-		toolCtx, cancelToolCtx := context.WithCancel(context.WithValue(ctx, telemetryContextKey{}, (chan<- string)(telemetryChan)))
-		defer cancelToolCtx()
-
-		// Listen for telemetry in the background and pipe to output
-		telemetryDone := make(chan struct{})
-		go func() {
-			for line := range telemetryChan {
-				out <- ChatEvent{Type: ChatEventTelemetry, Content: line}
-			}
-			close(telemetryDone)
-		}()
-
-		events := m.run.Run(toolCtx, m.userID, m.sessionID, genai.NewContentFromText(prompt, genai.Role("user")), agent.RunConfig{})
-
-		for event, err := range events {
-			if err != nil {
-				out <- ChatEvent{Type: ChatEventError, Content: err.Error()}
-				break
-			}
-
-			if event.Actions.TransferToAgent != "" {
-				out <- ChatEvent{Type: ChatEventHandoff, Content: event.Actions.TransferToAgent}
-			}
-
-			if event.Content != nil {
-				for _, part := range event.Content.Parts {
-					if part.FunctionCall != nil {
-						argsStr := ""
-						if part.FunctionCall.Args != nil {
-							b, err := json.Marshal(part.FunctionCall.Args)
-							if err == nil {
-								argsStr = " " + string(b)
-							}
-						}
-						out <- ChatEvent{Type: ChatEventToolCall, Content: fmt.Sprintf("%s%s", part.FunctionCall.Name, argsStr)}
-					}
-					if part.FunctionResponse != nil {
-						respStr := ""
-						if part.FunctionResponse.Response != nil {
-							b, err := json.Marshal(part.FunctionResponse.Response)
-							if err == nil {
-								// truncate response so it doesn't flood the UI
-								respStr = string(b)
-								if len(respStr) > 200 {
-									respStr = respStr[:200] + "..."
-								}
-								respStr = " " + respStr
-							}
-						}
-						out <- ChatEvent{Type: ChatEventToolResult, Content: fmt.Sprintf("%s%s", part.FunctionResponse.Name, respStr)}
-					}
-					// Only stream thoughts if they exist. Wait until final response for actual text.
-					if part.Thought {
-						// Stream the thought snippet. Truncate it if it's too long.
-						thought := part.Text
-						if len(thought) > 150 {
-							thought = thought[:150] + "..."
-						}
-						// Replace newlines with spaces for a single line log
-						thought = strings.ReplaceAll(thought, "\n", " ")
-						out <- ChatEvent{Type: ChatEventThought, Agent: event.Author, Content: thought}
-					}
-				}
-			}
-
-			if !event.Partial && event.IsFinalResponse() {
-				var fullResponse strings.Builder
-				if event.Content != nil {
-					for _, part := range event.Content.Parts {
-						if part.Text != "" && !part.Thought {
-							fullResponse.WriteString(part.Text)
-						}
-					}
-				}
-				author := event.Author
-				if author == "" {
-					author = "agent"
-				}
-				out <- ChatEvent{Type: ChatEventFinalResponse, Agent: author, Content: fullResponse.String()}
-			}
+		// 2. Execute the Reactive Task Pool
+		// ExecuteGraph handles the parallel execution, telemetry monitoring, and dynamic branching.
+		events, err := m.ExecuteGraph(ctx, graph)
+		if err != nil {
+			out <- ChatEvent{Type: ChatEventError, Agent: "Orchestrator", Content: "Failed to start swarm: " + err.Error()}
+			return
 		}
-		close(telemetryChan)
-		<-telemetryDone
+
+		for event := range events {
+			out <- event
+		}
 	}()
 
 	return out, nil

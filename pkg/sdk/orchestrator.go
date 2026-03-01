@@ -1,6 +1,8 @@
 package sdk
 
 import (
+	"fmt"
+	"math/rand"
 	"sync"
 	"time"
 )
@@ -17,17 +19,31 @@ const (
 	TaskStatusInvalidated TaskStatus = "invalidated"
 )
 
-// Task represents a single unit of work in a multi-agent execution graph.
+// SpanKind represents the type of operation in a trace.
+type SpanKind string
+
+const (
+	SpanKindAgent   SpanKind = "agent"
+	SpanKindTool    SpanKind = "tool"
+	SpanKindPlanner SpanKind = "planning"
+)
+
+// Task (Span) represents a single unit of work aligned with OTel conventions.
 type Task struct {
-	ID           string   `json:"id"`
-	ParentID     string   `json:"parent_id,omitempty"` // ID of the task that spawned this one
-	Name         string   `json:"name"`
-	Agent        string   `json:"agent"`        // The specific agent/skill capable of this task
-	Prompt       string   `json:"prompt"`       // The prompt or instructions for the agent
-	Dependencies []string `json:"dependencies"` // IDs of tasks that must complete before this one starts
-	StartTime    string   `json:"start_time,omitempty"`
-	EndTime      string   `json:"end_time,omitempty"`
-	Duration     string   `json:"duration,omitempty"`
+	ID           string            `json:"id"`
+	TraceID      string            `json:"trace_id"`
+	ParentID     string            `json:"parent_id,omitempty"`
+	Name         string            `json:"operation_name"`
+	Kind         SpanKind          `json:"kind"`
+	Agent        string            `json:"agent,omitempty"`
+	Attributes   map[string]any    `json:"attributes"` // OTel-style attributes (e.g. gen_ai.prompt)
+	Status       TaskStatus        `json:"status"`
+	StartTime    string            `json:"start_time"`
+	EndTime      string            `json:"end_time,omitempty"`
+	Duration     string            `json:"duration,omitempty"`
+	Dependencies []string          `json:"dependencies,omitempty"`
+	Result       string            `json:"result,omitempty"`
+	Prompt       string            `json:"-"` // Internal use, mapped to attributes in JSON
 }
 
 // ExecutionGraph represents a snapshot of the tasks to be executed.
@@ -39,6 +55,7 @@ type ExecutionGraph struct {
 // Orchestrator coordinates the reactive execution of a dynamic Task Pool.
 type Orchestrator struct {
 	mu             sync.RWMutex
+	traceID        string
 	tasks          map[string]Task
 	status         map[string]TaskStatus
 	result         map[string]string // Stores the "final response" of completed tasks
@@ -47,7 +64,9 @@ type Orchestrator struct {
 
 // NewOrchestrator creates a new Orchestrator for a given initial seed graph.
 func NewOrchestrator(g *ExecutionGraph) *Orchestrator {
+	traceID := fmt.Sprintf("tr-%d", rand.Int63())
 	o := &Orchestrator{
+		traceID:        traceID,
 		tasks:          make(map[string]Task),
 		status:         make(map[string]TaskStatus),
 		result:         make(map[string]string),
@@ -59,11 +78,20 @@ func NewOrchestrator(g *ExecutionGraph) *Orchestrator {
 	return o
 }
 
-// AddTasks adds new tasks to the pool.
+// AddTasks adds new tasks to the pool and ensures OTel metadata is set.
 func (o *Orchestrator) AddTasks(tasks ...Task) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	for _, t := range tasks {
+		if t.TraceID == "" {
+			t.TraceID = o.traceID
+		}
+		if t.Attributes == nil {
+			t.Attributes = make(map[string]any)
+		}
+		if t.Prompt != "" {
+			t.Attributes["gen_ai.prompt"] = t.Prompt
+		}
 		o.tasks[t.ID] = t
 		if _, exists := o.status[t.ID]; !exists {
 			o.status[t.ID] = TaskStatusPending
@@ -121,6 +149,11 @@ func (o *Orchestrator) MarkComplete(taskID string, result string) {
 		start, _ := time.Parse(time.RFC3339Nano, t.StartTime)
 		t.Duration = now.Sub(start).String()
 	}
+	if t.Attributes == nil {
+		t.Attributes = make(map[string]any)
+	}
+	t.Attributes["gen_ai.completion"] = result
+	t.Status = TaskStatusComplete
 	o.tasks[taskID] = t
 }
 
@@ -129,6 +162,9 @@ func (o *Orchestrator) MarkFailed(taskID string) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	o.status[taskID] = TaskStatusFailed
+	t := o.tasks[taskID]
+	t.Status = TaskStatusFailed
+	o.tasks[taskID] = t
 }
 
 // MarkInvalidated prunes a task or branch.
@@ -136,6 +172,9 @@ func (o *Orchestrator) MarkInvalidated(taskID string) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	o.status[taskID] = TaskStatusInvalidated
+	t := o.tasks[taskID]
+	t.Status = TaskStatusInvalidated
+	o.tasks[taskID] = t
 }
 
 // IsComplete returns true if all non-invalidated tasks are complete.
@@ -164,7 +203,8 @@ func (o *Orchestrator) GetContext() map[string]string {
 }
 
 type Trajectory struct {
-	Tasks         []Task `json:"tasks"`
+	TraceID       string `json:"trace_id"`
+	Spans         []Task `json:"spans"`
 	TotalDuration string `json:"total_duration"`
 }
 
@@ -173,13 +213,14 @@ func (o *Orchestrator) GetTrajectory() Trajectory {
 	o.mu.RLock()
 	defer o.mu.RUnlock()
 	
-	var tasks []Task
+	var spans []Task
 	for _, t := range o.tasks {
-		tasks = append(tasks, t)
+		spans = append(spans, t)
 	}
 	
 	return Trajectory{
-		Tasks:         tasks,
+		TraceID:       o.traceID,
+		Spans:         spans,
 		TotalDuration: time.Since(o.totalStartTime).String(),
 	}
 }

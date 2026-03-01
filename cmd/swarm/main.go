@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"time"
 
 	"github.com/dewitt/swarm/pkg/sdk"
 	"github.com/spf13/cobra"
@@ -14,6 +15,7 @@ import (
 var promptFlag string
 var planFlag bool
 var resumeFlag bool
+var emitTrajectoriesFlag bool
 
 var configCmd = &cobra.Command{
 	Use:   "config",
@@ -71,6 +73,11 @@ When run without arguments, it launches a persistent, interactive terminal sessi
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 				os.Exit(1)
 			}
+
+			if emitTrajectoriesFlag {
+				manager.SetDebug(true)
+			}
+
 			ch, err := manager.Chat(context.Background(), fullPrompt)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -81,6 +88,12 @@ When run without arguments, it launches a persistent, interactive terminal sessi
 					fmt.Printf("[%s] %s\n", event.Agent, event.Content)
 				} else if event.Type == sdk.ChatEventError {
 					fmt.Fprintf(os.Stderr, "Error: %s\n", event.Content)
+				} else if event.Type == sdk.ChatEventDebug && emitTrajectoriesFlag {
+					// Save trajectory to a file
+					filename := fmt.Sprintf("trajectory-%d.json", time.Now().Unix())
+					if err := os.WriteFile(filename, []byte(event.Content), 0644); err == nil {
+						fmt.Printf("\nTrajectory saved to %s\n", filename)
+					}
 				}
 			}
 			return
@@ -101,6 +114,7 @@ func init() {
 	rootCmd.Flags().StringVarP(&promptFlag, "prompt", "p", "", "Run a single-shot prompt and exit")
 	rootCmd.Flags().BoolVar(&planFlag, "plan", false, "Start the agent in read-only plan mode")
 	rootCmd.Flags().BoolVar(&resumeFlag, "resume", false, "Resume the last interactive session")
+	rootCmd.Flags().BoolVar(&emitTrajectoriesFlag, "emit-trajectories", false, "Save full swarm trajectories to JSON files")
 	rootCmd.AddCommand(configCmd)
 }
 func main() {

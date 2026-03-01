@@ -137,7 +137,7 @@ func NewSwarm(cfg ...SwarmConfig) (Swarm, error) {
 				IdleConnTimeout:       90 * time.Second,
 				TLSHandshakeTimeout:   10 * time.Second,
 				ExpectContinueTimeout: 1 * time.Second,
-				ResponseHeaderTimeout: 120 * time.Second, // Max 2 min wait for first byte
+				ResponseHeaderTimeout: 45 * time.Second, // Max 45s wait for first byte (fail fast)
 			},
 		}
 
@@ -161,8 +161,8 @@ func NewSwarm(cfg ...SwarmConfig) (Swarm, error) {
 		}
 
 		// Wrap models with a forced, hard timeout per request to prevent hanging on writeRequest
-		flashModel = &timeoutModel{underlying: flashModel, timeout: 3 * time.Minute}
-		proModel = &timeoutModel{underlying: proModel, timeout: 5 * time.Minute}
+		flashModel = &timeoutModel{underlying: flashModel, timeout: 60 * time.Second}
+		proModel = &timeoutModel{underlying: proModel, timeout: 2 * time.Minute}
 		fastModel = &timeoutModel{underlying: fastModel, timeout: 3 * time.Minute}
 	}
 
@@ -756,6 +756,9 @@ func (m *defaultSwarm) executeSpan(ctx context.Context, out chan<- ChatEvent, o 
 	var contextParts []string
 	for _, depID := range span.Dependencies {
 		if res, ok := contextMap[depID]; ok {
+			if len(res) > 8000 {
+				res = res[:8000] + "\n\n...[Content truncated to preserve context limits]..."
+			}
 			contextParts = append(contextParts, fmt.Sprintf("Output from previous span (%s):\n%s", depID, res))
 		}
 	}
@@ -767,7 +770,11 @@ func (m *defaultSwarm) executeSpan(ctx context.Context, out chan<- ChatEvent, o 
 			if ev.Content != nil {
 				for _, part := range ev.Content.Parts {
 					if part.Text != "" {
-						historyParts = append(historyParts, fmt.Sprintf("[%s]: %s", ev.Author, part.Text))
+						text := part.Text
+						if len(text) > 4000 {
+							text = text[:4000] + "\n\n...[Content truncated to preserve context limits]..."
+						}
+						historyParts = append(historyParts, fmt.Sprintf("[%s]: %s", ev.Author, text))
 					}
 				}
 			}
@@ -792,7 +799,9 @@ func (m *defaultSwarm) executeSpan(ctx context.Context, out chan<- ChatEvent, o 
 
 	for event, err := range events {
 		if err != nil {
-			out <- ChatEvent{Type: ChatEventError, Agent: targetAgent.Name(), SpanID: span.ID, Content: err.Error()}
+			out <- ChatEvent{Type: ChatEventThought, Agent: targetAgent.Name(), SpanID: span.ID, Content: "Error encountered: " + err.Error()}
+			full.WriteString("\n\nERROR: " + err.Error())
+			needsReplan = true
 			break
 		}
 		var thoughtBroadcasted bool
@@ -870,6 +879,13 @@ func (m *defaultSwarm) executeSpan(ctx context.Context, out chan<- ChatEvent, o 
 
 	// Update the global state of the last agent to respond
 	m.lastAgent = targetAgent.Name()
+
+	// If there was a hard error, skip Output Agent and immediately return with failed status and replan flag
+	if strings.Contains(finalText, "\n\nERROR: ") && needsReplan {
+		m.appendEvent(ctx, "model", fmt.Sprintf("[%s]: %s", targetAgent.Name(), finalText))
+		out <- ChatEvent{Type: ChatEventFinalResponse, Agent: targetAgent.Name(), SpanID: span.ID, Content: finalText}
+		return finalText, SpanStatusFailed, true
+	}
 
 	// Output Sanity Check (Output Agent)
 	if m.runOutputAgent(ctx, out, o, targetAgent.Name(), finalText) {

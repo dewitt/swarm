@@ -136,9 +136,10 @@ type defaultManager struct {
 	skills           []*Skill
 	clientCfg        *genai.ClientConfig
 	pinnedContext    map[string]string
-	inputInstruction string
-	outputInstruction string
-	debugMode         bool
+	inputInstruction    string
+	outputInstruction   string
+	planningInstruction string
+	debugMode           bool
 	flashModel        model.LLM
 	proModel          model.LLM
 	fastModel         model.LLM
@@ -208,50 +209,119 @@ func (m *defaultManager) Explain(ctx context.Context, traj Trajectory) (string, 
 }
 
 func (m *defaultManager) Reload() error {
-	var subAgents []agent.Agent; var loadedSkills []*Skill; skillDirs := []string{}
-	entries, _ := os.ReadDir("skills"); for _, entry := range entries { if entry.IsDir() { skillDirs = append(skillDirs, filepath.Join("skills", entry.Name())) } }
-	for _, dir := range skillDirs {
-		skill, err := LoadSkill(dir); if err != nil { continue }
-		loadedSkills = append(loadedSkills, skill); var skillTools []tool.Tool; skillTools = append(skillTools, m.toolRegistry["request_replan"])
-		for _, toolName := range skill.Manifest.Tools { if t, ok := m.toolRegistry[toolName]; ok { skillTools = append(skillTools, t) } }
-		targetModel := m.proModel; if skill.Manifest.Model == "flash" { targetModel = m.flashModel }
-		
-		// Ensure sub-agents skip greetings and introductory talk
-		instruction := skill.Instructions + "\n\nSUB-AGENT MODE: You are being invoked by the Swarm Agent to perform a specific task. Skip all greetings and introductory talk. Focus ONLY on executing the task and providing the results."
-		
-		skillAgent, _ := llmagent.New(llmagent.Config{Name: skill.Manifest.Name, Model: targetModel, Description: skill.Manifest.Description, Instruction: instruction, Tools: skillTools})
-		subAgents = append(subAgents, skillAgent)
+	var subAgents []agent.Agent
+	var loadedSkills []*Skill
+	
+	// Find the skills directory by searching upwards
+	absPath, _ := filepath.Abs(".")
+	skillsPath := ""
+	for {
+		testPath := filepath.Join(absPath, "skills")
+		if info, err := os.Stat(testPath); err == nil && info.IsDir() {
+			skillsPath = testPath
+			break
+		}
+		parentDir := filepath.Dir(absPath)
+		if parentDir == absPath {
+			break
+		}
+		absPath = parentDir
 	}
-	var subAgentNames []string; for _, sa := range subAgents { subAgentNames = append(subAgentNames, sa.Name()) }
-	swarmInstruction := fmt.Sprintf("You are the Swarm Agent, the primary coordinator and persona of this application. Your job is to understand the user's goals and either fulfill them directly using your tools or coordinate with specialized sub-agents. You have full node autonomy to decide the best path. Sub-agents available: %s", strings.Join(subAgentNames, ", "))
-	swarmAgent, _ := llmagent.New(llmagent.Config{Name: "swarm_agent", Model: m.flashModel, Instruction: swarmInstruction, Tools: []tool.Tool{m.toolRegistry["list_local_files"], m.toolRegistry["read_local_file"], m.toolRegistry["grep_search"]}, SubAgents: subAgents})
 
-	inputInstruction := `You are the Input Agent. Your job is to act as a failsafe for the human-in-the-loop.
-If the user's input is a greeting, a meta-question about the app, or a clear shift in topic away from the current context, you MUST output: "ROUTE TO: swarm_agent".
-Otherwise, output: "CONTINUE".
+	if skillsPath == "" {
+		return fmt.Errorf("could not locate skills directory")
+	}
 
-Be instant. Only output the ROUTE or CONTINUE line.`
+	skillDirs := []string{}
+	entries, err := os.ReadDir(skillsPath)
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			skillDirs = append(skillDirs, filepath.Join(skillsPath, entry.Name()))
+		}
+	}
 
-	inputAgent, _ := llmagent.New(llmagent.Config{Name: "input_agent", Model: m.fastModel, Instruction: inputInstruction})
-	planningAgent, _ := llmagent.New(llmagent.Config{Name: "planning_agent", Model: m.proModel, Instruction: "You are the Planning Agent. Decompose complex requests into a Directed Acyclic Graph (DAG) of tasks."})
-	outputInstruction := `You are the Output Agent. Your job is to sanity check responses before they are shown to the human. 
-RULE: Output ONLY 'OK' or 'FIX: [reason]'. 
-Do not be helpful. Do not explain. Just OK or FIX.
+	m.agents = make(map[string]agent.Agent)
+	var subAgentNames []string
 
-PASS CRITERIA:
-- Simple greetings, "Hello", and social inquiries are ALWAYS OK.
-- Direct answers to user questions are OK.
-- Technical explanations are OK.
+	// 1. Load all skills into agents
+	for _, dir := range skillDirs {
+		skill, err := LoadSkill(dir)
+		if err != nil {
+			continue
+		}
+		loadedSkills = append(loadedSkills, skill)
+		// ... existing tool loading logic ...
+		var skillTools []tool.Tool
+		skillTools = append(skillTools, m.toolRegistry["request_replan"])
+		for _, toolName := range skill.Manifest.Tools {
+			if t, ok := m.toolRegistry[toolName]; ok {
+				skillTools = append(skillTools, t)
+			}
+		}
+		targetModel := m.proModel
+		if skill.Manifest.Model == "flash" {
+			targetModel = m.fastModel
+		}
 
-REJECTION CRITERIA:
-- The response is empty.
-- The response is dangerous or violates safety guidelines.
-- The response is a clear hallucination or incoherent.`
-	outputAgent, _ := llmagent.New(llmagent.Config{Name: "output_agent", Model: m.fastModel, Instruction: outputInstruction})
+		// Core agents might need to skip the sub-agent suffix
+		instruction := skill.Instructions
+		if skill.Manifest.Name != "input_agent" && skill.Manifest.Name != "output_agent" && skill.Manifest.Name != "swarm_agent" && skill.Manifest.Name != "planning_agent" {
+			instruction += "\n\nSUB-AGENT MODE: You are being invoked by the Swarm Agent to perform a specific task. Skip all greetings and introductory talk. Focus ONLY on executing the task and providing the results."
+			subAgentNames = append(subAgentNames, skill.Manifest.Name)
+		}
+
+		skillAgent, _ := llmagent.New(llmagent.Config{
+			Name:        skill.Manifest.Name,
+			Model:       targetModel,
+			Description: skill.Manifest.Description,
+			Instruction: instruction,
+			Tools:       skillTools,
+		})
+		m.agents[skill.Manifest.Name] = skillAgent
+		if skill.Manifest.Name != "input_agent" && skill.Manifest.Name != "output_agent" && skill.Manifest.Name != "swarm_agent" && skill.Manifest.Name != "planning_agent" {
+			subAgents = append(subAgents, skillAgent)
+		}
+	}
+
+	// 2. Specialized Setup for Swarm Agent (assign sub-agents)
+	swarmAgent := m.agents["swarm_agent"]
+	if swarmAgent == nil {
+		return fmt.Errorf("swarm_agent skill not found")
+	}
+
+	// Re-initialize Swarm Agent with sub-agents and dynamically injected specialist names
+	skill, _ := LoadSkill(filepath.Join(skillsPath, "swarm-agent"))
+	instruction := fmt.Sprintf(skill.Instructions, strings.Join(subAgentNames, ", "))
+	swarmAgent, _ = llmagent.New(llmagent.Config{
+		Name:        "swarm_agent",
+		Model:       m.fastModel,
+		Instruction: instruction,
+		Tools:       []tool.Tool{m.toolRegistry["list_local_files"], m.toolRegistry["read_local_file"], m.toolRegistry["grep_search"]},
+		SubAgents:   subAgents,
+	})
+	m.agents["swarm_agent"] = swarmAgent
+
+	// 3. Assign core instructions
+	if _, ok := m.agents["input_agent"]; ok {
+		sk, _ := LoadSkill(filepath.Join(skillsPath, "input-agent"))
+		m.inputInstruction = sk.Instructions
+	}
+	if _, ok := m.agents["output_agent"]; ok {
+		sk, _ := LoadSkill(filepath.Join(skillsPath, "output-agent"))
+		m.outputInstruction = sk.Instructions
+	}
+	if _, ok := m.agents["planning_agent"]; ok {
+		sk, _ := LoadSkill(filepath.Join(skillsPath, "planning-agent"))
+		m.planningInstruction = sk.Instructions
+	}
+
+	m.skills = loadedSkills
+	m.subAgentNames = subAgentNames
 	m.run, _ = runner.New(runner.Config{AppName: "swarm-cli", Agent: swarmAgent, SessionService: m.sessionSvc})
-	m.skills = loadedSkills; m.subAgentNames = subAgentNames; m.inputInstruction = inputInstruction; m.inputAgent = inputAgent; m.outputInstruction = outputInstruction
-	m.agents = make(map[string]agent.Agent); m.agents["swarm_agent"] = swarmAgent; m.agents["input_agent"] = inputAgent; m.agents["planning_agent"] = planningAgent; m.agents["output_agent"] = outputAgent
-	for _, sa := range subAgents { m.agents[sa.Name()] = sa }
+
 	return nil
 }
 
@@ -280,30 +350,7 @@ func (m *defaultManager) ListSessions(ctx context.Context) ([]SessionInfo, error
 }
 
 func (m *defaultManager) Plan(ctx context.Context, prompt string) (*ExecutionGraph, error) {
-	systemPrompt := fmt.Sprintf(`You are the Swarm Agent, acting as the primary coordinator for this session. Your goal is to determine the most efficient path to fulfill the user's intent.
-
-AVAILABLE SPECIALISTS: %s
-
-DECISION TAXONOMY:
-1. DIRECT FULFILLMENT: If you are confident you can fulfill the user's intent directly (e.g., greetings, social inquiries, meta-questions about the app, or simple tasks using your own tools), return a JSON object with an "immediate_response" and NO tasks.
-2. SPECIALIST DELEGATION: If you are not confident in direct fulfillment but identify that a specialized agent is better suited for the task, return a JSON object with a "tasks" list routing the work to them.
-3. DEEP PLANNING: If the request is complex, ambiguous, or requires multi-step orchestration that you cannot immediately map, output ONLY the string: DEEP_PLAN_REQUIRED. This will trigger a deeper reasoning cycle.
-
-JSON SCHEMA:
-{
-  "tasks": [
-    { "id": "t1", "name": "Task Name", "agent": "agent_name", "prompt": "Instructions", "dependencies": [] }
-  ],
-  "immediate_response": "The direct response to the user"
-}
-
-RULES:
-- NEVER assign tasks to "input_agent", "output_agent", "swarm_agent", or "planning_agent". Use ONLY the available specialists.
-- Ensure all "dependencies" refer to "id"s that exist within the same "tasks" list.
-- If using "immediate_response", the "tasks" list should be empty or omitted.
-- Use EXACT agent names.
-- Output ONLY the JSON or the DEEP_PLAN_REQUIRED string. No markdown.`, strings.Join(m.subAgentNames, ", "))
-
+	systemPrompt := fmt.Sprintf(m.planningInstruction, strings.Join(m.subAgentNames, ", "))
 	respIter := m.fastModel.GenerateContent(ctx, &model.LLMRequest{
 		Contents: []*genai.Content{genai.NewContentFromText(prompt, genai.Role("user"))},
 		Config:   &genai.GenerateContentConfig{SystemInstruction: genai.NewContentFromText(systemPrompt, genai.Role("system"))},

@@ -277,8 +277,30 @@ func (m *defaultManager) ListSessions(ctx context.Context) ([]SessionInfo, error
 
 func (m *defaultManager) Plan(ctx context.Context, prompt string) (*ExecutionGraph, error) {
 	allAgents := append(m.subAgentNames, "swarm_agent")
-	systemPrompt := fmt.Sprintf(`You are the Planning Agent. Decompose request into DAG JSON. SCHEMA: { "tasks": [{ "id": "t1", "name": "N", "agent": "A", "prompt": "P", "dependencies": [] }] }. GREETINGS: use immediate_response. COMPLEX: DEEP_PLAN_REQUIRED. AVAILABLE: %s. RULE: Use EXACT field names. NO markdown.`, strings.Join(allAgents, ", "))
-	respIter := m.fastModel.GenerateContent(ctx, &model.LLMRequest{Contents: []*genai.Content{genai.NewContentFromText(prompt, genai.Role("user"))}, Config: &genai.GenerateContentConfig{SystemInstruction: genai.NewContentFromText(systemPrompt, genai.Role("system"))}}, false)
+	systemPrompt := fmt.Sprintf(`You are the Planning Agent. Your job is to decompose the user's request into a Directed Acyclic Graph (DAG) of tasks.
+
+AVAILABLE AGENTS: %s
+
+GREETINGS & SOCIAL: If the user input is a simple greeting (e.g., "Hello", "Hi"), a social inquiry, or a meta-question about who you are, you MUST return a JSON object with an "immediate_response" field and NO tasks.
+
+COMPLEX REQUESTS: If the task is complex, return a JSON object with a "tasks" list.
+SCHEMA: {
+  "tasks": [
+    { "id": "t1", "name": "Task Name", "agent": "agent_name", "prompt": "Instructions", "dependencies": [] }
+  ],
+  "immediate_response": "Optional short-circuit response"
+}
+
+If the request is extremely complex, output ONLY the string: DEEP_PLAN_REQUIRED.
+
+RULES:
+1. Use EXACT field names.
+2. Output ONLY the JSON or the DEEP_PLAN_REQUIRED string. No markdown.`, strings.Join(allAgents, ", "))
+
+	respIter := m.fastModel.GenerateContent(ctx, &model.LLMRequest{
+		Contents: []*genai.Content{genai.NewContentFromText(prompt, genai.Role("user"))},
+		Config:   &genai.GenerateContentConfig{SystemInstruction: genai.NewContentFromText(systemPrompt, genai.Role("system"))},
+	}, false)
 	var jsonStr string; for resp, err := range respIter { if err != nil { return nil, err }; if resp.Content != nil && len(resp.Content.Parts) > 0 { jsonStr += resp.Content.Parts[0].Text } }
 	jsonStr = strings.TrimSpace(jsonStr)
 	if jsonStr == "DEEP_PLAN_REQUIRED" {

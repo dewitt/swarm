@@ -241,6 +241,11 @@ type AgentManager interface {
 	DropContext(path string)
 	ListContext() []string
 
+	// Plan uses the Architect to decompose a complex prompt into an ExecutionGraph.
+	Plan(ctx context.Context, prompt string) (*ExecutionGraph, error)
+	// ExecuteGraph executes an ExecutionGraph in parallel and streams events.
+	ExecuteGraph(ctx context.Context, g *ExecutionGraph) (<-chan ChatEvent, error)
+
 	// Chat sends a natural language prompt to the internal Router Agent.
 	// It returns a channel that streams structured events back to the caller.
 	Chat(ctx context.Context, prompt string) (<-chan ChatEvent, error)
@@ -314,6 +319,7 @@ type defaultManager struct {
 	toolRegistry  map[string]tool.Tool
 	ciaAgent      agent.Agent
 	subAgentNames []string
+	agents        map[string]agent.Agent // Name to Agent mapping
 }
 
 // ManagerConfig defines configuration for the AgentManager.
@@ -624,6 +630,12 @@ Keep your analysis silent. ONLY output the routing decision.`, strings.Join(m.su
 	m.skills = loadedSkills
 	m.subAgentNames = subAgentNames
 	m.ciaInstruction = ciaInstruction
+	
+	m.agents = make(map[string]agent.Agent)
+	m.agents[routerAgent.Name()] = routerAgent
+	for _, sa := range subAgents {
+		m.agents[sa.Name()] = sa
+	}
 
 	// Initialize the Chat Input Agent (CIA)
 	ciaAgent, err := llmagent.New(llmagent.Config{
@@ -747,6 +759,58 @@ func (m *defaultManager) ListSessions(ctx context.Context) ([]SessionInfo, error
 		})
 	}
 	return infos, nil
+}
+
+func (m *defaultManager) Plan(ctx context.Context, prompt string) (*ExecutionGraph, error) {
+	systemPrompt := fmt.Sprintf(`You are the Swarm Architect.
+Your job is to take a complex user request and decompose it into a Directed Acyclic Graph (DAG) of tasks to be executed by specialized agents.
+Available agents: %s
+
+You MUST output ONLY valid JSON matching this schema:
+{
+  "tasks": [
+    {
+      "id": "unique_string_id",
+      "name": "Short name",
+      "agent": "agent_name",
+      "prompt": "Detailed instructions for the agent",
+      "dependencies": ["id_of_another_task"]
+    }
+  ]
+}
+Do not wrap the JSON in Markdown code blocks. Just output the raw JSON.`, strings.Join(m.subAgentNames, ", "))
+
+	respIter := m.proModel.GenerateContent(ctx, &model.LLMRequest{
+		Contents: []*genai.Content{genai.NewContentFromText(prompt, genai.Role("user"))},
+		Config: &genai.GenerateContentConfig{
+			SystemInstruction: genai.NewContentFromText(systemPrompt, genai.Role("system")),
+		},
+	}, false)
+
+	var jsonStr string
+	for resp, err := range respIter {
+		if err != nil {
+			return nil, err
+		}
+		if resp.Content != nil && len(resp.Content.Parts) > 0 {
+			jsonStr += resp.Content.Parts[0].Text
+		}
+	}
+
+	jsonStr = strings.TrimSpace(jsonStr)
+	// Strip markdown formatting if the model ignored the instruction
+	if strings.HasPrefix(jsonStr, "```json") {
+		jsonStr = strings.TrimPrefix(jsonStr, "```json")
+		jsonStr = strings.TrimSuffix(jsonStr, "```")
+		jsonStr = strings.TrimSpace(jsonStr)
+	}
+
+	var graph ExecutionGraph
+	if err := json.Unmarshal([]byte(jsonStr), &graph); err != nil {
+		return nil, fmt.Errorf("failed to parse DAG JSON: %w\nResponse was: %s", err, jsonStr)
+	}
+
+	return &graph, nil
 }
 
 func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan ChatEvent, error) {
@@ -908,6 +972,137 @@ func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan ChatEv
 		<-telemetryDone
 	}()
 
+	return out, nil
+}
+
+func (m *defaultManager) ExecuteGraph(ctx context.Context, g *ExecutionGraph) (<-chan ChatEvent, error) {
+	out := make(chan ChatEvent)
+	go func() {
+		defer close(out)
+		o := NewOrchestrator(g)
+
+		// A channel to receive completed task IDs
+		completed := make(chan string)
+		// To track running goroutines
+		activeTasks := 0
+
+		for {
+			// Get ready tasks
+			ready := o.GetReadyTasks()
+			for _, t := range ready {
+				o.MarkActive(t.ID)
+				activeTasks++
+
+				// Launch task in a goroutine
+				go func(task Task) {
+					// We need an agent for this task.
+					targetAgent, ok := m.agents[task.Agent]
+					if !ok {
+						out <- ChatEvent{Type: ChatEventError, Agent: "Orchestrator", Content: fmt.Sprintf("Agent '%s' not found for task '%s'", task.Agent, task.ID)}
+						completed <- task.ID
+						return
+					}
+
+					// We need an isolated runner for this execution to avoid polluting global session
+					taskSessionID := fmt.Sprintf("%s_%s", m.sessionID, task.ID)
+					_, _ = m.sessionSvc.Create(ctx, &session.CreateRequest{
+						AppName:   "swarm-cli",
+						UserID:    m.userID,
+						SessionID: taskSessionID,
+					})
+
+					taskRunner, err := runner.New(runner.Config{
+						AppName:        "swarm-cli",
+						Agent:          targetAgent,
+						SessionService: m.sessionSvc,
+					})
+					if err != nil {
+						out <- ChatEvent{Type: ChatEventError, Agent: "Orchestrator", Content: fmt.Sprintf("Failed to init runner for task '%s': %v", task.ID, err)}
+						completed <- task.ID
+						return
+					}
+
+					out <- ChatEvent{Type: ChatEventThought, Agent: targetAgent.Name(), Content: fmt.Sprintf("Starting task: %s", task.Name)}
+
+					// Add telemetry specifically for this task
+					telemetryChan := make(chan string, 100)
+					toolCtx, cancelToolCtx := context.WithCancel(context.WithValue(ctx, telemetryContextKey{}, (chan<- string)(telemetryChan)))
+					defer cancelToolCtx()
+
+					telemetryDone := make(chan struct{})
+					go func() {
+						for line := range telemetryChan {
+							out <- ChatEvent{Type: ChatEventTelemetry, Agent: targetAgent.Name(), Content: line}
+						}
+						close(telemetryDone)
+					}()
+
+					promptStr := fmt.Sprintf("Task: %s\nInstructions: %s", task.Name, task.Prompt)
+					events := taskRunner.Run(toolCtx, m.userID, taskSessionID, genai.NewContentFromText(promptStr, genai.Role("user")), agent.RunConfig{})
+
+					for event, err := range events {
+						if err != nil {
+							out <- ChatEvent{Type: ChatEventError, Agent: targetAgent.Name(), Content: err.Error()}
+							break
+						}
+                        
+						if event.Content != nil {
+							for _, part := range event.Content.Parts {
+								if part.FunctionCall != nil {
+									argsStr := ""
+									if part.FunctionCall.Args != nil {
+										b, err := json.Marshal(part.FunctionCall.Args)
+										if err == nil {
+											argsStr = " " + string(b)
+										}
+									}
+									out <- ChatEvent{Type: ChatEventToolCall, Agent: targetAgent.Name(), Content: fmt.Sprintf("%s%s", part.FunctionCall.Name, argsStr)}
+								}
+								if part.FunctionResponse != nil {
+									out <- ChatEvent{Type: ChatEventToolResult, Agent: targetAgent.Name(), Content: fmt.Sprintf("%s completed", part.FunctionResponse.Name)}
+								}
+							}
+						}
+						if !event.Partial && event.IsFinalResponse() {
+							var fullResponse strings.Builder
+							if event.Content != nil {
+								for _, part := range event.Content.Parts {
+									if part.Text != "" && !part.Thought {
+										fullResponse.WriteString(part.Text)
+									}
+								}
+							}
+							out <- ChatEvent{Type: ChatEventFinalResponse, Agent: targetAgent.Name(), Content: fullResponse.String()}
+						}
+					}
+
+					close(telemetryChan)
+					<-telemetryDone
+
+					completed <- task.ID
+				}(t)
+			}
+
+			if activeTasks == 0 {
+				if o.IsComplete() {
+					break // We are done!
+				} else {
+					// Deadlock! No active tasks, but graph is not complete.
+					out <- ChatEvent{Type: ChatEventError, Agent: "Orchestrator", Content: "Deadlock detected: No active tasks and unresolved dependencies."}
+					break
+				}
+			}
+
+			// Wait for a task to finish
+			select {
+			case <-ctx.Done():
+				return
+			case doneTaskID := <-completed:
+				o.MarkComplete(doneTaskID)
+				activeTasks--
+			}
+		}
+	}()
 	return out, nil
 }
 

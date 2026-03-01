@@ -218,6 +218,11 @@ type modelsLoadedMsg struct {
 	err    error
 }
 
+type graphPlannedMsg struct {
+	graph *sdk.ExecutionGraph
+	err   error
+}
+
 type item struct {
 	name        string
 	description string
@@ -1157,6 +1162,22 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.updateViewport()
 		return m, m.dequeueAndRun()
 
+	case graphPlannedMsg:
+		if msg.err != nil {
+			m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Render("Planning failed: "+msg.err.Error()))
+			m.loading = false
+			return m, nil
+		}
+		
+		b, _ := json.MarshalIndent(msg.graph, "", "  ")
+		m.messages = append(m.messages, lipgloss.NewStyle().Foreground(tipColor).Render("Execution Plan Generated:\n"+string(b)))
+		
+		ch, err := m.manager.ExecuteGraph(context.Background(), msg.graph)
+		if err != nil {
+			return m, func() tea.Msg { return streamErrMsg{err: err} }
+		}
+		return m, listenForStream(ch)
+
 	case streamErrMsg:
 		m.loading = false
 		m.statusMsg = ""
@@ -1297,6 +1318,13 @@ func (m model) callSDK(ctx context.Context, input string) tea.Cmd {
 	return listenForStream(ch)
 }
 
+func (m model) callSwarm(ctx context.Context, task string) tea.Cmd {
+	return func() tea.Msg {
+		g, err := m.manager.Plan(ctx, task)
+		return graphPlannedMsg{graph: g, err: err}
+	}
+}
+
 func (m *model) dequeueAndRun() tea.Cmd {
 	if len(m.inputQueue) == 0 {
 		m.loading = false
@@ -1419,6 +1447,16 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 
 		icon := agentMsgStyle.Render("✦ ")
 		m.messages = append(m.messages, lipgloss.JoinHorizontal(lipgloss.Top, icon, helpText))
+	case "/swarm":
+		if len(parts) > 1 {
+			task := strings.Join(parts[1:], " ")
+			m.loading = true
+			ctx, cancel := context.WithCancel(context.Background())
+			m.cancelChat = cancel
+			return m.callSwarm(ctx, task)
+		} else {
+			m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Render("Usage: /swarm <complex task description>"))
+		}
 	case "/sessions":
 		sessions, err := m.manager.ListSessions(context.Background())
 		if err != nil {

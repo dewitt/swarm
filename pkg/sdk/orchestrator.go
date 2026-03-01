@@ -124,7 +124,9 @@ func (o *Orchestrator) GetReadyTasks() []Task {
 
 		allDepsMet := true
 		for _, depID := range t.Dependencies {
-			if o.status[depID] != TaskStatusComplete {
+			// If dependency exists and isn't complete, we aren't ready.
+			// If it doesn't exist, we treat it as met (pruning the broken link).
+			if s, exists := o.status[depID]; exists && s != TaskStatusComplete {
 				allDepsMet = false
 				break
 			}
@@ -169,14 +171,38 @@ func (o *Orchestrator) MarkComplete(taskID string, result string) {
 	o.tasks[taskID] = t
 }
 
-// MarkFailed marks a task as failed.
+// MarkFailed marks a task as failed and invalidates its dependents.
 func (o *Orchestrator) MarkFailed(taskID string) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
+	
 	o.status[taskID] = TaskStatusFailed
 	t := o.tasks[taskID]
 	t.Status = TaskStatusFailed
 	o.tasks[taskID] = t
+
+	// Recursively invalidate all dependents to prevent deadlock
+	o.invalidateDependentsLocked(taskID)
+}
+
+// invalidateDependentsLocked prunes all branches that depend on the given task.
+// Must be called while holding the lock.
+func (o *Orchestrator) invalidateDependentsLocked(taskID string) {
+	for id, t := range o.tasks {
+		for _, depID := range t.Dependencies {
+			if depID == taskID {
+				if o.status[id] != TaskStatusInvalidated {
+					o.status[id] = TaskStatusInvalidated
+					task := o.tasks[id]
+					task.Status = TaskStatusInvalidated
+					o.tasks[id] = task
+					// Recurse
+					o.invalidateDependentsLocked(id)
+				}
+				break
+			}
+		}
+	}
 }
 
 // MarkInvalidated prunes a task or branch.

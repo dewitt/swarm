@@ -440,55 +440,59 @@ func (m *defaultManager) Execute(ctx context.Context, g *ExecutionGraph, o *Orch
 	}
 
 	go func() {
-		defer close(out)
-		type completedTask struct {
-			ID     string
-			Result string
-			Replan bool
+	defer close(out)
+	type completedTask struct {
+		ID     string
+		Result string
+		Status TaskStatus
+		Replan bool
+	}
+	completed := make(chan completedTask, 100)
+	activeTasks := 0
+	var wg sync.WaitGroup
+	replanCount := 0
+	const maxReplans = 3
+
+	for {
+		ready := o.GetReadyTasks()
+		for _, t := range ready {
+			o.MarkActive(t.ID)
+			activeTasks++
+			wg.Add(1)
+			go func(task Task) {
+				defer wg.Done()
+				result, status, needsReplan := m.executeTask(ctx, out, o, task)
+				completed <- completedTask{ID: task.ID, Result: result, Status: status, Replan: needsReplan}
+			}(t)
 		}
-		completed := make(chan completedTask, 100)
-		activeTasks := 0
-		var wg sync.WaitGroup
-		replanCount := 0
-		const maxReplans = 3
 
-		for {
-			ready := o.GetReadyTasks()
-			for _, t := range ready {
-				o.MarkActive(t.ID)
-				activeTasks++
-				wg.Add(1)
-				go func(task Task) {
-					defer wg.Done()
-					result, needsReplan := m.executeTask(ctx, out, o, task)
-					completed <- completedTask{ID: task.ID, Result: result, Replan: needsReplan}
-				}(t)
+		if activeTasks == 0 {
+			if o.IsComplete() {
+				break
+			} else {
+				out <- ChatEvent{Type: ChatEventError, Agent: "Swarm", Content: "Deadlock detected in execution graph."}
+				break
 			}
+		}
 
-			if activeTasks == 0 {
-				if o.IsComplete() {
-					break
-				} else {
-					out <- ChatEvent{Type: ChatEventError, Agent: "Orchestrator", Content: "Deadlock detected in execution graph."}
-					break
-				}
-			}
-
-			select {
-			case <-ctx.Done():
-				return
-			case done := <-completed:
+		select {
+		case <-ctx.Done():
+			return
+		case done := <-completed:
+			if done.Status == TaskStatusComplete {
 				o.MarkComplete(done.ID, done.Result)
-				activeTasks--
-
+			} else {
+				o.MarkFailed(done.ID)
+			}
+			activeTasks--
 				// Handle dynamic replanning or subgraph expansion
 				if done.Replan {
 					if replanCount >= maxReplans {
-						out <- ChatEvent{Type: ChatEventError, Agent: "Orchestrator", Content: "Maximum replan attempts reached. Halting loop."}
+						out <- ChatEvent{Type: ChatEventError, Agent: "Swarm", Content: "Maximum replan attempts reached. Halting loop."}
 						continue
 					}
 					replanCount++
-					out <- ChatEvent{Type: ChatEventThought, Agent: "Orchestrator", Content: fmt.Sprintf("Replanning effort %d/%d…", replanCount, maxReplans)}
+					out <- ChatEvent{Type: ChatEventThought, Agent: "Swarm", Content: fmt.Sprintf("Replanning effort %d/%d…", replanCount, maxReplans)}
 					newG, err := m.Plan(ctx, "Pivot: "+done.Result)
 					if err == nil {
 						o.AddTasks(newG.Tasks...)
@@ -516,11 +520,11 @@ func (m *defaultManager) Execute(ctx context.Context, g *ExecutionGraph, o *Orch
 	return out, o, nil
 }
 
-func (m *defaultManager) executeTask(ctx context.Context, out chan<- ChatEvent, o *Orchestrator, task Task) (string, bool) {
+func (m *defaultManager) executeTask(ctx context.Context, out chan<- ChatEvent, o *Orchestrator, task Task) (string, TaskStatus, bool) {
 	targetAgent, ok := m.agents[task.Agent]
 	if !ok {
-		out <- ChatEvent{Type: ChatEventError, Agent: "Orchestrator", TaskID: task.ID, Content: "Agent not found: " + task.Agent}
-		return "Agent not found", false
+		out <- ChatEvent{Type: ChatEventError, Agent: "Swarm", TaskID: task.ID, Content: "Agent not found: " + task.Agent}
+		return "Agent not found", TaskStatusFailed, false
 	}
 
 	// Use a unique session ID for this specific task to prevent turn-order corruption
@@ -686,7 +690,7 @@ func (m *defaultManager) executeTask(ctx context.Context, out chan<- ChatEvent, 
 	}
 
 	if finalText == "" {
-		return "No response emitted by agent.", false
+		return "No response emitted by agent.", TaskStatusFailed, false
 	}
 
 	// Update the global state of the last agent to respond
@@ -697,11 +701,11 @@ func (m *defaultManager) executeTask(ctx context.Context, out chan<- ChatEvent, 
 		// Record the response in the main conversation history
 		m.appendEvent(ctx, "model", fmt.Sprintf("[%s]: %s", targetAgent.Name(), finalText))
 		out <- ChatEvent{Type: ChatEventFinalResponse, Agent: targetAgent.Name(), TaskID: task.ID, Content: finalText}
-		return finalText, needsReplan
+		return finalText, TaskStatusComplete, needsReplan
 	}
 
-	out <- ChatEvent{Type: ChatEventThought, Agent: "Orchestrator", TaskID: task.ID, Content: "Output Agent rejected the response as problematic."}
-	return "Output Agent rejected response.", true
+	out <- ChatEvent{Type: ChatEventThought, Agent: "Swarm", TaskID: task.ID, Content: "Output Agent rejected the response as problematic."}
+	return "Output Agent rejected response.", TaskStatusComplete, true
 }
 
 

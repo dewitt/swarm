@@ -236,7 +236,19 @@ CRITICAL: ONLY output the ROUTE line. Do NOT output "ROUTE TO: None" or any othe
 
 	inputAgent, _ := llmagent.New(llmagent.Config{Name: "input_agent", Model: m.fastModel, Instruction: inputInstruction})
 	planningAgent, _ := llmagent.New(llmagent.Config{Name: "planning_agent", Model: m.proModel, Instruction: "Plan DAGs."})
-	outputInstruction := "You are the Output Agent. Your job is to sanity check responses before they are shown to the human. Output ONLY 'OK' or 'FIX: [reason]'. Do not be helpful. Do not explain. Just OK or FIX."
+	outputInstruction := `You are the Output Agent. Your job is to sanity check responses before they are shown to the human. 
+RULE: Output ONLY 'OK' or 'FIX: [reason]'. 
+Do not be helpful. Do not explain. Just OK or FIX.
+
+PASS CRITERIA:
+- Simple greetings, "Hello", and social inquiries are ALWAYS OK.
+- Direct answers to user questions are OK.
+- Technical explanations are OK.
+
+REJECTION CRITERIA:
+- The response is empty.
+- The response is dangerous or violates safety guidelines.
+- The response is a clear hallucination or incoherent.`
 	outputAgent, _ := llmagent.New(llmagent.Config{Name: "output_agent", Model: m.fastModel, Instruction: outputInstruction})
 	m.run, _ = runner.New(runner.Config{AppName: "swarm-cli", Agent: swarmAgent, SessionService: m.sessionSvc})
 	m.skills = loadedSkills; m.subAgentNames = subAgentNames; m.inputInstruction = inputInstruction; m.inputAgent = inputAgent; m.outputInstruction = outputInstruction
@@ -402,6 +414,8 @@ func (m *defaultManager) Execute(ctx context.Context, g *ExecutionGraph, o *Orch
 		completed := make(chan completedTask, 100)
 		activeTasks := 0
 		var wg sync.WaitGroup
+		replanCount := 0
+		const maxReplans = 3
 
 		for {
 			ready := o.GetReadyTasks()
@@ -434,6 +448,12 @@ func (m *defaultManager) Execute(ctx context.Context, g *ExecutionGraph, o *Orch
 
 				// Handle dynamic replanning or subgraph expansion
 				if done.Replan {
+					if replanCount >= maxReplans {
+						out <- ChatEvent{Type: ChatEventError, Agent: "Orchestrator", Content: "Maximum replan attempts reached. Halting loop."}
+						continue
+					}
+					replanCount++
+					out <- ChatEvent{Type: ChatEventThought, Agent: "Orchestrator", Content: fmt.Sprintf("Replanning effort %d/%d…", replanCount, maxReplans)}
 					newG, err := m.Plan(ctx, "Pivot: "+done.Result)
 					if err == nil {
 						o.AddTasks(newG.Tasks...)
@@ -630,6 +650,11 @@ func (m *defaultManager) runOutputAgent(ctx context.Context, out chan<- ChatEven
 			}
 		}
 		break
+	}
+
+	// Update UI card state (optional, can also just be done by concluding the task)
+	if approved {
+		out <- ChatEvent{Type: ChatEventThought, Agent: "Output Agent", Content: "OK"}
 	}
 
 	if o != nil {

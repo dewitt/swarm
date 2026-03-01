@@ -227,7 +227,16 @@ func (m *defaultManager) Reload() error {
 	inputAgent, err := llmagent.New(llmagent.Config{Name: "input_agent", Model: m.flashModel, Instruction: inputInstruction})
 	if err != nil { return err }
 	m.run = r; m.skills = loadedSkills; m.subAgentNames = subAgentNames; m.inputInstruction = inputInstruction; m.inputAgent = inputAgent
-	m.agents = make(map[string]agent.Agent); m.agents[swarmAgent.Name()] = swarmAgent
+	
+	// Initialize Planning Agent for the map
+	planAgents := append(subAgentNames, "swarm_agent", "planning_agent")
+	planInstruction := fmt.Sprintf("You are the Planning Agent. Decompose request into DAG JSON. TRIVIAL: use immediate_response. COMPLEX: DEEP_PLAN_REQUIRED. Agents: %s", strings.Join(planAgents, ", "))
+	planningAgent, _ := llmagent.New(llmagent.Config{Name: "planning_agent", Model: m.proModel, Instruction: planInstruction})
+
+	m.agents = make(map[string]agent.Agent)
+	m.agents[swarmAgent.Name()] = swarmAgent
+	m.agents["input_agent"] = inputAgent
+	m.agents["planning_agent"] = planningAgent
 	for _, sa := range subAgents { m.agents[sa.Name()] = sa }
 	return nil
 }
@@ -265,7 +274,27 @@ func (m *defaultManager) ListSessions(ctx context.Context) ([]SessionInfo, error
 }
 
 func (m *defaultManager) Plan(ctx context.Context, prompt string) (*ExecutionGraph, error) {
-	systemPrompt := fmt.Sprintf("You are the Planning Agent. Decompose request into DAG JSON. TRIVIAL: use immediate_response. COMPLEX: DEEP_PLAN_REQUIRED. Agents: %s", strings.Join(m.subAgentNames, ", "))
+	allAgents := append(m.subAgentNames, "swarm_agent", "planning_agent")
+	systemPrompt := fmt.Sprintf(`You are the Planning Agent.
+Decompose the user's request into a Directed Acyclic Graph (DAG) of tasks.
+
+SCHEMA RULES:
+1. You MUST output ONLY raw JSON. No markdown blocks.
+2. The root object must have a "tasks" array.
+3. Each task must have: "id", "name", "agent", "prompt", and "dependencies" (array of IDs).
+4. Use the exact field names: "tasks" (not nodes) and "prompt" (not instruction).
+
+TRIVIAL QUERIES: If the request is a simple greeting, use the "immediate_response" field instead of tasks.
+
+AVAILABLE AGENTS: %s
+
+EXAMPLE:
+{
+  "tasks": [
+    { "id": "t1", "name": "Research", "agent": "web_researcher_agent", "prompt": "Find X", "dependencies": [] },
+    { "id": "t2", "name": "Write", "agent": "claude_code_agent", "prompt": "Write code based on t1", "dependencies": ["t1"] }
+  ]
+}`, strings.Join(allAgents, ", "))
 	respIter := m.fastModel.GenerateContent(ctx, &model.LLMRequest{Contents: []*genai.Content{genai.NewContentFromText(prompt, genai.Role("user"))}, Config: &genai.GenerateContentConfig{SystemInstruction: genai.NewContentFromText(systemPrompt, genai.Role("system"))}}, false)
 	var jsonStr string; for resp, err := range respIter { if err != nil { return nil, err }; if resp.Content != nil && len(resp.Content.Parts) > 0 { jsonStr += resp.Content.Parts[0].Text } }
 	jsonStr = strings.TrimSpace(jsonStr)

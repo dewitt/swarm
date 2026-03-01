@@ -26,7 +26,7 @@ Sleep 20s
 Show
 Sleep 4s
 
-Type "! ls src"
+Type "! ls -F pkg/sdk/"
 Sleep 500ms
 Enter
 Sleep 3s

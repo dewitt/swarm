@@ -46,6 +46,19 @@ The `ChatEvent` and the `Chat` return channel must be upgraded to support multip
 - **AgentID Requirement:** Every `ChatEvent` must include a unique `AgentID` (or `TaskID`) so the UI can route the event to the correct Agent Card in the panel.
 - **Event Aggregation:** The SDK must multiplex streams from $N$ workers into a single outbound channel for the UI.
 
+### 5. Dynamic Replanning & Feedback Loop
+
+A static DAG is insufficient because "no plan survives first contact with the enemy." Execution nodes must be able to pivot.
+- **Upward Feedback:** Agents must have a tool (e.g., `request_replan`) to yield control back to the Orchestrator with hints and context about why the current task is blocked or how the overall goal should shift.
+- **Graph Mutability:** The Orchestrator must be able to accept a `ReplanRequested` event, pause the dispatch of new tasks, and feed the failed/pivoted task's context back into the Graph Planner.
+- **Sub-planning:** Execution nodes should be able to dynamically spawn their own sub-graphs for localized complex tasks without needing the global Orchestrator to re-evaluate the entire project.
+
+### 6. Observer Agents (Checks and Balances)
+
+In a highly concurrent, byzantine system, we need continuous monitoring.
+- **Execution Oversight:** Specialized "Observer Agents" run in parallel to the workers. They monitor the event stream, checking for infinite loops, hallucinated tool calls, or deviations from the user's original intent.
+- **Intervention:** When an Observer detects a critical failure path, it can inject a "Stop and Re-evaluate" event into the Orchestrator, forcing a fallback to the smartest available model to untangle the mess.
+
 ## UI Visualization (The Execution Graph)
 
 The Agent Panel must evolve to visualize these dependencies:

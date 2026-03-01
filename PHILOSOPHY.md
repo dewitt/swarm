@@ -120,6 +120,23 @@ intelligent, autonomous agent acting on our behalf.
   will eventually be accessible through a mediating agentic layer, reducing
   complex technical workflows to high-level goal-setting.
 
+## 9. Dynamic Replanning (No Plan Survives First Contact)
+
+We recognize that "no plan survives first contact with the enemy." In the real world, almost nothing agentic will work as expected on the first try.
+- **Dynamic Graphs are Essential:** Execution nodes must be able to dynamically make new subplans of their own when encountering obstacles.
+- **Upward Feedback:** Agents must be able to provide hints, context, and feedback back up the chain to the orchestrator to trigger replanning, rather than simply failing and halting execution.
+
+## 10. The Byzantine System & Checks and Balances
+
+We accept that a complex swarm of agents operating concurrently is a byzantine system, and that is a feature, not a bug.
+- **Observer Agents:** We employ observer agents that act as checks and balances. They constantly monitor the execution graph and identify when parts of the system are going wrong or deviating from the goal.
+- **Continuous Improvement:** Our agents are smart and must constantly be on the lookout for opportunities to improve the plan, correct each other's mistakes, and optimize the workflow.
+
+## 11. Fall Back on the Smartest Models
+
+When the system is in doubt, stuck in a loop, or facing ambiguous errors, we do not rely on rigid heuristics.
+- **Wisdom of the Frontier:** We always fall back on the wisdom of our smartest models. Because these models are getting smarter every day, routing complex unresolvable states back to them ensures the system can self-heal and adapt to novel edge cases without requiring brittle custom code.
+
 ## The "Engineering Manager" Paradigm
 
 The ultimate goal of `swarm` is to abstract away the mechanics of agent

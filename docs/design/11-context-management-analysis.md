@@ -15,7 +15,7 @@ and proposes a unified, market-aligned design for the `swarm` CLI.
   needed to answer questions.
 - **Explicit Injection (Per-Turn):** The user can type `@filename` to force a
   file into the context for that specific prompt.
-- **Pinning:** Claude Code does *not* heavily emphasize a manual pinning
+- **Pinning:** Claude Code does _not_ heavily emphasize a manual pinning
   system (like `/context add`), preferring the agent to manage its own working
   memory, though history retention achieves a similar effect over a session.
 
@@ -48,11 +48,11 @@ and proposes a unified, market-aligned design for the `swarm` CLI.
 The market has converged on two primary workflows for context management:
 
 1. **Transient Injection (`@` Reference):** The user explicitly provides a
-   file for a *single turn*. (e.g., "Refactor `@app.go` to use the new DB
+   file for a _single turn_. (e.g., "Refactor `@app.go` to use the new DB
    driver.") The file is read, injected, and then naturally ages out of the
    context window as the conversation progresses.
 1. **Persistent Pinning ("The Pinned Context"):** The user declares that a
-   file is foundational to the *entire session*. (e.g., "I'm working on a
+   file is foundational to the _entire session_. (e.g., "I'm working on a
    massive refactor of `manager.go`, never forget what's in this file.") This
    file is injected into the system prompt or prepended to every single turn.
 
@@ -85,9 +85,9 @@ paradigms:
   - `/drop <file_path>`: Removes a file from the pinned context.
   - `/drop all`: Clears the pinned context.
 - **Mechanics:** Pinned files are stored in a `map[string]string` in the
-  `Swarm`. Before *every* `Chat` execution, the contents of all pinned
-  files are injected into the system prompt instructions (similar to how we
-  inject `GEMINI.md` or global memory).
+  `Swarm`. Before _every_ `Chat` execution, the contents of all pinned files
+  are injected into the system prompt instructions (similar to how we inject
+  `GEMINI.md` or global memory).
 - **Why this deviates slightly from Claude Code:** While Claude relies almost
   entirely on agentic retrieval, explicit pinning is a highly requested
   power-user feature (popularized by Cursor) that provides deterministic

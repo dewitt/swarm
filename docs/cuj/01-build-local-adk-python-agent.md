@@ -27,17 +27,17 @@ agents
 
 The CLI launches its interactive interface:
 
-> **Swarm CLI:** Welcome to Agents! How can I help you today? **Alex:** I
-> want to build a simple agent that can fetch the current weather using Python
-> and the Google ADK.
+> **Swarm CLI:** Welcome to Agents! How can I help you today? **Alex:** I want
+> to build a simple agent that can fetch the current weather using Python and
+> the Google ADK.
 
 ### 3. Scaffolding
 
-The `swarm` internal Swarm Agent understands the intent. It delegates the
-task to the Builder Agent, equipped with the ADK Python Skill.
+The `swarm` internal Swarm Agent understands the intent. It delegates the task
+to the Builder Agent, equipped with the ADK Python Skill.
 
 > **Swarm CLI:** Excellent! I'll set up a Google ADK Python project for you.
-> *[Spinner: Generating boilerplate...]* I have created the following files:
+> _[Spinner: Generating boilerplate...]_ I have created the following files:
 >
 > - `requirements.txt` (with `google-adk` and `requests`)
 > - `agent.py` (your ADK agent with a mock `get_weather` tool)
@@ -63,11 +63,11 @@ Alex wants to make sure it works.
 
 > **Alex:** Let's test it. Ask the agent what the weather is in Tokyo.
 
-The CLI, acting as an engine, invokes the local Python process defined
-in `agent.yaml`.
+The CLI, acting as an engine, invokes the local Python process defined in
+`agent.yaml`.
 
 > **Swarm CLI:** Running local agent... **Agent (Local):** The weather in
 > Tokyo is currently clear and 15°C.
 >
-> **Swarm CLI:** The local agent successfully executed the `get_weather`
-> tool. How else would you like to modify it?
+> **Swarm CLI:** The local agent successfully executed the `get_weather` tool.
+> How else would you like to modify it?

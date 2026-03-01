@@ -10,7 +10,7 @@ As the `swarm` CLI evolves into an agent-centric Agent Panel for orchestrating
 swarms of parallel, long-running agentic processes, the traditional
 synchronous Chat REPL paradigm breaks down.
 
-When a user types a command like *"Refactor the billing service"*, the swarm
+When a user types a command like _"Refactor the billing service"_, the swarm
 might take 45 minutes to execute tests, read files, and write code. During
 this time, the user cannot simply be locked out of the interface. They must be
 able to:
@@ -23,7 +23,7 @@ able to:
 This document outlines the architectural and UX strategies for handling
 concurrent input, interruptions, and async HITL interactions.
 
-______________________________________________________________________
+---
 
 ## 1. Input Queueing vs. Blocking
 
@@ -41,11 +41,11 @@ The CLI should adopt a non-blocking queue model.
 - **Visuals:** Queued messages appear in the chat log immediately but are
   styled distinctly (e.g., slightly dimmed or with an hourglass icon `⧖`) to
   indicate they are "pending ingestion" by the Swarm Agent.
-- **Processing:** Once the Swarm Agent's current cognitive cycle frees up, or if an
-  agent specifically requests input, it pops the oldest message from the
+- **Processing:** Once the Swarm Agent's current cognitive cycle frees up, or
+  if an agent specifically requests input, it pops the oldest message from the
   queue.
 
-______________________________________________________________________
+---
 
 ## 2. Visual Cues in the Input Box
 
@@ -70,7 +70,7 @@ gracefully without restricting their freedom to type.
     slightly to emphasize that the swarm is entirely blocked until the human
     responds.
 
-______________________________________________________________________
+---
 
 ## 3. Interruption Mechanisms
 
@@ -105,7 +105,7 @@ bleed.
      their underlying subprocesses.
   1. The UI renders: `[System] Swarm execution forcefully halted by user.`
 
-______________________________________________________________________
+---
 
 ## 4. Architectural Implementation (SDK Event Bus)
 
@@ -117,8 +117,8 @@ the linear `Chat(prompt) (<-chan string)` signature.
 The SDK should expose a long-lived `SessionContext`.
 
 1. **The Ingress Channel:** The UI pushes strings (or `InputEvent` structs)
-   into a continuous ingress channel. The Swarm Agent listens to this channel in a
-   persistent background goroutine.
+   into a continuous ingress channel. The Swarm Agent listens to this channel
+   in a persistent background goroutine.
 1. **The Egress Channel (Event Bus):** The SDK pushes structured events
    (`AgentSpawned`, `ToolStream`, `TextChunk`, `HITLRequest`) back to the UI.
 1. **The HITL Loop:** If a tool like `ask_user` is invoked by an agent, the
@@ -129,8 +129,8 @@ The SDK should expose a long-lived `SessionContext`.
 
 ### Summary of Changes
 
-- Refactor `cmd/swarm/interactive.go` to handle queued inputs and visual
-  state shifts.
+- Refactor `cmd/swarm/interactive.go` to handle queued inputs and visual state
+  shifts.
 - Refactor `pkg/sdk/manager.go` to support persistent background runners and
   bidirectional channels.
 - Implement `context.Context` plumbing through all custom tools to support

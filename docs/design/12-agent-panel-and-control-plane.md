@@ -19,13 +19,14 @@ know:
 1. Are they stuck?
 1. How can I intervene?
 
-This document outlines the design for the **Agent Panel and Control
-Plane**, the defining feature that transforms `swarm` from a basic chat
-interface into a Supreme Engine.
+This document outlines the design for the **Agent Panel and Control Plane**,
+the defining feature that transforms `swarm` from a basic chat interface into
+a Supreme Engine.
 
 ## The Vision: Air Traffic Control for Code
 
-The UI must shift from a traditional "Chat REPL" to an agent-centric Agent Panel.
+The UI must shift from a traditional "Chat REPL" to an agent-centric Agent
+Panel.
 
 When a swarm is deployed, the terminal layout will dynamically split. The main
 chat/viewport remains for high-level synthesis, but a new, persistent **Agent
@@ -42,8 +43,8 @@ The Agent Panel will utilize a grid or dynamic list of "Agent Cards."
 - **Current Intent (The "Observer" Pattern):** Instead of flashing raw tool
   calls (e.g., `read_local_file`), the SDK employs a lightweight "Observer
   Agent" that reads the stream of raw tool calls and synthesizes them into
-  human-readable intents (e.g., *"Tracing database authentication flow..."* or
-  *"Resolving merge conflicts..."*).
+  human-readable intents (e.g., _"Tracing database authentication flow..."_ or
+  _"Resolving merge conflicts..."_).
 - **Live Telemetry:** If an agent is executing a shell command, the card
   streams the last 3 lines of `stdout` in real-time. If it's searching the
   web, it shows the active query.
@@ -67,8 +68,8 @@ entire system.
 
 ### 3. Asynchronous & Long-Running Jobs
 
-Not all tasks finish in seconds. A user might tell the swarm: *"Migrate this
-entire 100k line Java codebase to Go."*
+Not all tasks finish in seconds. A user might tell the swarm: _"Migrate this
+entire 100k line Java codebase to Go."_
 
 - **Background Swarms:** Agents can be dispatched into the "background." The
   TUI session can be closed safely while the agents continue running via an
@@ -81,8 +82,7 @@ entire 100k line Java codebase to Go."*
 
 A foundational principle of the `swarm` project is the strict separation
 between the core SDK (`pkg/sdk/`) and the Presentation Layer (`cmd/swarm/`).
-This separation must be rigorously maintained as we build out the Agent
-Panel.
+This separation must be rigorously maintained as we build out the Agent Panel.
 
 The "Engineering Manager" paradigm is a business logic concept, not just a UI
 trick.
@@ -92,7 +92,7 @@ trick.
   summarization. It must expose this state purely through a standardized Event
   Bus or gRPC/REST interface (e.g., `AgentSpawnedEvent`,
   `AgentStatusUpdateEvent`, `TelemetryStreamEvent`).
-- **The UI is Just a Consumer:** The TUI (Bubble Tea) is merely *one* possible
+- **The UI is Just a Consumer:** The TUI (Bubble Tea) is merely _one_ possible
   consumer of this event stream. It listens to the bus and renders the Agent
   Cards accordingly.
 - **Portability:** By keeping the orchestration and telemetry strictly within
@@ -116,7 +116,7 @@ upgraded to an **Event Bus**.
   `AgentSpawned`, `AgentPaused`, `AgentResumed`, `AgentTerminated`.
 - **Tool Telemetry Events:** Tool execution must be non-blocking with respect
   to telemetry. E.g., `bash_execute` must yield a channel of `stdout` chunks
-  back to the event bus *while* the tool is running, rather than returning a
+  back to the event bus _while_ the tool is running, rather than returning a
   single monolithic string when it finishes.
 - **The Observer Runtime:** A mechanism to spin up cheap, low-latency models
   (e.g., `gemini-2.5-flash-8b`) purely for synthesizing telemetry into
@@ -155,21 +155,21 @@ upgraded to an **Event Bus**.
 
 ## The Ultimate Vision: "Do This Complicated Thing"
 
-The north star of the `swarm` project is an interface that effortlessly
-scales from a trivial, single-turn query to a massive, asynchronous
-engineering effort—all from the exact same entry point.
+The north star of the `swarm` project is an interface that effortlessly scales
+from a trivial, single-turn query to a massive, asynchronous engineering
+effort—all from the exact same entry point.
 
 A user should be able to type `$ agents` to open the console and simply say:
 
-> *"Refactor the entire billing microservice from Python to Go, ensure 100%
-> test coverage, and update the Kubernetes deployment manifests."*
+> _"Refactor the entire billing microservice from Python to Go, ensure 100%
+> test coverage, and update the Kubernetes deployment manifests."_
 
 The CLI must be smart enough to understand that this is not a task for a
 single LLM call. It must autonomously:
 
-1. **Plan & Decompose:** The Swarm Agent agent immediately spins up a "Planning
-   Swarm" to break the massive request down into a dependency graph of
-   sub-tasks.
+1. **Plan & Decompose:** The Swarm Agent agent immediately spins up a
+   "Planning Swarm" to break the massive request down into a dependency graph
+   of sub-tasks.
 1. **Dynamic Provisioning:** The system dynamically provisions as many agents
    as necessary to complete the work in parallel. It might launch three
    "Translation Agents" to convert Python files to Go concurrently, one "Test

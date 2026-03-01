@@ -6,7 +6,7 @@ A core tenet of the `swarm` project is that **Human-In-The-Loop (HITL) should
 only be required for permissions or creative opinions, never for mechanical
 verification.**
 
-Agents working on this project must *never* ask the human user to run the
+Agents working on this project must _never_ ask the human user to run the
 binary and describe what the UI looks like. The agent must verify the visual
 correctness, layout, and behavior of the Terminal UI autonomously.
 
@@ -25,13 +25,13 @@ assert that the internal state updates correctly.
 ```go
 func TestUpdate(t *testing.T) {
     m := initialModel()
-    
+
     // Simulate typing 'hello'
     m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("hello")})
-    
+
     // Simulate pressing Enter
     m, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-    
+
     // Verify the state updated without needing a human
     if len(m.messages) != 2 {
         t.Fatalf("Expected 2 messages, got %d", len(m.messages))

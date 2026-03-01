@@ -2,13 +2,13 @@
 
 The `swarm` project is designed as two distinct layers:
 
-1. **The CLI (`cmd/swarm/`)**: A Terminal User Interface and application
-   entry point.
+1. **The CLI (`cmd/swarm/`)**: A Terminal User Interface and application entry
+   point.
 1. **The Core SDK (`pkg/sdk/`)**: The embeddable intelligence and
    orchestration engine.
 
 To maximize the impact of the `swarm` ecosystem, the Core SDK must be
-accessible to developers working in *any* programming language, not just Go.
+accessible to developers working in _any_ programming language, not just Go.
 This document outlines the architectural requirements and strategies for
 cross-compiling the Go core into native language bindings (Python, TypeScript,
 Rust, Java, etc.).
@@ -30,8 +30,8 @@ Rust, Java, etc.).
 
 ## 2. Interface Definition (Protobuf)
 
-To ensure consistency across boundaries, the `Swarm` interface and all
-data structures (e.g., `AgentManifest`, `Skill`, `ToolResult`) must be defined
+To ensure consistency across boundaries, the `Swarm` interface and all data
+structures (e.g., `AgentManifest`, `Skill`, `ToolResult`) must be defined
 using Protocol Buffers (`.proto` files).
 
 These protobuf definitions act as the universal contract. We will generate the
@@ -87,6 +87,6 @@ To achieve this, the repository structure will expand to include:
 1. **`/bindings/python`**: The generated Python SDK and native wrappers.
 1. **`/bindings/typescript`**: The generated TS SDK and WASM loader.
 
-*Note: This architecture draws inspiration from successful cross-language Go
+_Note: This architecture draws inspiration from successful cross-language Go
 projects (like Esbuild or Terraform's JS APIs) and internal proofs-of-concept
-for unified LLM library distribution.*
+for unified LLM library distribution._

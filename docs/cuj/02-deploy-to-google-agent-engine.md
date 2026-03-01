@@ -55,8 +55,8 @@ Priya reviews the file and is satisfied.
 Because `swarm` is integrated with the local repository, it can track the
 GitHub Action it just triggered.
 
-> **Swarm CLI:** The deployment workflow has started on GitHub. *\[Spinner:
-> Waiting for deployment...\]* ... Build successful. ... Deployment
+> **Swarm CLI:** The deployment workflow has started on GitHub. _\[Spinner:
+> Waiting for deployment...\]_ ... Build successful. ... Deployment
 > successful.
 >
 > Your agent is now live! The API endpoint is available at:

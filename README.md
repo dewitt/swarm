@@ -15,8 +15,8 @@ into native ecosystems.
 
 - **Agent Panel**: The UI shifts from a basic chat REPL into an agent-centric
   layout when swarms are deployed. It visualizes concurrent agents working in
-  parallel via live "Agent Cards" featuring **Live Telemetry** (e.g., real-time
-  scrolling build logs and test outputs) and dynamic status updates.
+  parallel via live "Agent Cards" featuring **Live Telemetry** (e.g.,
+  real-time scrolling build logs and test outputs) and dynamic status updates.
 
 - **Direct Shell Execution (`!`)**: Toggle into a dedicated shell mode or run
   single-shot bash commands instantly from within the REPL without breaking
@@ -26,11 +26,10 @@ into native ecosystems.
   LLM's context window by typing `@` to trigger an inline, fuzzy-filtered
   overlay of your workspace files.
 
-- **Input Agent**: A high-speed, lightweight routing layer that
-  pre-processes every user input. It proactively detects digressions and
-  context shifts, rerouting the conversation to the Swarm Agent
-  *before* the message is processed, ensuring the system stays aligned with
-  human topic-switching.
+- **Input Agent**: A high-speed, lightweight routing layer that pre-processes
+  every user input. It proactively detects digressions and context shifts,
+  rerouting the conversation to the Swarm Agent _before_ the message is
+  processed, ensuring the system stays aligned with human topic-switching.
 
 - **Session Persistence & Resumption**: Sessions are automatically persisted
   to a local SQLite database. View past activity with `/sessions`, rewind the
@@ -73,10 +72,10 @@ into native ecosystems.
   (like GitHub Actions) and integrates directly with your native ecosystem.
 
 - **Agent Swarms**: The core SDK is powered by the Google Agent Development
-  Kit (ADK) and orchestrates a swarm of specialized internal agents (Swarm Agent,
-  Builder, Deployment) using a cascading model architecture (fast models for
-  routing, reasoning models for execution). Agent responses are attributed
-  with colorful badges in the chat log.
+  Kit (ADK) and orchestrates a swarm of specialized internal agents (Swarm
+  Agent, Builder, Deployment) using a cascading model architecture (fast
+  models for routing, reasoning models for execution). Agent responses are
+  attributed with colorful badges in the chat log.
 
 ## Prerequisites
 
@@ -119,8 +118,8 @@ new projects, or deploy existing agents.
 - **[Critical User Journeys](docs/cuj/)**: Example workflows illustrating how
   the CLI is intended to be used.
 
-______________________________________________________________________
+---
 
-*The `demo.gif` above is generated autonomously using Charmbracelet's `vhs`
+_The `demo.gif` above is generated autonomously using Charmbracelet's `vhs`
 tool. Agents working on this project should re-run `vhs demo.tape` whenever
-they significantly alter the UI.*
+they significantly alter the UI._

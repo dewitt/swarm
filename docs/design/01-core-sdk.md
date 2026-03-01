@@ -19,8 +19,8 @@ power the CLI's interactive assistant.
 
 Internally, the SDK uses a multi-agent topology to resolve user commands:
 
-- **Swarm Agent**: Analyzes user input and determines whether the request is
-  a local file operation, an agent-building task, or a deployment command.
+- **Swarm Agent**: Analyzes user input and determines whether the request is a
+  local file operation, an agent-building task, or a deployment command.
 - **Builder Agent**: Specialized in scaffolding new agent projects across
   different frameworks (ADK, LangGraph).
 - **GitOps Agent**: Translates deployment requests into CI/CD configurations
@@ -28,7 +28,7 @@ Internally, the SDK uses a multi-agent topology to resolve user commands:
 
 ## Framework Agnosticism
 
-While our internal agents use ADK, the *target* agents (the swarm the user is
+While our internal agents use ADK, the _target_ agents (the swarm the user is
 building) can be in any framework. The SDK achieves this via an **Adapter
 Pattern**.
 

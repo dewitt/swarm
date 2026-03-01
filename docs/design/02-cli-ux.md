@@ -10,12 +10,27 @@ interactive developer environment.
 
 ## The Four Main Areas (UI Principals)
 
-The Terminal UI is strictly divided into four distinct, principled areas. This layout provides clear separation of concerns, ensuring the user always understands the system state and who is talking.
+The Terminal UI is strictly divided into four distinct, principled areas. This
+layout provides clear separation of concerns, ensuring the user always
+understands the system state and who is talking.
 
-1. **The Status Bar**: Located at the bottom (or top) of the screen, this area displays meta-information about the application state itself (e.g., active models, current context loaded, Git branch, token usage). It is purely informational and not mediated by any LLM.
-2. **The Input Area**: Where the Human-In-The-Loop (HITL) interacts. This area is implicitly mediated by the **Input Agent**, a high-speed failsafe that pre-processes keystrokes to detect topic shifts and ensures the user is routed to the correct agent context.
-3. **The Output Area (Viewport)**: The main chat log. This area is mediated by the **Output Agent**, which performs a final sanity check on all text before it is rendered to the user, preventing raw hallucinations or broken markdown from polluting the display.
-4. **The Agent Panel**: A real-time dashboard visualizing the Swarm's internal state. It displays active agents, their current statuses (e.g., "Analyzing request...", "Running list_local_files"), and ephemeral telemetry. This provides transparency into the "black box" of agent orchestration without overwhelming the main output area.
+1. **The Status Bar**: Located at the bottom (or top) of the screen, this area
+   displays meta-information about the application state itself (e.g., active
+   models, current context loaded, Git branch, token usage). It is purely
+   informational and not mediated by any LLM.
+2. **The Input Area**: Where the Human-In-The-Loop (HITL) interacts. This area
+   is implicitly mediated by the **Input Agent**, a high-speed failsafe that
+   pre-processes keystrokes to detect topic shifts and ensures the user is
+   routed to the correct agent context.
+3. **The Output Area (Viewport)**: The main chat log. This area is mediated by
+   the **Output Agent**, which performs a final sanity check on all text
+   before it is rendered to the user, preventing raw hallucinations or broken
+   markdown from polluting the display.
+4. **The Agent Panel**: A real-time dashboard visualizing the Swarm's internal
+   state. It displays active agents, their current statuses (e.g., "Analyzing
+   request...", "Running list_local_files"), and ephemeral telemetry. This
+   provides transparency into the "black box" of agent orchestration without
+   overwhelming the main output area.
 
 ## 1. The Interactive Session (REPL)
 
@@ -110,7 +125,7 @@ natural language prompts intended for the LLM and strict, actionable commands
 intended for the local client.
 
 - **Client-Side Interception:** Any input starting with a forward slash (`/`)
-  must be intercepted by a local Go command router *before* it hits the ADK
+  must be intercepted by a local Go command router _before_ it hits the ADK
   LLM. This prevents burning tokens and suffering network latency for simple
   UI tasks.
 - **Core Commands:**
@@ -169,6 +184,6 @@ down the wrong path, a developer shouldn't have to restart their entire
 
 - The UI should support a `/rewind` command that drops the last $N$ turns from
   the conversation history.
-- Sessions should be persisted to disk (`~/.config/swarm/sessions/`) so a
-  user can close their laptop, come back the next day, and run
-  `agents --resume` to pick up exactly where they left off.
+- Sessions should be persisted to disk (`~/.config/swarm/sessions/`) so a user
+  can close their laptop, come back the next day, and run `agents --resume` to
+  pick up exactly where they left off.

@@ -30,8 +30,8 @@ architecture:
 Sub-agents (Skills) default to `gemini-3.1-pro-preview` for thorough execution
 but can request specific models via their SkillManifest.
 
-When the Swarm Agent delegates to a sub-agent, the terminal UI visualizes
-this handoff in real-time (e.g., "Handoff to builder_agent..."). All agent
+When the Swarm Agent delegates to a sub-agent, the terminal UI visualizes this
+handoff in real-time (e.g., "Handoff to builder_agent..."). All agent
 responses are identified by their author in the chat log using colorful agent
 badges for clear multi-agent swarm attribution, making the multi-agent
 execution transparent to the user.
@@ -59,15 +59,15 @@ scaffold these complex patterns for the user.
 ## 4. Third-Party Agent Orchestration
 
 As the ecosystem evolves, monolithic AI tools (like Claude Code, Codex, or
-Gemini CLI) will become highly capable specialists. The `swarm` CLI should
-not attempt to rewrite these massive, proprietary systems from scratch.
+Gemini CLI) will become highly capable specialists. The `swarm` CLI should not
+attempt to rewrite these massive, proprietary systems from scratch.
 
 Instead, the `swarm` CLI will act as the **Supreme Engine**.
 
 ### The Implementation
 
 We have built specialized "Wrapper Agents" (as Skills) that wrap the
-command-line interfaces of *other* AI coding agents, specifically `gemini-cli`
+command-line interfaces of _other_ AI coding agents, specifically `gemini-cli`
 and `claude-code`.
 
 For example, if a user asks for a massive refactoring of a legacy codebase:

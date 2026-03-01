@@ -1,7 +1,7 @@
 # Telemetry, Logging, and Evaluation Architecture
 
-For the `swarm` CLI to be a viable, production-grade application, it must
-have robust support for observability. This document outlines the strategy for
+For the `swarm` CLI to be a viable, production-grade application, it must have
+robust support for observability. This document outlines the strategy for
 capturing application logs, handling errors gracefully within the TUI
 environment, and recording complete session trajectories for downstream agent
 evaluations.

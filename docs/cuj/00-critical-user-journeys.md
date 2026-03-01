@@ -1,8 +1,8 @@
 # Critical User Journeys (CUJs)
 
 This directory contains detailed narratives of how developers interact with
-the `swarm` CLI in various scenarios. These journeys guide the product
-design, ensuring the tool remains user-centric, frictionless, and powerful.
+the `swarm` CLI in various scenarios. These journeys guide the product design,
+ensuring the tool remains user-centric, frictionless, and powerful.
 
 ## Existing Journeys
 
@@ -18,7 +18,7 @@ design, ensuring the tool remains user-centric, frictionless, and powerful.
    - **Focus:** Self-updating skills, deep web research, human-in-the-loop
      validation, and GitOps branching strategies.
 
-______________________________________________________________________
+---
 
 ## Brainstorming: Future CUJs
 

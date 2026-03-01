@@ -7,42 +7,27 @@ Set WindowBar Colorful
 Set BorderRadius 10
 
 Hide
-Type "export AGENTS_DRY_RUN=true"
-Enter
 Type "./bin/swarm"
 Enter
-Sleep 2s
+Sleep 1s
 Show
 
 Type "Hello, what can you do?"
 Sleep 500ms
 Enter
-Sleep 5s
+Sleep 4s
 
-Ctrl+L
-Sleep 1s
+Type "How many Go files are in this repository?"
+Sleep 500ms
+Enter
+Sleep 20s
+
+Type "! ls src"
+Sleep 500ms
+Enter
+Sleep 3s
 
 Type "/skills"
 Sleep 500ms
 Enter
-Sleep 5s
-
-Type "! ls -F"
-Sleep 500ms
-Enter
-Sleep 5s
-
-Type "!"
-Sleep 500ms
-Enter
-Sleep 2s
-
-Type "Build and test this repository"
-Sleep 500ms
-Enter
-Sleep 10s
-
-Type "Now deploy it to production"
-Sleep 500ms
-Enter
-Sleep 15s
+Sleep 4s

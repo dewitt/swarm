@@ -28,8 +28,8 @@ following steps:
 ```text
 > deploy this agent to AWS Lambda
 
-Agent: I see this is a Python LangGraph agent. You don't currently have a GitHub Action configured for AWS Lambda deployment. 
-I have generated a standard serverless deployment workflow. 
+Agent: I see this is a Python LangGraph agent. You don't currently have a GitHub Action configured for AWS Lambda deployment.
+I have generated a standard serverless deployment workflow.
 Would you like me to commit these changes and push to trigger the deployment? (Y/n)
 ```
 

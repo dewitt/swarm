@@ -30,15 +30,61 @@ import (
 	"gorm.io/gorm/logger"
 )
 
-type ListFilesArgs struct { Dir string `json:"dir"` }
-type ListFilesResult struct { Files []string `json:"files"`; Error string `json:"error,omitempty"` }
+type ListFilesArgs struct {
+	Dir       string `json:"dir"`
+	Recursive bool   `json:"recursive,omitempty"`
+}
+type ListFilesResult struct {
+	Files []string `json:"files"`
+	Error string   `json:"error,omitempty"`
+}
+
 func listLocalFiles(ctx tool.Context, args ListFilesArgs) (ListFilesResult, error) {
-	if args.Dir == "" { args.Dir = "." }
-	entries, err := os.ReadDir(args.Dir); if err != nil { return ListFilesResult{Error: err.Error()}, nil }
-	var files []string
-	for _, entry := range entries {
-		name := entry.Name(); if entry.IsDir() { name += "/" }; files = append(files, name)
+	if args.Dir == "" {
+		args.Dir = "."
 	}
+	var files []string
+
+	if args.Recursive {
+		err := filepath.Walk(args.Dir, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return nil // Skip errors (like permission denied)
+			}
+			// Skip hidden directories like .git
+			if info.IsDir() && strings.HasPrefix(info.Name(), ".") && info.Name() != "." {
+				return filepath.SkipDir
+			}
+			if path != args.Dir {
+				name := strings.TrimPrefix(path, args.Dir+"/")
+				if info.IsDir() {
+					name += "/"
+				}
+				files = append(files, name)
+			}
+			return nil
+		})
+		if err != nil {
+			return ListFilesResult{Error: err.Error()}, nil
+		}
+	} else {
+		entries, err := os.ReadDir(args.Dir)
+		if err != nil {
+			return ListFilesResult{Error: err.Error()}, nil
+		}
+		for _, entry := range entries {
+			name := entry.Name()
+			if entry.IsDir() {
+				name += "/"
+			}
+			files = append(files, name)
+		}
+	}
+	
+	// Limit to prevent context window explosion
+	if len(files) > 1000 {
+		files = append(files[:1000], fmt.Sprintf("... and %d more. Use grep_search for specific queries.", len(files)-1000))
+	}
+	
 	return ListFilesResult{Files: files}, nil
 }
 

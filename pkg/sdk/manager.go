@@ -315,6 +315,9 @@ RULES:
 
 func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan ChatEvent, error) {
 	out := make(chan ChatEvent, 1000)
+	// Record the user's initial prompt in the persistent session
+	m.appendEvent(ctx, "user", prompt)
+
 	go func() {
 		defer close(out)
 		swarmStartTime := time.Now()
@@ -395,6 +398,8 @@ func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan ChatEv
 		// 3. Execution
 		if graph.ImmediateResponse != "" {
 			if m.runOutputAgent(ctx, out, o, "Swarm Agent", graph.ImmediateResponse) {
+				// Record the immediate response in the persistent session
+				m.appendEvent(ctx, "model", graph.ImmediateResponse)
 				out <- ChatEvent{Type: ChatEventFinalResponse, Agent: "Swarm Agent", Content: graph.ImmediateResponse}
 			}
 		} else {
@@ -512,8 +517,10 @@ func (m *defaultManager) executeTask(ctx context.Context, out chan<- ChatEvent, 
 		return "Agent not found", false
 	}
 
-	// Use the persistent session service and the manager's current session ID
-	// this ensures that the agent has access to the conversation history.
+	// Use a unique session ID for this specific task to prevent turn-order corruption
+	// in the shared session service, especially during parallel execution.
+	taskSessionID := fmt.Sprintf("%s/%s", m.sessionID, task.ID)
+	
 	taskRunner, _ := runner.New(runner.Config{
 		AppName:        "swarm-cli",
 		Agent:          targetAgent,
@@ -570,13 +577,30 @@ func (m *defaultManager) executeTask(ctx context.Context, out chan<- ChatEvent, 
 		}
 	}
 
+	// Fetch and inject global conversation history
+	var historyParts []string
+	if sessResp, err := m.sessionSvc.Get(ctx, &session.GetRequest{AppName: "swarm-cli", UserID: m.userID, SessionID: m.sessionID}); err == nil {
+		for ev := range sessResp.Session.Events().All() {
+			if ev.Content != nil {
+				for _, part := range ev.Content.Parts {
+					if part.Text != "" {
+						historyParts = append(historyParts, fmt.Sprintf("[%s]: %s", ev.Author, part.Text))
+					}
+				}
+			}
+		}
+	}
+
 	promptStr := task.Prompt
+	if len(historyParts) > 0 {
+		promptStr = "### CONVERSATION HISTORY\n" + strings.Join(historyParts, "\n") + "\n\n" + promptStr
+	}
 	if len(contextParts) > 0 {
 		promptStr = promptStr + "\n\n### CONTEXT FROM PREVIOUS TASKS\n" + strings.Join(contextParts, "\n\n")
 	}
 
-	// We use the same sessionID for all agents in the swarm so they share context
-	events := taskRunner.Run(taskCtx, m.userID, m.sessionID, genai.NewContentFromText(promptStr, genai.Role("user")), agent.RunConfig{})
+	// Execute with the unique taskSessionID
+	events := taskRunner.Run(taskCtx, m.userID, taskSessionID, genai.NewContentFromText(promptStr, genai.Role("user")), agent.RunConfig{})
 
 	var full strings.Builder
 	var needsReplan bool
@@ -646,6 +670,8 @@ func (m *defaultManager) executeTask(ctx context.Context, out chan<- ChatEvent, 
 
 	// Output Sanity Check (Output Agent)
 	if m.runOutputAgent(ctx, out, o, targetAgent.Name(), finalText) {
+		// Record the response in the main conversation history
+		m.appendEvent(ctx, "model", fmt.Sprintf("[%s]: %s", targetAgent.Name(), finalText))
 		out <- ChatEvent{Type: ChatEventFinalResponse, Agent: targetAgent.Name(), TaskID: task.ID, Content: finalText}
 		return finalText, needsReplan
 	}
@@ -655,6 +681,24 @@ func (m *defaultManager) executeTask(ctx context.Context, out chan<- ChatEvent, 
 }
 
 
+
+func (m *defaultManager) appendEvent(ctx context.Context, author, content string) {
+	if m.sessionSvc == nil {
+		return
+	}
+	// Fetch the actual session object to fulfill the interface
+	resp, err := m.sessionSvc.Get(ctx, &session.GetRequest{AppName: "swarm-cli", UserID: m.userID, SessionID: m.sessionID})
+	if err != nil {
+		return
+	}
+	_ = m.sessionSvc.AppendEvent(ctx, resp.Session, &session.Event{
+		Timestamp: time.Now(),
+		Author:    author,
+		LLMResponse: model.LLMResponse{
+			Content: genai.NewContentFromText(content, genai.Role(author)),
+		},
+	})
+}
 
 func (m *defaultManager) runOutputAgent(ctx context.Context, out chan<- ChatEvent, o *Orchestrator, agentName, content string) bool {
 	coaStart := time.Now()

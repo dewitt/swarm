@@ -376,7 +376,7 @@ func NewManager(cfg ...ManagerConfig) (AgentManager, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to create pro model: %w", err)
 		}
-		fastModel, err = gemini.NewModel(ctx, "gemini-2.5-flash-8b", clientConfig)
+		fastModel, err = gemini.NewModel(ctx, "gemini-2.5-flash", clientConfig)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create fast model: %w", err)
 		}

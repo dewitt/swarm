@@ -1922,6 +1922,12 @@ func getAgentIcon(name string) string {
 		return "⚙" // Gear (1-cell reliable)
 	case strings.Contains(name, "router"):
 		return "◈" // Diamond (1-cell reliable)
+	case strings.Contains(name, "architect"):
+		return "🏛" // Temple/Architect
+	case strings.Contains(name, "cia"):
+		return "⚙" // Gear
+	case strings.Contains(name, "coa"):
+		return "🛡" // Shield
 	case strings.Contains(name, "investigator") || strings.Contains(name, "codebase"):
 		return "🔎" // Magnifying glass (usually 2-cell)
 	default:

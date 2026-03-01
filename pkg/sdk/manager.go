@@ -808,6 +808,8 @@ Available agents: %s
 
 TRIVIAL QUERIES: If the user's request is trivial (e.g., "Hello", "How are you?", or simple calculations like "2+2") and does not require specialized agent work, DO NOT generate tasks. Instead, provide the answer in the "immediate_response" field.
 
+COMPLEXITY CHECK: If the request is highly complex (e.g., "Build a full stack app", "Refactor the entire core library"), and you are currently running as a FAST model, output "DEEP_PLAN_REQUIRED" as your entire response.
+
 You MUST output ONLY valid JSON matching this schema:
 {
   "tasks": [
@@ -823,7 +825,8 @@ You MUST output ONLY valid JSON matching this schema:
 }
 Do not wrap the JSON in Markdown code blocks. Just output the raw JSON.`, strings.Join(m.subAgentNames, ", "))
 
-	respIter := m.proModel.GenerateContent(ctx, &model.LLMRequest{
+	// 1. First pass: Try the FAST model
+	respIter := m.fastModel.GenerateContent(ctx, &model.LLMRequest{
 		Contents: []*genai.Content{genai.NewContentFromText(prompt, genai.Role("user"))},
 		Config: &genai.GenerateContentConfig{
 			SystemInstruction: genai.NewContentFromText(systemPrompt, genai.Role("system")),
@@ -841,7 +844,29 @@ Do not wrap the JSON in Markdown code blocks. Just output the raw JSON.`, string
 	}
 
 	jsonStr = strings.TrimSpace(jsonStr)
-	// Strip markdown formatting if the model ignored the instruction
+
+	// 2. Complexity Check: If FAST model says it's too complex, fallback to PRO
+	if jsonStr == "DEEP_PLAN_REQUIRED" {
+		respIter = m.proModel.GenerateContent(ctx, &model.LLMRequest{
+			Contents: []*genai.Content{genai.NewContentFromText(prompt, genai.Role("user"))},
+			Config: &genai.GenerateContentConfig{
+				SystemInstruction: genai.NewContentFromText(systemPrompt, genai.Role("system")),
+			},
+		}, false)
+
+		jsonStr = ""
+		for resp, err := range respIter {
+			if err != nil {
+				return nil, err
+			}
+			if resp.Content != nil && len(resp.Content.Parts) > 0 {
+				jsonStr += resp.Content.Parts[0].Text
+			}
+		}
+		jsonStr = strings.TrimSpace(jsonStr)
+	}
+
+	// Clean up markdown code blocks if the model ignored instructions
 	if strings.HasPrefix(jsonStr, "```json") {
 		jsonStr = strings.TrimPrefix(jsonStr, "```json")
 		jsonStr = strings.TrimSuffix(jsonStr, "```")
@@ -857,7 +882,7 @@ Do not wrap the JSON in Markdown code blocks. Just output the raw JSON.`, string
 }
 
 func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan ChatEvent, error) {
-	out := make(chan ChatEvent)
+	out := make(chan ChatEvent, 1000) // Large buffer to prevent blocking the swarm
 
 	go func() {
 		defer close(out)
@@ -908,12 +933,15 @@ func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan ChatEv
 				ciaText := ciaResp.Content.Parts[0].Text
 				if strings.HasPrefix(ciaText, "RESPONSE: ") {
 					directResp := strings.TrimPrefix(ciaText, "RESPONSE: ")
-					m.runCOA(ctx, out, "CIA", directResp)
-					if m.debugMode {
-						out <- ChatEvent{Type: ChatEventDebug, Agent: "Orchestrator", Content: fmt.Sprintf("Full Swarm Trajectory: CIA Direct Response. Duration: %s", time.Since(swarmStartTime))}
+					if m.runCOA(ctx, out, "CIA", directResp) {
+						if m.debugMode {
+							out <- ChatEvent{Type: ChatEventDebug, Agent: "Orchestrator", Content: fmt.Sprintf("Full Swarm Trajectory: CIA Direct Response. Duration: %s", time.Since(swarmStartTime))}
+						}
+						out <- ChatEvent{Type: ChatEventFinalResponse, Agent: "CIA", Content: directResp}
+						return
 					}
-					out <- ChatEvent{Type: ChatEventFinalResponse, Agent: "CIA", Content: directResp}
-					return
+					// If rejected, fall through to Architect planning
+					out <- ChatEvent{Type: ChatEventThought, Agent: "Orchestrator", Content: "CIA direct response rejected by COA. Falling back to swarm architect."}
 				}
 				if strings.HasPrefix(ciaText, "ROUTE TO: ") {
 					target := strings.TrimPrefix(ciaText, "ROUTE TO: ")
@@ -948,12 +976,15 @@ func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan ChatEv
 		}
 
 		if graph.ImmediateResponse != "" {
-			m.runCOA(ctx, out, "Architect", graph.ImmediateResponse)
-			if m.debugMode {
-				out <- ChatEvent{Type: ChatEventDebug, Agent: "Orchestrator", Content: fmt.Sprintf("Full Swarm Trajectory: Immediate Response (Trivial Plan). Duration: %s", time.Since(swarmStartTime))}
+			if m.runCOA(ctx, out, "Architect", graph.ImmediateResponse) {
+				if m.debugMode {
+					out <- ChatEvent{Type: ChatEventDebug, Agent: "Orchestrator", Content: fmt.Sprintf("Full Swarm Trajectory: Immediate Response (Trivial Plan). Duration: %s", time.Since(swarmStartTime))}
+				}
+				out <- ChatEvent{Type: ChatEventFinalResponse, Agent: "Architect", Content: graph.ImmediateResponse}
+				return
 			}
-			out <- ChatEvent{Type: ChatEventFinalResponse, Agent: "Architect", Content: graph.ImmediateResponse}
-			return
+			// If bad response, fall through to full swarm planning
+			out <- ChatEvent{Type: ChatEventThought, Agent: "Orchestrator", Content: "Architect direct response rejected by COA. Falling back to full task planning."}
 		}
 
 		// --- 3. Execute the Reactive Task Pool ---
@@ -1144,12 +1175,14 @@ Otherwise, output: "OK".`, targetAgent.Name(), task.Name, strings.Join(history, 
 							finalText := fullResponse.String()
 							
 							// --- Chat Output Agent (COA) Damage Control ---
-							m.runCOA(ctx, out, targetAgent.Name(), finalText)
-							
-							// For now, we assume if COA found a fix, it emitted a thought.
-							// In a future pass we can make runCOA return a 'rejected' bool.
-							out <- ChatEvent{Type: ChatEventFinalResponse, Agent: targetAgent.Name(), Content: finalText}
-							taskResult = finalText
+							if m.runCOA(ctx, out, targetAgent.Name(), finalText) {
+								out <- ChatEvent{Type: ChatEventFinalResponse, Agent: targetAgent.Name(), Content: finalText}
+								taskResult = finalText
+							} else {
+								// BLOCK the response and trigger replan
+								needsReplan = true
+								taskResult = "COA rejected response due to sanity check failure. Needs retry/replan."
+							}
 						}
 					}
 
@@ -1207,7 +1240,7 @@ Otherwise, output: "OK".`, targetAgent.Name(), task.Name, strings.Join(history, 
 	return out, o, nil
 }
 
-func (m *defaultManager) runCOA(ctx context.Context, out chan<- ChatEvent, agentName, content string) {
+func (m *defaultManager) runCOA(ctx context.Context, out chan<- ChatEvent, agentName, content string) bool {
 	coaPrompt := fmt.Sprintf(`You are the Chat Output Agent (COA).
 Sanity check the following response from a swarm agent to the user.
 Goal: Ensure the response is helpful, accurate, and respects the user's time.
@@ -1222,15 +1255,18 @@ Otherwise, output: "OK".`, content)
 		Contents: []*genai.Content{genai.NewContentFromText(coaPrompt, genai.Role("user"))},
 	}, false)
 
+	approved := true
 	for coaResp, err := range coaRespIter {
 		if err == nil && coaResp.Content != nil && len(coaResp.Content.Parts) > 0 {
 			text := coaResp.Content.Parts[0].Text
 			if strings.HasPrefix(text, "FIX:") {
 				out <- ChatEvent{Type: ChatEventThought, Agent: "COA", Content: fmt.Sprintf("Sanity check for %s failed: %s", agentName, strings.TrimPrefix(text, "FIX:"))}
+				approved = false
 			}
 		}
 		break
 	}
+	return approved
 }
 
 func (m *defaultManager) Rewind(n int) error {

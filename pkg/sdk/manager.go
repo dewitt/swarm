@@ -884,6 +884,8 @@ func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan ChatEv
 			prompt = strings.Join(contextDocs, "\n\n") + "\n\nUser Prompt:\n" + prompt
 		}
 
+		swarmStartTime := time.Now()
+
 		// --- 1. Chat Input Agent (CIA) Pre-processing ---
 		out <- ChatEvent{Type: ChatEventThought, Agent: "CIA", Content: "Classifying intent…"}
 		ciaRespIter := m.fastModel.GenerateContent(ctx, &model.LLMRequest{
@@ -960,7 +962,7 @@ Response: %s`, graph.ImmediateResponse)
 
 			if !badResponse {
 				if m.debugMode {
-					out <- ChatEvent{Type: ChatEventDebug, Agent: "Orchestrator", Content: "Full Swarm Trajectory: Immediate Response (Trivial Plan)."}
+					out <- ChatEvent{Type: ChatEventDebug, Agent: "Orchestrator", Content: fmt.Sprintf("Full Swarm Trajectory: Immediate Response (Trivial Plan). Duration: %s", time.Since(swarmStartTime))}
 				}
 				out <- ChatEvent{Type: ChatEventFinalResponse, Agent: "Architect", Content: graph.ImmediateResponse}
 				return
@@ -987,9 +989,9 @@ Response: %s`, graph.ImmediateResponse)
 
 		// --- 4. Trajectory Debugging ---
 		if m.debugMode {
-			results := orchestrator.GetContext()
-			b, _ := json.MarshalIndent(results, "", "  ")
-			out <- ChatEvent{Type: ChatEventDebug, Agent: "Orchestrator", Content: "Full Swarm Trajectory (Results):\n" + string(b)}
+			traj := orchestrator.GetTrajectory()
+			b, _ := json.MarshalIndent(traj, "", "  ")
+			out <- ChatEvent{Type: ChatEventDebug, Agent: "Orchestrator", Content: "Full Swarm Trajectory:\n" + string(b)}
 		}
 	}()
 

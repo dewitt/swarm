@@ -2,6 +2,7 @@ package sdk
 
 import (
 	"sync"
+	"time"
 )
 
 // TaskStatus represents the current state of a task.
@@ -24,6 +25,9 @@ type Task struct {
 	Agent        string   `json:"agent"`        // The specific agent/skill capable of this task
 	Prompt       string   `json:"prompt"`       // The prompt or instructions for the agent
 	Dependencies []string `json:"dependencies"` // IDs of tasks that must complete before this one starts
+	StartTime    string   `json:"start_time,omitempty"`
+	EndTime      string   `json:"end_time,omitempty"`
+	Duration     string   `json:"duration,omitempty"`
 }
 
 // ExecutionGraph represents a snapshot of the tasks to be executed.
@@ -34,18 +38,20 @@ type ExecutionGraph struct {
 
 // Orchestrator coordinates the reactive execution of a dynamic Task Pool.
 type Orchestrator struct {
-	mu     sync.RWMutex
-	tasks  map[string]Task
-	status map[string]TaskStatus
-	result map[string]string // Stores the "final response" of completed tasks
+	mu             sync.RWMutex
+	tasks          map[string]Task
+	status         map[string]TaskStatus
+	result         map[string]string // Stores the "final response" of completed tasks
+	totalStartTime time.Time
 }
 
 // NewOrchestrator creates a new Orchestrator for a given initial seed graph.
 func NewOrchestrator(g *ExecutionGraph) *Orchestrator {
 	o := &Orchestrator{
-		tasks:  make(map[string]Task),
-		status: make(map[string]TaskStatus),
-		result: make(map[string]string),
+		tasks:          make(map[string]Task),
+		status:         make(map[string]TaskStatus),
+		result:         make(map[string]string),
+		totalStartTime: time.Now(),
 	}
 	if g != nil {
 		o.AddTasks(g.Tasks...)
@@ -96,6 +102,9 @@ func (o *Orchestrator) MarkActive(taskID string) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	o.status[taskID] = TaskStatusActive
+	t := o.tasks[taskID]
+	t.StartTime = time.Now().Format(time.RFC3339Nano)
+	o.tasks[taskID] = t
 }
 
 // MarkComplete marks a task as successfully completed and stores its result.
@@ -104,6 +113,15 @@ func (o *Orchestrator) MarkComplete(taskID string, result string) {
 	defer o.mu.Unlock()
 	o.status[taskID] = TaskStatusComplete
 	o.result[taskID] = result
+	
+	t := o.tasks[taskID]
+	now := time.Now()
+	t.EndTime = now.Format(time.RFC3339Nano)
+	if t.StartTime != "" {
+		start, _ := time.Parse(time.RFC3339Nano, t.StartTime)
+		t.Duration = now.Sub(start).String()
+	}
+	o.tasks[taskID] = t
 }
 
 // MarkFailed marks a task as failed.
@@ -143,4 +161,25 @@ func (o *Orchestrator) GetContext() map[string]string {
 		ctx[k] = v
 	}
 	return ctx
+}
+
+type Trajectory struct {
+	Tasks         []Task `json:"tasks"`
+	TotalDuration string `json:"total_duration"`
+}
+
+// GetTrajectory returns a full timed trajectory of the swarm execution.
+func (o *Orchestrator) GetTrajectory() Trajectory {
+	o.mu.RLock()
+	defer o.mu.RUnlock()
+	
+	var tasks []Task
+	for _, t := range o.tasks {
+		tasks = append(tasks, t)
+	}
+	
+	return Trajectory{
+		Tasks:         tasks,
+		TotalDuration: time.Since(o.totalStartTime).String(),
+	}
 }

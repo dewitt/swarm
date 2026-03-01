@@ -795,6 +795,7 @@ func (m *defaultSwarm) executeSpan(ctx context.Context, out chan<- ChatEvent, o 
 			out <- ChatEvent{Type: ChatEventError, Agent: targetAgent.Name(), SpanID: span.ID, Content: err.Error()}
 			break
 		}
+		var thoughtBroadcasted bool
 		if event.Content != nil {
 			for _, part := range event.Content.Parts {
 				if part.FunctionCall != nil {
@@ -835,7 +836,12 @@ func (m *defaultSwarm) executeSpan(ctx context.Context, out chan<- ChatEvent, o 
 						o.AddSpans(t) // Update the span in the engine
 					}
 				}
-				if part.Text != "" && !part.Thought {
+				if part.Thought {
+					if !thoughtBroadcasted {
+						out <- ChatEvent{Type: ChatEventThought, Agent: targetAgent.Name(), SpanID: span.ID, Content: "Thinking deeply..."}
+						thoughtBroadcasted = true
+					}
+				} else if part.Text != "" {
 					full.WriteString(part.Text)
 				}
 			}

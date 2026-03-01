@@ -99,6 +99,19 @@ When run without arguments, it launches a persistent, interactive terminal sessi
 					if trajectoryFlag {
 						fmt.Println(event.Content)
 					}
+				} else if !trajectoryFlag {
+					switch event.Type {
+					case sdk.ChatEventThought:
+						fmt.Fprintf(os.Stderr, "[%s] 🤔 %s\n", event.Agent, event.Content)
+					case sdk.ChatEventToolCall:
+						fmt.Fprintf(os.Stderr, "[%s] 🛠️  Executing: %s\n", event.Agent, event.Content)
+					case sdk.ChatEventHandoff:
+						fmt.Fprintf(os.Stderr, "[%s] ➡️  Delegating to: %s\n", event.Agent, event.Content)
+					case sdk.ChatEventObserver:
+						fmt.Fprintf(os.Stderr, "[%s] 👀 %s\n", event.Agent, event.Content)
+					case sdk.ChatEventReplan:
+						fmt.Fprintf(os.Stderr, "[%s] 🔄 %s\n", event.Agent, event.Content)
+					}
 				}
 			}
 

@@ -31,6 +31,11 @@ Sleep 500ms
 Enter
 Sleep 3s
 
+Type "!"
+Sleep 500ms
+Enter
+Sleep 2s
+
 Type "/skills"
 Sleep 500ms
 Enter

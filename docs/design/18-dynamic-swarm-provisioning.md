@@ -1,6 +1,6 @@
 # Dynamic Swarm Provisioning & Reactive Orchestration
 
-## The Vision: The Reactive "Engineering Manager"
+## The Vision: The Reactive Swarm Operator
 
 The `swarm` project rejects the idea of a static execution plan. In complex
 agentic systems, **"no plan survives first contact with the enemy."**

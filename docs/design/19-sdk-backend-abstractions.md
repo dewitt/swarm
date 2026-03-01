@@ -7,10 +7,9 @@ core `swarm` SDK is designed around a set of rigorous, decoupled abstractions.
 This document defines the primary interfaces and data structures that power
 the framework-agnostic Swarm backend.
 
-By adhering to these abstractions, we ensure that the "Engineering Manager"
-paradigm remains a property of the _core SDK_, allowing the same orchestration
-logic to be seamlessly embedded into web panels, VS Code extensions, or Slack
-bots.
+By adhering to these abstractions, we ensure that the Swarm Operator paradigm
+remains a property of the _core SDK_, allowing the same orchestration logic to
+be seamlessly embedded into web panels, VS Code extensions, or Slack bots.
 
 ## 1. The Swarm Interface
 
@@ -90,8 +89,8 @@ native `Tools` it requires access to.
 At runtime, the `Swarm` scans the skills directories, reads the markdown
 instructions, binds the requested tools from the `toolRegistry`, and
 dynamically compiles them into native ADK `Agent` instances. This enforces the
-"Thin Software, Fat Models" philosophy—behavior is defined in plain text
-models rather than Go code.
+Thin Software, Fat Models philosophy—behavior is defined in plain text models
+rather than Go code.
 
 ## 5. Event Stream (`ObservableEvent`)
 

@@ -32,13 +32,13 @@ specialized context, debate, and iterative verification loops.
 
 - The system must natively assume and support multi-agent collaboration
   (Swarms, Supervisor-Worker patterns, Debate teams).
-- Every problem should be approached by asking: *"Can we split this task among
-  specialized sub-agents?"*
+- Every problem should be approached by asking: _"Can we split this task among
+  specialized sub-agents?"_
 
 ## 3. Zero-HITL (Human-In-The-Loop) for Verification
 
 Agents must respect the human developer's time and attention.
-Human-In-The-Loop should *only* be required for permissions (e.g., "Can I push
+Human-In-The-Loop should _only_ be required for permissions (e.g., "Can I push
 to `main`?") or creative opinions (e.g., "Do you like this UI layout?").
 
 - **Mechanical Verification is Autonomous:** An agent must never ask a human
@@ -102,75 +102,96 @@ different tools in the ecosystem.
 ## 8. Ubiquitous Mediation
 
 We believe that, at the limit, every interaction—whether human-to-computer,
-computer-to-computer, or computer-to-human—will be mediated by an
-intelligent, autonomous agent acting on our behalf.
+computer-to-computer, or computer-to-human—will be mediated by an intelligent,
+autonomous agent acting on our behalf.
 
 - **The Agent as the Interface:** The user no longer interacts directly with
   raw tools or rigid UIs. Instead, they interact with a coordinating
   intelligence that translates intent into action.
-- **Invisible Mediation (Input & Output Agents):** Every interaction is mediated 
-  by an **Input Agent** (preprocessing) and an **Output Agent** (sanity checking).
-  These agents are invisible to the user in the conversation but appear in 
-  system trajectories and the Agent Panel.
-- **Intelligent Output Synthesis:** Just as inputs are mediated, computer-to-human
-  outputs should be synthesized by an agent to ensure they are communicated in
-  the most effective format, tone, and language for the specific user and
-  context (e.g., real-time translation or level-of-detail adjustment).
+- **Invisible Mediation (Input & Output Agents):** Every interaction is
+  mediated by an **Input Agent** (preprocessing) and an **Output Agent**
+  (sanity checking). These agents are invisible to the user in the
+  conversation but appear in system trajectories and the Agent Panel.
+- **Intelligent Output Synthesis:** Just as inputs are mediated,
+  computer-to-human outputs should be synthesized by an agent to ensure they
+  are communicated in the most effective format, tone, and language for the
+  specific user and context (e.g., real-time translation or level-of-detail
+  adjustment).
 - **Orchestration by Default:** We assume that every component of a system
   will eventually be accessible through a mediating agentic layer, reducing
   complex technical workflows to high-level goal-setting.
 
 ## 9. Dynamic Replanning (No Plan Survives First Contact)
 
-We recognize that "no plan survives first contact with the enemy." In the real world, almost nothing agentic will work as expected on the first try.
-- **Dynamic Graphs are Essential:** Execution nodes must be able to dynamically make new subplans of their own when encountering obstacles.
-- **Node Autonomy:** Every node in the swarm (Agent, Tool, Remote execution) is responsible for doing its best to fulfill the request correctly and efficiently. We trust nodes to handle their own next steps—whether that's responding directly or orchestrating a subgraph—using the **Planning Agent** as an optional service for help.
-- **Upward Feedback:** Agents must be able to provide hints, context, and feedback back up the chain to the engine to trigger replanning, rather than simply failing and halting execution.
+We recognize that "no plan survives first contact with the enemy." In the real
+world, almost nothing agentic will work as expected on the first try.
+
+- **Dynamic Graphs are Essential:** Execution nodes must be able to
+  dynamically make new subplans of their own when encountering obstacles.
+- **Node Autonomy:** Every node in the swarm (Agent, Tool, Remote execution)
+  is responsible for doing its best to fulfill the request correctly and
+  efficiently. We trust nodes to handle their own next steps—whether that's
+  responding directly or orchestrating a subgraph—using the **Planning Agent**
+  as an optional service for help.
+- **Upward Feedback:** Agents must be able to provide hints, context, and
+  feedback back up the chain to the engine to trigger replanning, rather than
+  simply failing and halting execution.
 
 ## 10. The Byzantine System & Checks and Balances
 
-We accept that a complex swarm of agents operating concurrently is a byzantine system, and that is a feature, not a bug.
-- **Observer Agents:** We employ observer agents that act as checks and balances. They constantly monitor the execution graph and identify when parts of the system are going wrong or deviating from the goal.
-- **Trust but Verify:** While nodes are autonomous, they are never unsupervised. Continuous observation ensures the byzantine swarm remains aligned with the user's intent.
+We accept that a complex swarm of agents operating concurrently is a byzantine
+system, and that is a feature, not a bug.
+
+- **Observer Agents:** We employ observer agents that act as checks and
+  balances. They constantly monitor the execution graph and identify when
+  parts of the system are going wrong or deviating from the goal.
+- **Trust but Verify:** While nodes are autonomous, they are never
+  unsupervised. Continuous observation ensures the byzantine swarm remains
+  aligned with the user's intent.
 
 ## 11. Fall Back on the Smartest Models
 
-When the system is in doubt, stuck in a loop, or facing ambiguous errors, we do not rely on rigid heuristics.
-- **Wisdom of the Frontier:** We always fall back on the wisdom of our smartest models. Because these models are getting smarter every day, routing complex unresolvable states back to them ensures the system can self-heal and adapt to novel edge cases without requiring brittle custom code.
+When the system is in doubt, stuck in a loop, or facing ambiguous errors, we
+do not rely on rigid heuristics.
 
-## The "Engineering Manager" Paradigm
+- **Wisdom of the Frontier:** We always fall back on the wisdom of our
+  smartest models. Because these models are getting smarter every day, routing
+  complex unresolvable states back to them ensures the system can self-heal
+  and adapt to novel edge cases without requiring brittle custom code.
+
+## The Swarm Operator Paradigm
 
 The ultimate goal of `swarm` is to abstract away the mechanics of agent
-orchestration. A user should be able to type `$ swarm` and give an
-arbitrarily complex directive (e.g., *"Migrate our billing service from Python
-to Go"*).
+orchestration. A user should be able to type `$ swarm` and give an arbitrarily
+complex directive (e.g., _"Migrate our billing service from Python to Go"_).
 
 The system must be intelligent enough to autonomously decompose the task,
 dynamically provision the exact number of specialized agents required (one or
-one hundred), and coordinate their parallel efforts to completion. 
+one hundred), and coordinate their parallel efforts to completion.
 
-The **Swarm Agent** is the primary realization of this mission—it holds the instructions that define the characteristics, personality, and foundational rules of the entire application.
+The **Swarm Agent** is the primary realization of this mission—it holds the
+instructions that define the characteristics, personality, and foundational
+rules of the entire application.
 
 The ultimate goal of `swarm` is to abstract away the mechanics of agent
-orchestration. A user should be able to type `$ swarm` and give an
-arbitrarily complex directive (e.g., *"Migrate our billing service from Python
-to Go"*).
+orchestration. A user should be able to type `$ swarm` and give an arbitrarily
+complex directive (e.g., _"Migrate our billing service from Python to Go"_).
 
 The system must be intelligent enough to autonomously decompose the task,
 dynamically provision the exact number of specialized agents required (one or
 one hundred), and coordinate their parallel efforts to completion. In this
 paradigm, the user ceases to be a pair-programmer and instead assumes the role
-of an Engineering Manager overseeing a highly skilled, infinitely scalable
-virtual workforce. The CLI's UI must reflect this shift by providing
-high-level observability and steering mechanisms (Agent Panel), rather
-than just a linear chat log.
+of a Swarm Operator overseeing a highly skilled, infinitely scalable virtual
+workforce. The CLI's UI must reflect this shift by providing high-level
+observability and steering mechanisms (Agent Panel), rather than just a linear
+chat log.
 
 ### UI is Just a Consumer
 
-Crucially, the "Engineering Manager" paradigm is a property of the *core SDK*,
-not the Terminal UI. The complex logic of provisioning sub-agents, routing
-tasks, and generating observer telemetry must be strictly encapsulated within
-the embeddable Go library. The TUI is simply a thin presentation layer that
+Crucially, the Swarm Operator paradigm is a property of the _core SDK_, not
+the Terminal UI. The complex logic of provisioning sub-agents, routing tasks,
+and generating observer telemetry must be strictly encapsulated within the
+embeddable Go library. The TUI is simply a thin presentation layer that
 consumes these standardized events. This ensures that the same powerful swarm
 orchestration can be seamlessly embedded into web-based Agent Panels, VS Code
 extensions, or Slack bots without rewriting any business logic.

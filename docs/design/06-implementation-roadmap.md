@@ -93,12 +93,12 @@ transparently on a single user request.
 
 ## Phase 7: Dynamic Swarm Provisioning & Agent Panel
 
-**Goal:** Realize the "Engineering Manager Paradigm" where the CLI
-autonomously decomposes complex tasks, provisions $N$ agents to execute them
-in parallel, and provides an Agent Panel to monitor them.
+**Goal:** Realize the Swarm Operator Paradigm where the CLI autonomously
+decomposes complex tasks, provisions $N$ agents to execute them in parallel,
+and provides an Agent Panel to monitor them.
 
 - [x] **Task 7.1:** Implement the "Agent Panel" Bubble Tea layout component,
-      creating a visual grid of active "Agent Cards" above the main chat
+      creating a visual grid of active Agent Cards above the main chat
       viewport.
 - [x] **Task 7.2:** Refactor the SDK Event Bus to stream live tool telemetry
       (e.g., streaming `stdout` from `bash_execute`) directly to the Agent

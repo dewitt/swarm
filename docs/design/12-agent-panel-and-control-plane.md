@@ -84,8 +84,7 @@ A foundational principle of the `swarm` project is the strict separation
 between the core SDK (`pkg/sdk/`) and the Presentation Layer (`cmd/swarm/`).
 This separation must be rigorously maintained as we build out the Agent Panel.
 
-The "Engineering Manager" paradigm is a business logic concept, not just a UI
-trick.
+The Swarm Operator paradigm is a business logic concept, not just a UI trick.
 
 - **The SDK Emits Standardized Events:** The core SDK must handle all the
   complex multi-agent orchestration, dynamic provisioning, and observer
@@ -183,6 +182,6 @@ single LLM call. It must autonomously:
    chaotic concurrency, synthesizing the activity via Observer Agents so the
    user feels completely in control.
 
-In this paradigm, the user is no longer a pair programmer; they are an
-Engineering Manager. The CLI is their entire engineering department,
-dynamically scaling its workforce to meet the exact complexity of the request.
+In this paradigm, the user is no longer a pair programmer; they are an Swarm
+Operator. The CLI is their entire engineering department, dynamically scaling
+its workforce to meet the exact complexity of the request.

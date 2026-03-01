@@ -85,5 +85,5 @@ what populated the `Content` of the Agent Card.
    event so the UI can construct tool breakdowns.
 3. **The `AgentPanel` Bubble Tea Grid:** We will build a new Bubble Tea model
    component in `cmd/swarm/interactive.go` that explicitly reads these
-   structured events and updates its internal Go Map of active "Agent Cards",
+   structured events and updates its internal Go Map of active Agent Cards,
    re-rendering the terminal layout on every tick.

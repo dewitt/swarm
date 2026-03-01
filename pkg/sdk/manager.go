@@ -423,7 +423,7 @@ func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan ChatEv
 			traj := o.GetTrajectory()
 			traj.TotalDuration = time.Since(swarmStartTime).String()
 			b, _ := json.MarshalIndent(traj, "", "  ")
-			out <- ChatEvent{Type: ChatEventDebug, Agent: "Orchestrator", Content: string(b)}
+			out <- ChatEvent{Type: ChatEventDebug, Agent: "Swarm", Content: string(b)}
 		}
 	}()
 	return out, nil

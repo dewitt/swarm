@@ -1037,7 +1037,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			newA, agentCmd = m.ensureAgent(newAgentName)
 			newA.update("active", "Analyzing context…")
 
-			m.activeAgent = newAgentName
+			// Sync active agent
+			if !isMediationAgent(newAgentName) {
+				m.activeAgent = newAgentName
+			}
 			m.statusMsg = ""
 			m.updateViewport()
 			return m, tea.Batch(listenForStream(msg.ch), agentCmd)
@@ -1064,6 +1067,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a, cmd := m.ensureAgent(targetAgentName)
 			agentCmd = cmd
 			a.update("active", "Tool: "+toolName)
+
+			// Sync active agent
+			if targetAgentName != "" && !isMediationAgent(targetAgentName) {
+				m.activeAgent = targetAgentName
+			}
 
 			if m.observeMode {
 				logEntry := fmt.Sprintf("[%s] Executing %s", targetAgentName, toolName)
@@ -1120,6 +1128,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				a.lastActive = time.Now()
 			}
+
+			// Sync active agent
+			if targetAgentName != "" && !isMediationAgent(targetAgentName) {
+				m.activeAgent = targetAgentName
+			}
 			return m, listenForStream(msg.ch)
 
 		case sdk.ChatEventThought:
@@ -1166,6 +1179,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a, cmd := m.ensureAgent(author)
 			agentCmd = cmd
 			a.update("success", "Response ready")
+
+			// Sync active agent
+			if author != "" && !isMediationAgent(author) {
+				m.activeAgent = author
+			}
 
 			text := event.Content
 			

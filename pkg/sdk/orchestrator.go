@@ -108,6 +108,18 @@ func (o *Orchestrator) AddTasks(tasks ...Task) {
 		} else if _, exists := o.status[t.ID]; !exists {
 			o.status[t.ID] = TaskStatusPending
 		}
+
+		// Sanity check: if any dependency is already failed or invalidated,
+		// this new task should be invalidated immediately.
+		for _, depID := range t.Dependencies {
+			if s, exists := o.status[depID]; exists && (s == TaskStatusFailed || s == TaskStatusInvalidated) {
+				o.status[t.ID] = TaskStatusInvalidated
+				t.Status = TaskStatusInvalidated
+				o.tasks[t.ID] = t
+				o.invalidateDependentsLocked(t.ID)
+				break
+			}
+		}
 	}
 }
 

@@ -14,7 +14,7 @@ separation between the CLI and the SDK.
 - **Task 1.2:** Implement the basic CLI routing using a modern Go CLI
   framework (e.g., `cobra` or `bubbletea` for the interactive TUI shell).
 - **Task 1.3:** Define the core SDK interfaces in `pkg/sdk/` (e.g.,
-  `AgentManager`, `SkillLoader`). These should be empty stubs with thorough
+  `Swarm`, `SkillLoader`). These should be empty stubs with thorough
   godoc comments explaining their intent.
 - **Task 1.4:** Setup the testing harness. Ensure `go test ./...` passes.
 

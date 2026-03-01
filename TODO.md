@@ -24,7 +24,7 @@ debt that should be addressed as the project evolves.
 
 - [x] **Third-Party Tool Orchestration**: Develop Skills/Sub-agents that wrap
   external AI CLIs (e.g., `gemini-cli`, `claude-code`) via `bash_execute` so
-  the Swarm CLI can act as a master orchestrator for other complex systems.
+  the Swarm CLI can act as a master engine for other complex systems.
 
 - [x] **Input Agent Oversight** (#25): Implemented as a failsafe for the human-in-the-loop.
   to detect intent shifts and handle transitions.

@@ -65,16 +65,16 @@ const (
 
 type ChatEvent struct {
 	Type                   ChatEventType
-	Agent, TaskID, Content string
+	Agent, SpanID, Content string
 }
 
-type AgentManager interface {
+type Swarm interface {
 	Discover(ctx context.Context, dir string) (*AgentManifest, error)
 	AddContext(path string) error
 	DropContext(path string)
 	ListContext() []string
 	Plan(ctx context.Context, prompt string) (*ExecutionGraph, error)
-	Execute(ctx context.Context, g *ExecutionGraph, o *Orchestrator) (<-chan ChatEvent, *Orchestrator, error)
+	Execute(ctx context.Context, g *ExecutionGraph, o *Engine) (<-chan ChatEvent, *Engine, error)
 	Chat(ctx context.Context, prompt string) (<-chan ChatEvent, error)
 	Reset()
 	Reload() error
@@ -89,7 +89,7 @@ type AgentManager interface {
 
 type telemetryContextKey struct{}
 
-type defaultManager struct {
+type defaultSwarm struct {
 	run                 *runner.Runner
 	db                  *gorm.DB
 	sessionSvc          session.Service
@@ -112,12 +112,12 @@ type defaultManager struct {
 	lastAgent           string // Tracks the last agent to respond
 }
 
-type ManagerConfig struct {
+type SwarmConfig struct {
 	Model             model.LLM
 	ResumeLastSession bool
 }
 
-func NewManager(cfg ...ManagerConfig) (AgentManager, error) {
+func NewSwarm(cfg ...SwarmConfig) (Swarm, error) {
 	ctx := context.Background()
 	var flashModel, proModel, fastModel model.LLM
 	clientConfig := &genai.ClientConfig{}
@@ -197,7 +197,7 @@ func NewManager(cfg ...ManagerConfig) (AgentManager, error) {
 		sessionID = fmt.Sprintf("session_%d", rand.Int63())
 	}
 	_, _ = sessionSvc.Create(ctx, &session.CreateRequest{AppName: "swarm-cli", UserID: "local_user", SessionID: sessionID})
-	m := &defaultManager{
+	m := &defaultSwarm{
 		db: db, sessionSvc: sessionSvc, userID: "local_user", sessionID: sessionID, clientCfg: clientConfig, pinnedContext: make(map[string]string), flashModel: flashModel, proModel: proModel, fastModel: fastModel, toolRegistry: toolRegistry,
 	}
 	if err := m.Reload(); err != nil {
@@ -206,10 +206,10 @@ func NewManager(cfg ...ManagerConfig) (AgentManager, error) {
 	return m, nil
 }
 
-func (m *defaultManager) IsDebug() bool         { return m.debugMode }
-func (m *defaultManager) SetDebug(enabled bool) { m.debugMode = enabled }
+func (m *defaultSwarm) IsDebug() bool         { return m.debugMode }
+func (m *defaultSwarm) SetDebug(enabled bool) { m.debugMode = enabled }
 
-func (m *defaultManager) Explain(ctx context.Context, traj Trajectory) (string, error) {
+func (m *defaultSwarm) Explain(ctx context.Context, traj Trajectory) (string, error) {
 	trajJSON, _ := json.MarshalIndent(traj, "", "  ")
 	prompt := fmt.Sprintf("You are the Swarm Historian. Explain WHY this path was taken. Concisely. Trajectory: %s", string(trajJSON))
 	respIter := m.proModel.GenerateContent(ctx, &model.LLMRequest{Contents: []*genai.Content{genai.NewContentFromText(prompt, genai.Role("user"))}}, false)
@@ -225,7 +225,7 @@ func (m *defaultManager) Explain(ctx context.Context, traj Trajectory) (string, 
 	return strings.TrimSpace(exp), nil
 }
 
-func (m *defaultManager) Reload() error {
+func (m *defaultSwarm) Reload() error {
 	var subAgents []agent.Agent
 	var loadedSkills []*Skill
 
@@ -287,7 +287,7 @@ func (m *defaultManager) Reload() error {
 		// Core agents might need to skip the sub-agent suffix
 		instruction := skill.Instructions
 		if skill.Manifest.Name != "input_agent" && skill.Manifest.Name != "output_agent" && skill.Manifest.Name != "swarm_agent" && skill.Manifest.Name != "planning_agent" {
-			instruction += "\n\nSUB-AGENT MODE: You are being invoked by the Swarm Agent to perform a specific task. Skip all greetings and introductory talk. Focus ONLY on executing the task and providing the results."
+			instruction += "\n\nSUB-AGENT MODE: You are being invoked by the Swarm Agent to perform a specific span. Skip all greetings and introductory talk. Focus ONLY on executing the span and providing the results."
 			subAgentNames = append(subAgentNames, skill.Manifest.Name)
 			subAgentDescriptions = append(subAgentDescriptions, fmt.Sprintf("- **%s**: %s", skill.Manifest.Name, skill.Manifest.Description))
 		}
@@ -346,8 +346,8 @@ func (m *defaultManager) Reload() error {
 	return nil
 }
 
-func (m *defaultManager) Skills() []*Skill { return m.skills }
-func (m *defaultManager) AddContext(path string) error {
+func (m *defaultSwarm) Skills() []*Skill { return m.skills }
+func (m *defaultSwarm) AddContext(path string) error {
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return err
@@ -355,22 +355,22 @@ func (m *defaultManager) AddContext(path string) error {
 	m.pinnedContext[path] = string(b)
 	return nil
 }
-func (m *defaultManager) DropContext(path string) {
+func (m *defaultSwarm) DropContext(path string) {
 	if path == "all" {
 		m.pinnedContext = make(map[string]string)
 	} else {
 		delete(m.pinnedContext, path)
 	}
 }
-func (m *defaultManager) ListContext() []string {
+func (m *defaultSwarm) ListContext() []string {
 	var p []string
 	for path := range m.pinnedContext {
 		p = append(p, path)
 	}
 	return p
 }
-func (m *defaultManager) Reset() { m.sessionID = fmt.Sprintf("session_%d", rand.Int63()) }
-func (m *defaultManager) ListModels(ctx context.Context) ([]ModelInfo, error) {
+func (m *defaultSwarm) Reset() { m.sessionID = fmt.Sprintf("session_%d", rand.Int63()) }
+func (m *defaultSwarm) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	client, err := genai.NewClient(ctx, m.clientCfg)
 	if err != nil {
 		return nil, err
@@ -387,7 +387,7 @@ func (m *defaultManager) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	return models, nil
 }
 
-func (m *defaultManager) ListSessions(ctx context.Context) ([]SessionInfo, error) {
+func (m *defaultSwarm) ListSessions(ctx context.Context) ([]SessionInfo, error) {
 	resp, err := m.sessionSvc.List(ctx, &session.ListRequest{AppName: "swarm-cli", UserID: m.userID})
 	if err != nil {
 		return nil, err
@@ -408,7 +408,7 @@ func (m *defaultManager) ListSessions(ctx context.Context) ([]SessionInfo, error
 	return infos, nil
 }
 
-func (m *defaultManager) Plan(ctx context.Context, prompt string) (*ExecutionGraph, error) {
+func (m *defaultSwarm) Plan(ctx context.Context, prompt string) (*ExecutionGraph, error) {
 	// Recompile the descriptions since they aren't stored on the struct
 	var descriptions []string
 	for _, name := range m.subAgentNames {
@@ -458,7 +458,7 @@ func (m *defaultManager) Plan(ctx context.Context, prompt string) (*ExecutionGra
 	return &graph, nil
 }
 
-func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan ChatEvent, error) {
+func (m *defaultSwarm) Chat(ctx context.Context, prompt string) (<-chan ChatEvent, error) {
 	out := make(chan ChatEvent, 1000)
 	// Record the user's initial prompt in the persistent session
 	m.appendEvent(ctx, "user", prompt)
@@ -466,7 +466,7 @@ func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan ChatEv
 	go func() {
 		defer close(out)
 		swarmStartTime := time.Now()
-		o := NewOrchestrator(nil)
+		o := NewEngine(nil)
 
 		// 1. Input Classification (Fast Path / CIA)
 		inputStart := time.Now()
@@ -497,8 +497,8 @@ func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan ChatEv
 			break
 		}
 
-		o.AddTasks(Task{
-			ID: "input", Name: "Classification", Agent: "input_agent", Status: TaskStatusComplete,
+		o.AddSpans(Span{
+			ID: "input", Name: "Classification", Agent: "input_agent", Status: SpanStatusComplete,
 			Kind:      SpanKindPlanner,
 			StartTime: inputStart.Format(time.RFC3339Nano), EndTime: time.Now().Format(time.RFC3339Nano),
 			Duration: time.Since(inputStart).String(), Attributes: map[string]any{"gen_ai.prompt": prompt, "gen_ai.completion": inputResult},
@@ -529,15 +529,15 @@ func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan ChatEv
 				return
 			}
 			planJSON, _ := json.Marshal(graph)
-			o.AddTasks(Task{
-				ID: "coordination", Name: "Swarm Planning", Agent: "swarm_agent", Status: TaskStatusComplete,
+			o.AddSpans(Span{
+				ID: "coordination", Name: "Swarm Planning", Agent: "swarm_agent", Status: SpanStatusComplete,
 				Kind:      SpanKindPlanner,
 				StartTime: planStart.Format(time.RFC3339Nano), EndTime: time.Now().Format(time.RFC3339Nano),
 				Duration: time.Since(planStart).String(), Attributes: map[string]any{"gen_ai.prompt": prompt, "gen_ai.completion": string(planJSON)},
 			})
 		} else {
 			// Direct execution with specialized agent (Node Autonomy)
-			graph = &ExecutionGraph{Tasks: []Task{{ID: "t1", Name: "Fulfill", Agent: target, Prompt: prompt}}}
+			graph = &ExecutionGraph{Spans: []Span{{ID: "t1", Name: "Fulfill", Agent: target, Prompt: prompt}}}
 		}
 
 		// 3. Execution
@@ -569,43 +569,43 @@ func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan ChatEv
 	return out, nil
 }
 
-func (m *defaultManager) Execute(ctx context.Context, g *ExecutionGraph, o *Orchestrator) (<-chan ChatEvent, *Orchestrator, error) {
+func (m *defaultSwarm) Execute(ctx context.Context, g *ExecutionGraph, o *Engine) (<-chan ChatEvent, *Engine, error) {
 	if o == nil {
-		o = NewOrchestrator(g)
+		o = NewEngine(g)
 	}
 	out := make(chan ChatEvent, 1000)
 	if g != nil {
-		o.AddTasks(g.Tasks...)
+		o.AddSpans(g.Spans...)
 	}
 
 	go func() {
 		defer close(out)
-		type completedTask struct {
+		type completedSpan struct {
 			ID     string
 			Result string
-			Status TaskStatus
+			Status SpanStatus
 			Replan bool
 		}
-		completed := make(chan completedTask, 100)
-		activeTasks := 0
+		completed := make(chan completedSpan, 100)
+		activeSpans := 0
 		var wg sync.WaitGroup
 		replanCount := 0
 		const maxReplans = 3
 
 		for {
-			ready := o.GetReadyTasks()
+			ready := o.GetReadySpans()
 			for _, t := range ready {
 				o.MarkActive(t.ID)
-				activeTasks++
+				activeSpans++
 				wg.Add(1)
-				go func(task Task) {
+				go func(span Span) {
 					defer wg.Done()
-					result, status, needsReplan := m.executeTask(ctx, out, o, task)
-					completed <- completedTask{ID: task.ID, Result: result, Status: status, Replan: needsReplan}
+					result, status, needsReplan := m.executeSpan(ctx, out, o, span)
+					completed <- completedSpan{ID: span.ID, Result: result, Status: status, Replan: needsReplan}
 				}(t)
 			}
 
-			if activeTasks == 0 {
+			if activeSpans == 0 {
 				if o.IsComplete() {
 					break
 				} else {
@@ -618,12 +618,12 @@ func (m *defaultManager) Execute(ctx context.Context, g *ExecutionGraph, o *Orch
 			case <-ctx.Done():
 				return
 			case done := <-completed:
-				if done.Status == TaskStatusComplete {
+				if done.Status == SpanStatusComplete {
 					o.MarkComplete(done.ID, done.Result)
 				} else {
 					o.MarkFailed(done.ID)
 				}
-				activeTasks--
+				activeSpans--
 				// Handle dynamic replanning or subgraph expansion
 				if done.Replan {
 					if replanCount >= maxReplans {
@@ -634,20 +634,20 @@ func (m *defaultManager) Execute(ctx context.Context, g *ExecutionGraph, o *Orch
 					out <- ChatEvent{Type: ChatEventThought, Agent: "Swarm", Content: fmt.Sprintf("Replanning effort %d/%d…", replanCount, maxReplans)}
 					newG, err := m.Plan(ctx, "Pivot: "+done.Result)
 					if err == nil {
-						o.AddTasks(newG.Tasks...)
+						o.AddSpans(newG.Spans...)
 					}
-				} else if strings.Contains(done.Result, "```json") && strings.Contains(done.Result, "\"tasks\":") {
+				} else if strings.Contains(done.Result, "```json") && strings.Contains(done.Result, "\"spans\":") {
 					// Strict check for JSON blocks to avoid false positives in markdown text
 					re := regexp.MustCompile("(?s)```json\n(\\{.*\\})\n```")
 					match := re.FindStringSubmatch(done.Result)
 					if len(match) > 1 {
 						var subGraph ExecutionGraph
 						if err := json.Unmarshal([]byte(match[1]), &subGraph); err == nil {
-							for i := range subGraph.Tasks {
-								subGraph.Tasks[i].ParentID = done.ID
-								subGraph.Tasks[i].ID = fmt.Sprintf("%s_%s", done.ID, subGraph.Tasks[i].ID)
+							for i := range subGraph.Spans {
+								subGraph.Spans[i].ParentID = done.ID
+								subGraph.Spans[i].ID = fmt.Sprintf("%s_%s", done.ID, subGraph.Spans[i].ID)
 							}
-							o.AddTasks(subGraph.Tasks...)
+							o.AddSpans(subGraph.Spans...)
 						}
 					}
 				}
@@ -659,35 +659,35 @@ func (m *defaultManager) Execute(ctx context.Context, g *ExecutionGraph, o *Orch
 	return out, o, nil
 }
 
-func (m *defaultManager) executeTask(ctx context.Context, out chan<- ChatEvent, o *Orchestrator, task Task) (string, TaskStatus, bool) {
-	targetAgent, ok := m.agents[task.Agent]
+func (m *defaultSwarm) executeSpan(ctx context.Context, out chan<- ChatEvent, o *Engine, span Span) (string, SpanStatus, bool) {
+	targetAgent, ok := m.agents[span.Agent]
 	if !ok {
-		out <- ChatEvent{Type: ChatEventError, Agent: "Swarm", TaskID: task.ID, Content: "Agent not found: " + task.Agent}
-		return "Agent not found", TaskStatusFailed, false
+		out <- ChatEvent{Type: ChatEventError, Agent: "Swarm", SpanID: span.ID, Content: "Agent not found: " + span.Agent}
+		return "Agent not found", SpanStatusFailed, false
 	}
 
-	// Use a unique session ID for this specific task to prevent turn-order corruption
+	// Use a unique session ID for this specific span to prevent turn-order corruption
 	// in the shared session service, especially during parallel execution.
-	taskSessionID := fmt.Sprintf("%s/%s", m.sessionID, task.ID)
+	spanSessionID := fmt.Sprintf("%s/%s", m.sessionID, span.ID)
 
-	// Ensure the task session exists in the database
+	// Ensure the span session exists in the database
 	_, _ = m.sessionSvc.Create(ctx, &session.CreateRequest{
 		AppName:   "swarm-cli",
 		UserID:    m.userID,
-		SessionID: taskSessionID,
+		SessionID: spanSessionID,
 	})
 
-	taskRunner, _ := runner.New(runner.Config{
+	spanRunner, _ := runner.New(runner.Config{
 		AppName:        "swarm-cli",
 		Agent:          targetAgent,
 		SessionService: m.sessionSvc,
 	})
 
-	out <- ChatEvent{Type: ChatEventThought, Agent: targetAgent.Name(), TaskID: task.ID, Content: "Starting…"}
+	out <- ChatEvent{Type: ChatEventThought, Agent: targetAgent.Name(), SpanID: span.ID, Content: "Starting…"}
 
 	// Telemetry and Observation
 	telemetryChan := make(chan string, 100)
-	taskCtx, cancel := context.WithCancel(context.WithValue(ctx, telemetryContextKey{}, (chan<- string)(telemetryChan)))
+	spanCtx, cancel := context.WithCancel(context.WithValue(ctx, telemetryContextKey{}, (chan<- string)(telemetryChan)))
 	defer cancel()
 
 	telemetryDone := make(chan struct{})
@@ -698,7 +698,7 @@ func (m *defaultManager) executeTask(ctx context.Context, out chan<- ChatEvent, 
 		defer obsWg.Done()
 		var lastLines []string
 		for line := range telemetryChan {
-			out <- ChatEvent{Type: ChatEventTelemetry, Agent: targetAgent.Name(), TaskID: task.ID, Content: line}
+			out <- ChatEvent{Type: ChatEventTelemetry, Agent: targetAgent.Name(), SpanID: span.ID, Content: line}
 			lastLines = append(lastLines, line)
 			if len(lastLines) >= 10 {
 				obsWg.Add(1)
@@ -712,7 +712,7 @@ func (m *defaultManager) executeTask(ctx context.Context, out chan<- ChatEvent, 
 						if err == nil && resp.Content != nil && len(resp.Content.Parts) > 0 {
 							text := resp.Content.Parts[0].Text
 							if strings.HasPrefix(text, "INTERVENE:") {
-								out <- ChatEvent{Type: ChatEventObserver, Agent: "Observer", TaskID: task.ID, Content: text}
+								out <- ChatEvent{Type: ChatEventObserver, Agent: "Observer", SpanID: span.ID, Content: text}
 								cancel() // Forcefully halt the agent interaction loop
 							}
 						}
@@ -727,9 +727,9 @@ func (m *defaultManager) executeTask(ctx context.Context, out chan<- ChatEvent, 
 	// Inject results from dependencies into the prompt (Node Autonomy)
 	contextMap := o.GetContext()
 	var contextParts []string
-	for _, depID := range task.Dependencies {
+	for _, depID := range span.Dependencies {
 		if res, ok := contextMap[depID]; ok {
-			contextParts = append(contextParts, fmt.Sprintf("Output from previous task (%s):\n%s", depID, res))
+			contextParts = append(contextParts, fmt.Sprintf("Output from previous span (%s):\n%s", depID, res))
 		}
 	}
 
@@ -747,7 +747,7 @@ func (m *defaultManager) executeTask(ctx context.Context, out chan<- ChatEvent, 
 		}
 	}
 
-	promptStr := fmt.Sprintf("TASK: %s\nINSTRUCTIONS: %s", task.Name, task.Prompt)
+	promptStr := fmt.Sprintf("TASK: %s\nINSTRUCTIONS: %s", span.Name, span.Prompt)
 
 	if len(historyParts) > 0 {
 		promptStr = promptStr + "\n\n### CONVERSATION HISTORY (FOR CONTEXT)\n" + strings.Join(historyParts, "\n")
@@ -756,16 +756,16 @@ func (m *defaultManager) executeTask(ctx context.Context, out chan<- ChatEvent, 
 		promptStr = promptStr + "\n\n### RESULTS FROM PREVIOUS TASKS\n" + strings.Join(contextParts, "\n\n")
 	}
 
-	// Execute with the unique taskSessionID
-	events := taskRunner.Run(taskCtx, m.userID, taskSessionID, genai.NewContentFromText(promptStr, genai.Role("user")), agent.RunConfig{})
+	// Execute with the unique spanSessionID
+	events := spanRunner.Run(spanCtx, m.userID, spanSessionID, genai.NewContentFromText(promptStr, genai.Role("user")), agent.RunConfig{})
 
 	var full strings.Builder
 	var needsReplan bool
-	activeToolSpans := make(map[string][]Task)
+	activeToolSpans := make(map[string][]Span)
 
 	for event, err := range events {
 		if err != nil {
-			out <- ChatEvent{Type: ChatEventError, Agent: targetAgent.Name(), TaskID: task.ID, Content: err.Error()}
+			out <- ChatEvent{Type: ChatEventError, Agent: targetAgent.Name(), SpanID: span.ID, Content: err.Error()}
 			break
 		}
 		if event.Content != nil {
@@ -774,30 +774,30 @@ func (m *defaultManager) executeTask(ctx context.Context, out chan<- ChatEvent, 
 					if part.FunctionCall.Name == "request_replan" {
 						needsReplan = true
 					}
-					out <- ChatEvent{Type: ChatEventToolCall, Agent: targetAgent.Name(), TaskID: task.ID, Content: part.FunctionCall.Name}
+					out <- ChatEvent{Type: ChatEventToolCall, Agent: targetAgent.Name(), SpanID: span.ID, Content: part.FunctionCall.Name}
 
 					// Record tool span start
 					toolStart := time.Now()
-					toolID := fmt.Sprintf("%s-tool-%s-%d", task.ID, part.FunctionCall.Name, toolStart.UnixNano())
-					toolTask := Task{
-						ID: toolID, ParentID: task.ID, TraceID: task.TraceID,
-						Name: part.FunctionCall.Name, Kind: SpanKindTool, Status: TaskStatusActive,
+					toolID := fmt.Sprintf("%s-tool-%s-%d", span.ID, part.FunctionCall.Name, toolStart.UnixNano())
+					toolTask := Span{
+						ID: toolID, ParentID: span.ID, TraceID: span.TraceID,
+						Name: part.FunctionCall.Name, Kind: SpanKindTool, Status: SpanStatusActive,
 						StartTime:  toolStart.Format(time.RFC3339Nano),
 						Attributes: map[string]any{"gen_ai.tool_args": part.FunctionCall.Args},
 					}
-					o.AddTasks(toolTask)
+					o.AddSpans(toolTask)
 					activeToolSpans[part.FunctionCall.Name] = append(activeToolSpans[part.FunctionCall.Name], toolTask)
 				}
 				if part.FunctionResponse != nil {
-					out <- ChatEvent{Type: ChatEventToolResult, Agent: targetAgent.Name(), TaskID: task.ID, Content: part.FunctionResponse.Name}
+					out <- ChatEvent{Type: ChatEventToolResult, Agent: targetAgent.Name(), SpanID: span.ID, Content: part.FunctionResponse.Name}
 
 					// Record tool span completion (pop from queue)
-					if tasks, ok := activeToolSpans[part.FunctionResponse.Name]; ok && len(tasks) > 0 {
-						t := tasks[0]
-						activeToolSpans[part.FunctionResponse.Name] = tasks[1:]
+					if spans, ok := activeToolSpans[part.FunctionResponse.Name]; ok && len(spans) > 0 {
+						t := spans[0]
+						activeToolSpans[part.FunctionResponse.Name] = spans[1:]
 
 						now := time.Now()
-						t.Status = TaskStatusComplete
+						t.Status = SpanStatusComplete
 						t.EndTime = now.Format(time.RFC3339Nano)
 						if t.StartTime != "" {
 							start, _ := time.Parse(time.RFC3339Nano, t.StartTime)
@@ -805,7 +805,7 @@ func (m *defaultManager) executeTask(ctx context.Context, out chan<- ChatEvent, 
 						}
 						resJSON, _ := json.Marshal(part.FunctionResponse.Response)
 						t.Attributes["gen_ai.tool_result"] = string(resJSON)
-						o.AddTasks(t) // Update the task in the orchestrator
+						o.AddSpans(t) // Update the span in the engine
 					}
 				}
 				if part.Text != "" && !part.Thought {
@@ -821,18 +821,18 @@ func (m *defaultManager) executeTask(ctx context.Context, out chan<- ChatEvent, 
 	obsWg.Wait()
 
 	// Ensure all tool spans are closed (Node Autonomy cleanup)
-	for _, tasks := range activeToolSpans {
-		for _, t := range tasks {
+	for _, spans := range activeToolSpans {
+		for _, t := range spans {
 			now := time.Now()
-			t.Status = TaskStatusFailed
+			t.Status = SpanStatusFailed
 			t.EndTime = now.Format(time.RFC3339Nano)
 			t.Attributes["gen_ai.tool_result"] = "Tool execution interrupted or incomplete"
-			o.AddTasks(t)
+			o.AddSpans(t)
 		}
 	}
 
 	if finalText == "" {
-		return "No response emitted by agent.", TaskStatusFailed, false
+		return "No response emitted by agent.", SpanStatusFailed, false
 	}
 
 	// Update the global state of the last agent to respond
@@ -842,15 +842,15 @@ func (m *defaultManager) executeTask(ctx context.Context, out chan<- ChatEvent, 
 	if m.runOutputAgent(ctx, out, o, targetAgent.Name(), finalText) {
 		// Record the response in the main conversation history
 		m.appendEvent(ctx, "model", fmt.Sprintf("[%s]: %s", targetAgent.Name(), finalText))
-		out <- ChatEvent{Type: ChatEventFinalResponse, Agent: targetAgent.Name(), TaskID: task.ID, Content: finalText}
-		return finalText, TaskStatusComplete, needsReplan
+		out <- ChatEvent{Type: ChatEventFinalResponse, Agent: targetAgent.Name(), SpanID: span.ID, Content: finalText}
+		return finalText, SpanStatusComplete, needsReplan
 	}
 
-	out <- ChatEvent{Type: ChatEventThought, Agent: "Swarm", TaskID: task.ID, Content: "Output Agent rejected the response as problematic."}
-	return "Output Agent rejected response.", TaskStatusComplete, true
+	out <- ChatEvent{Type: ChatEventThought, Agent: "Swarm", SpanID: span.ID, Content: "Output Agent rejected the response as problematic."}
+	return "Output Agent rejected response.", SpanStatusComplete, true
 }
 
-func (m *defaultManager) appendEvent(ctx context.Context, author, content string) {
+func (m *defaultSwarm) appendEvent(ctx context.Context, author, content string) {
 	if m.sessionSvc == nil {
 		return
 	}
@@ -868,7 +868,7 @@ func (m *defaultManager) appendEvent(ctx context.Context, author, content string
 	})
 }
 
-func (m *defaultManager) runOutputAgent(ctx context.Context, out chan<- ChatEvent, o *Orchestrator, agentName, content string) bool {
+func (m *defaultSwarm) runOutputAgent(ctx context.Context, out chan<- ChatEvent, o *Engine, agentName, content string) bool {
 	coaStart := time.Now()
 	coaPrompt := fmt.Sprintf("Sanity check worker: %s. Response: %s. RULE: Output ONLY 'OK' or 'FIX: [reason]'.", agentName, content)
 	respIter := m.fastModel.GenerateContent(ctx, &model.LLMRequest{
@@ -895,16 +895,16 @@ func (m *defaultManager) runOutputAgent(ctx context.Context, out chan<- ChatEven
 	}
 
 	if o != nil {
-		o.AddTasks(Task{
+		o.AddSpans(Span{
 			ID: "output-agent-" + fmt.Sprintf("%d", coaStart.UnixNano()), Name: "Sanity Check", Agent: "output_agent",
-			Status: TaskStatusComplete, StartTime: coaStart.Format(time.RFC3339Nano), EndTime: time.Now().Format(time.RFC3339Nano),
+			Status: SpanStatusComplete, StartTime: coaStart.Format(time.RFC3339Nano), EndTime: time.Now().Format(time.RFC3339Nano),
 			Duration: time.Since(coaStart).String(), Attributes: map[string]any{"gen_ai.prompt": coaPrompt, "gen_ai.completion": res},
 		})
 	}
 	return approved
 }
 
-func (m *defaultManager) Rewind(n int) error {
+func (m *defaultSwarm) Rewind(n int) error {
 	if n <= 0 {
 		return nil
 	}

@@ -41,7 +41,7 @@ func ParseManifest(path string) (*AgentManifest, error) {
 
 // Discover checks the current directory (and parent directories up to a limit)
 // for an agent.yaml manifest.
-func (m *defaultManager) Discover(ctx context.Context, dir string) (*AgentManifest, error) {
+func (m *defaultSwarm) Discover(ctx context.Context, dir string) (*AgentManifest, error) {
 	currentDir := dir
 	if currentDir == "" {
 		currentDir = "."

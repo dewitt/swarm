@@ -30,7 +30,7 @@ Rust, Java, etc.).
 
 ## 2. Interface Definition (Protobuf)
 
-To ensure consistency across boundaries, the `AgentManager` interface and all
+To ensure consistency across boundaries, the `Swarm` interface and all
 data structures (e.g., `AgentManifest`, `Skill`, `ToolResult`) must be defined
 using Protocol Buffers (`.proto` files).
 

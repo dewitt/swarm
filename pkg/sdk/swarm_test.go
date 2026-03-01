@@ -32,7 +32,7 @@ func (m *MockModel) GenerateContent(ctx context.Context, req *model.LLMRequest, 
 					if contains(userPrompt, "hello") {
 						responseText = `{"immediate_response": "Hello from trivial plan!"}`
 					} else {
-						responseText = `{"tasks": [{"id": "t1", "name": "Test Task", "agent": "swarm_agent", "prompt": "do it", "dependencies": []}]}`
+						responseText = `{"spans": [{"id": "t1", "name": "Test Span", "agent": "swarm_agent", "prompt": "do it", "dependencies": []}]}`
 					}
 					break
 				}
@@ -65,20 +65,20 @@ func contains(s, substr string) bool {
 	return false
 }
 
-func TestNewManager(t *testing.T) {
+func TestNewSwarm(t *testing.T) {
 	mockLLM := &MockModel{response: "Hello from the mock agent!"}
-	manager, err := sdk.NewManager(sdk.ManagerConfig{Model: mockLLM})
+	swarm, err := sdk.NewSwarm(sdk.SwarmConfig{Model: mockLLM})
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	if manager == nil {
-		t.Fatal("expected manager to be non-nil")
+	if swarm == nil {
+		t.Fatal("expected swarm to be non-nil")
 	}
 
 	ctx := context.Background()
 
-	ch, err := manager.Chat(ctx, "hello")
+	ch, err := swarm.Chat(ctx, "hello")
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -109,14 +109,14 @@ func TestNewManager(t *testing.T) {
 
 func TestChat_TrivialResponse(t *testing.T) {
 	mockLLM := &MockModel{response: "Trivial Response"}
-	manager, err := sdk.NewManager(sdk.ManagerConfig{Model: mockLLM})
+	swarm, err := sdk.NewSwarm(sdk.SwarmConfig{Model: mockLLM})
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
 	ctx := context.Background()
 	// Trivial prompt that should trigger ImmediateResponse in our MockModel's Planning mode
-	ch, err := manager.Chat(ctx, "Hello")
+	ch, err := swarm.Chat(ctx, "Hello")
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}

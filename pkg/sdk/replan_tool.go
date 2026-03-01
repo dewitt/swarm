@@ -15,9 +15,9 @@ type ReplanResult struct {
 }
 
 func requestReplan(ctx tool.Context, args ReplanArgs) (ReplanResult, error) {
-	// The tool doesn't do much on its own; the Orchestrator loop listens for the result.
+	// The tool doesn't do much on its own; the Engine loop listens for the result.
 	return ReplanResult{
 		Success: true,
-		Message: "Replan requested. The orchestrator will pivot after this task concludes.",
+		Message: "Replan requested. The engine will pivot after this span concludes.",
 	}, nil
 }

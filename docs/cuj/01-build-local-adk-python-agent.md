@@ -63,7 +63,7 @@ Alex wants to make sure it works.
 
 > **Alex:** Let's test it. Ask the agent what the weather is in Tokyo.
 
-The CLI, acting as an orchestrator, invokes the local Python process defined
+The CLI, acting as an engine, invokes the local Python process defined
 in `agent.yaml`.
 
 > **Swarm CLI:** Running local agent... **Agent (Local):** The weather in

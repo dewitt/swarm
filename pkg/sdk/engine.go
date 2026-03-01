@@ -7,16 +7,16 @@ import (
 	"time"
 )
 
-// TaskStatus represents the current state of a task.
-type TaskStatus string
+// SpanStatus represents the current state of a span.
+type SpanStatus string
 
 const (
-	TaskStatusPending     TaskStatus = "pending"
-	TaskStatusActive      TaskStatus = "active"
-	TaskStatusComplete    TaskStatus = "complete"
-	TaskStatusBlocked     TaskStatus = "blocked"
-	TaskStatusFailed      TaskStatus = "failed"
-	TaskStatusInvalidated TaskStatus = "invalidated"
+	SpanStatusPending     SpanStatus = "pending"
+	SpanStatusActive      SpanStatus = "active"
+	SpanStatusComplete    SpanStatus = "complete"
+	SpanStatusBlocked     SpanStatus = "blocked"
+	SpanStatusFailed      SpanStatus = "failed"
+	SpanStatusInvalidated SpanStatus = "invalidated"
 )
 
 // SpanKind represents the type of operation in a trace.
@@ -28,8 +28,8 @@ const (
 	SpanKindPlanner SpanKind = "planning"
 )
 
-// Task (Span) represents a single unit of work aligned with OTel conventions.
-type Task struct {
+// Span (Span) represents a single unit of work aligned with OTel conventions.
+type Span struct {
 	ID           string            `json:"id"`
 	TraceID      string            `json:"trace_id"`
 	ParentID     string            `json:"parent_id,omitempty"`
@@ -37,7 +37,7 @@ type Task struct {
 	Kind         SpanKind          `json:"kind"`
 	Agent        string            `json:"agent,omitempty"`
 	Attributes   map[string]any    `json:"attributes"` // OTel-style attributes (e.g. gen_ai.prompt)
-	Status       TaskStatus        `json:"status"`
+	Status       SpanStatus        `json:"status"`
 	StartTime    string            `json:"start_time"`
 	EndTime      string            `json:"end_time,omitempty"`
 	Duration     string            `json:"duration,omitempty"`
@@ -46,43 +46,43 @@ type Task struct {
 	Prompt       string            `json:"prompt,omitempty"` // The instructions for the agent
 }
 
-// ExecutionGraph represents a snapshot of the tasks to be executed.
+// ExecutionGraph represents a snapshot of the spans to be executed.
 type ExecutionGraph struct {
-	Tasks             []Task `json:"tasks"`
+	Spans             []Span `json:"spans"`
 	ImmediateResponse string `json:"immediate_response,omitempty"` // Short-circuit for trivial requests
 }
 
-// Orchestrator coordinates the reactive execution of a dynamic Task Pool.
-type Orchestrator struct {
+// Engine coordinates the reactive execution of a dynamic Span Pool.
+type Engine struct {
 	mu             sync.RWMutex
 	traceID        string
-	tasks          map[string]Task
-	status         map[string]TaskStatus
-	result         map[string]string // Stores the "final response" of completed tasks
+	spans          map[string]Span
+	status         map[string]SpanStatus
+	result         map[string]string // Stores the "final response" of completed spans
 	totalStartTime time.Time
 }
 
-// NewOrchestrator creates a new Orchestrator for a given initial seed graph.
-func NewOrchestrator(g *ExecutionGraph) *Orchestrator {
+// NewEngine creates a new Engine for a given initial seed graph.
+func NewEngine(g *ExecutionGraph) *Engine {
 	traceID := fmt.Sprintf("tr-%d", rand.Int63())
-	o := &Orchestrator{
+	o := &Engine{
 		traceID:        traceID,
-		tasks:          make(map[string]Task),
-		status:         make(map[string]TaskStatus),
+		spans:          make(map[string]Span),
+		status:         make(map[string]SpanStatus),
 		result:         make(map[string]string),
 		totalStartTime: time.Now(),
 	}
 	if g != nil {
-		o.AddTasks(g.Tasks...)
+		o.AddSpans(g.Spans...)
 	}
 	return o
 }
 
-// AddTasks adds new tasks to the pool and ensures OTel metadata is set.
-func (o *Orchestrator) AddTasks(tasks ...Task) {
+// AddSpans adds new spans to the pool and ensures OTel metadata is set.
+func (o *Engine) AddSpans(spans ...Span) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
-	for _, t := range tasks {
+	for _, t := range spans {
 		if t.TraceID == "" {
 			t.TraceID = o.traceID
 		}
@@ -93,29 +93,29 @@ func (o *Orchestrator) AddTasks(tasks ...Task) {
 			t.Attributes["gen_ai.prompt"] = t.Prompt
 		}
 		
-		// Record the task result if it's already complete
-		if t.Status == TaskStatusComplete {
+		// Record the span result if it's already complete
+		if t.Status == SpanStatusComplete {
 			if res, ok := t.Attributes["gen_ai.completion"].(string); ok {
 				o.result[t.ID] = res
 			}
 		}
 
-		o.tasks[t.ID] = t
+		o.spans[t.ID] = t
 		
 		// Always update status if provided, otherwise default to Pending
 		if t.Status != "" {
 			o.status[t.ID] = t.Status
 		} else if _, exists := o.status[t.ID]; !exists {
-			o.status[t.ID] = TaskStatusPending
+			o.status[t.ID] = SpanStatusPending
 		}
 
 		// Sanity check: if any dependency is already failed or invalidated,
-		// this new task should be invalidated immediately.
+		// this new span should be invalidated immediately.
 		for _, depID := range t.Dependencies {
-			if s, exists := o.status[depID]; exists && (s == TaskStatusFailed || s == TaskStatusInvalidated) {
-				o.status[t.ID] = TaskStatusInvalidated
-				t.Status = TaskStatusInvalidated
-				o.tasks[t.ID] = t
+			if s, exists := o.status[depID]; exists && (s == SpanStatusFailed || s == SpanStatusInvalidated) {
+				o.status[t.ID] = SpanStatusInvalidated
+				t.Status = SpanStatusInvalidated
+				o.spans[t.ID] = t
 				o.invalidateDependentsLocked(t.ID)
 				break
 			}
@@ -123,14 +123,14 @@ func (o *Orchestrator) AddTasks(tasks ...Task) {
 	}
 }
 
-// GetReadyTasks returns tasks that are pending and have met all dependencies.
-func (o *Orchestrator) GetReadyTasks() []Task {
+// GetReadySpans returns spans that are pending and have met all dependencies.
+func (o *Engine) GetReadySpans() []Span {
 	o.mu.RLock()
 	defer o.mu.RUnlock()
 
-	var ready []Task
-	for id, t := range o.tasks {
-		if o.status[id] != TaskStatusPending {
+	var ready []Span
+	for id, t := range o.spans {
+		if o.status[id] != SpanStatusPending {
 			continue
 		}
 
@@ -138,7 +138,7 @@ func (o *Orchestrator) GetReadyTasks() []Task {
 		for _, depID := range t.Dependencies {
 			// If dependency exists and isn't complete, we aren't ready.
 			// If it doesn't exist, we treat it as met (pruning the broken link).
-			if s, exists := o.status[depID]; exists && s != TaskStatusComplete {
+			if s, exists := o.status[depID]; exists && s != SpanStatusComplete {
 				allDepsMet = false
 				break
 			}
@@ -151,24 +151,24 @@ func (o *Orchestrator) GetReadyTasks() []Task {
 	return ready
 }
 
-// MarkActive marks a task as actively executing.
-func (o *Orchestrator) MarkActive(taskID string) {
+// MarkActive marks a span as actively executing.
+func (o *Engine) MarkActive(spanID string) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
-	o.status[taskID] = TaskStatusActive
-	t := o.tasks[taskID]
+	o.status[spanID] = SpanStatusActive
+	t := o.spans[spanID]
 	t.StartTime = time.Now().Format(time.RFC3339Nano)
-	o.tasks[taskID] = t
+	o.spans[spanID] = t
 }
 
-// MarkComplete marks a task as successfully completed and stores its result.
-func (o *Orchestrator) MarkComplete(taskID string, result string) {
+// MarkComplete marks a span as successfully completed and stores its result.
+func (o *Engine) MarkComplete(spanID string, result string) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
-	o.status[taskID] = TaskStatusComplete
-	o.result[taskID] = result
+	o.status[spanID] = SpanStatusComplete
+	o.result[spanID] = result
 	
-	t := o.tasks[taskID]
+	t := o.spans[spanID]
 	now := time.Now()
 	t.EndTime = now.Format(time.RFC3339Nano)
 	if t.StartTime != "" {
@@ -179,35 +179,35 @@ func (o *Orchestrator) MarkComplete(taskID string, result string) {
 		t.Attributes = make(map[string]any)
 	}
 	t.Attributes["gen_ai.completion"] = result
-	t.Status = TaskStatusComplete
-	o.tasks[taskID] = t
+	t.Status = SpanStatusComplete
+	o.spans[spanID] = t
 }
 
-// MarkFailed marks a task as failed and invalidates its dependents.
-func (o *Orchestrator) MarkFailed(taskID string) {
+// MarkFailed marks a span as failed and invalidates its dependents.
+func (o *Engine) MarkFailed(spanID string) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	
-	o.status[taskID] = TaskStatusFailed
-	t := o.tasks[taskID]
-	t.Status = TaskStatusFailed
-	o.tasks[taskID] = t
+	o.status[spanID] = SpanStatusFailed
+	t := o.spans[spanID]
+	t.Status = SpanStatusFailed
+	o.spans[spanID] = t
 
 	// Recursively invalidate all dependents to prevent deadlock
-	o.invalidateDependentsLocked(taskID)
+	o.invalidateDependentsLocked(spanID)
 }
 
-// invalidateDependentsLocked prunes all branches that depend on the given task.
+// invalidateDependentsLocked prunes all branches that depend on the given span.
 // Must be called while holding the lock.
-func (o *Orchestrator) invalidateDependentsLocked(taskID string) {
-	for id, t := range o.tasks {
+func (o *Engine) invalidateDependentsLocked(spanID string) {
+	for id, t := range o.spans {
 		for _, depID := range t.Dependencies {
-			if depID == taskID {
-				if o.status[id] != TaskStatusInvalidated {
-					o.status[id] = TaskStatusInvalidated
-					task := o.tasks[id]
-					task.Status = TaskStatusInvalidated
-					o.tasks[id] = task
+			if depID == spanID {
+				if o.status[id] != SpanStatusInvalidated {
+					o.status[id] = SpanStatusInvalidated
+					span := o.spans[id]
+					span.Status = SpanStatusInvalidated
+					o.spans[id] = span
 					// Recurse
 					o.invalidateDependentsLocked(id)
 				}
@@ -217,31 +217,31 @@ func (o *Orchestrator) invalidateDependentsLocked(taskID string) {
 	}
 }
 
-// MarkInvalidated prunes a task or branch.
-func (o *Orchestrator) MarkInvalidated(taskID string) {
+// MarkInvalidated prunes a span or branch.
+func (o *Engine) MarkInvalidated(spanID string) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
-	o.status[taskID] = TaskStatusInvalidated
-	t := o.tasks[taskID]
-	t.Status = TaskStatusInvalidated
-	o.tasks[taskID] = t
+	o.status[spanID] = SpanStatusInvalidated
+	t := o.spans[spanID]
+	t.Status = SpanStatusInvalidated
+	o.spans[spanID] = t
 }
 
-// IsComplete returns true if all non-invalidated tasks are complete.
-func (o *Orchestrator) IsComplete() bool {
+// IsComplete returns true if all non-invalidated spans are complete.
+func (o *Engine) IsComplete() bool {
 	o.mu.RLock()
 	defer o.mu.RUnlock()
-	for id := range o.tasks {
+	for id := range o.spans {
 		s := o.status[id]
-		if s != TaskStatusComplete && s != TaskStatusInvalidated && s != TaskStatusFailed {
+		if s != SpanStatusComplete && s != SpanStatusInvalidated && s != SpanStatusFailed {
 			return false
 		}
 	}
 	return true
 }
 
-// GetContext returns a synthesis of completed task results for injection into new tasks.
-func (o *Orchestrator) GetContext() map[string]string {
+// GetContext returns a synthesis of completed span results for injection into new spans.
+func (o *Engine) GetContext() map[string]string {
 	o.mu.RLock()
 	defer o.mu.RUnlock()
 	// Deep copy of results
@@ -254,17 +254,17 @@ func (o *Orchestrator) GetContext() map[string]string {
 
 type Trajectory struct {
 	TraceID       string `json:"trace_id"`
-	Spans         []Task `json:"spans"`
+	Spans         []Span `json:"spans"`
 	TotalDuration string `json:"total_duration"`
 }
 
 // GetTrajectory returns a full timed trajectory of the swarm execution.
-func (o *Orchestrator) GetTrajectory() Trajectory {
+func (o *Engine) GetTrajectory() Trajectory {
 	o.mu.RLock()
 	defer o.mu.RUnlock()
 	
-	var spans []Task
-	for _, t := range o.tasks {
+	var spans []Span
+	for _, t := range o.spans {
 		spans = append(spans, t)
 	}
 	

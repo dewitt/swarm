@@ -85,7 +85,7 @@ paradigms:
   - `/drop <file_path>`: Removes a file from the pinned context.
   - `/drop all`: Clears the pinned context.
 - **Mechanics:** Pinned files are stored in a `map[string]string` in the
-  `AgentManager`. Before *every* `Chat` execution, the contents of all pinned
+  `Swarm`. Before *every* `Chat` execution, the contents of all pinned
   files are injected into the system prompt instructions (similar to how we
   inject `GEMINI.md` or global memory).
 - **Why this deviates slightly from Claude Code:** While Claude relies almost

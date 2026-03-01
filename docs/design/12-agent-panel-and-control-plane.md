@@ -21,7 +21,7 @@ know:
 
 This document outlines the design for the **Agent Panel and Control
 Plane**, the defining feature that transforms `swarm` from a basic chat
-interface into a Supreme Orchestrator.
+interface into a Supreme Engine.
 
 ## The Vision: Air Traffic Control for Code
 

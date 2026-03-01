@@ -280,7 +280,7 @@ type model struct {
 	history      []string
 	historyIdx   int
 	currentInput string
-	manager      sdk.AgentManager
+	swarm      sdk.Swarm
 	err          error
 	width        int
 	height       int
@@ -548,8 +548,8 @@ func doGitTick() tea.Cmd {
 	})
 }
 
-func getRecentActivity(manager sdk.AgentManager, width int) string {
-	sessions, _ := manager.ListSessions(context.Background())
+func getRecentActivity(swarm sdk.Swarm, width int) string {
+	sessions, _ := swarm.ListSessions(context.Background())
 	commits, _ := sdk.GetRecentCommits(".", 3)
 
 	var sb strings.Builder
@@ -668,7 +668,7 @@ func initialModel(planMode bool, resume bool) (model, error) {
 		{name: "Swarm Agent", icon: "◈", status: "Idle", state: "idle", spin: agentSpinner, resident: true, lastActive: time.Now()},
 	}
 
-	manager, err := sdk.NewManager(sdk.ManagerConfig{ResumeLastSession: resume})
+	swarm, err := sdk.NewSwarm(sdk.SwarmConfig{ResumeLastSession: resume})
 	if err != nil {
 		return model{}, err
 	}
@@ -676,7 +676,7 @@ func initialModel(planMode bool, resume bool) (model, error) {
 	// Prepare splash screen components for dynamic rendering in View()
 	greeting := fmt.Sprintf("\n\n%s %s!", lipgloss.NewStyle().Foreground(tipColor).Render("Welcome back,"), lipgloss.NewStyle().Bold(true).Render(getUserName()))
 	logoAndGreeting := renderLogo() + greeting
-	recentActivity := getRecentActivity(manager, 40) // Default width, will be updated in View()
+	recentActivity := getRecentActivity(swarm, 40) // Default width, will be updated in View()
 
 	return model{
 		textArea:       ta,
@@ -686,7 +686,7 @@ func initialModel(planMode bool, resume bool) (model, error) {
 		messages:       []string{"SPLASH_SCREEN"},
 		history:        loadedHist,
 		historyIdx:     len(loadedHist),
-		manager:        manager,
+		swarm:        swarm,
 		loading:        false,
 		quitting:       false,
 		planMode:       planMode,
@@ -1026,12 +1026,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			if m.observeMode {
-				m.observeLog = append(m.observeLog, fmt.Sprintf("[%s] ➡️ Delegated task to: %s", oldAgentName, lipgloss.NewStyle().Bold(true).Render(newAgentName)))
+				m.observeLog = append(m.observeLog, fmt.Sprintf("[%s] ➡️ Delegated span to: %s", oldAgentName, lipgloss.NewStyle().Bold(true).Render(newAgentName)))
 			}
 
 			// Update AgentPanel
 			if oldA := m.findAgent(oldAgentName); oldA != nil {
-				oldA.update("success", "Task delegated")
+				oldA.update("success", "Span delegated")
 			}
 			var newA *swarmAgent
 			newA, agentCmd = m.ensureAgent(newAgentName)
@@ -1368,7 +1368,7 @@ func (m model) callSDK(ctx context.Context, input string) tea.Cmd {
 	if m.planMode {
 		input = "[SYSTEM: You are in PLAN MODE. You must strictly act as a read-only architectural advisor. Under NO circumstances should you use tools to write files, execute bash commands, or alter git state. Only use tools to read and list files.]\n\nUser: " + input
 	}
-	ch, err := m.manager.Chat(ctx, input)
+	ch, err := m.swarm.Chat(ctx, input)
 	if err != nil {
 		return func() tea.Msg { return streamErrMsg{err: err} }
 	}
@@ -1381,7 +1381,7 @@ func (m *model) dequeueAndRun() tea.Cmd {
 		return checkGitStatus()
 	}
 
-	// Reset AgentPanel for new task
+	// Reset AgentPanel for new span
 	for _, a := range m.agents {
 		a.update("idle", "Idle")
 	}
@@ -1421,7 +1421,7 @@ func (m model) runShellCommand(ctx context.Context, command string) tea.Cmd {
 
 func (m model) fetchModels() tea.Cmd {
 	return func() tea.Msg {
-		models, err := m.manager.ListModels(context.Background())
+		models, err := m.swarm.ListModels(context.Background())
 		return modelsLoadedMsg{models: models, err: err}
 	}
 }
@@ -1499,7 +1499,7 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 		icon := agentMsgStyle.Render("✦ ")
 		m.messages = append(m.messages, lipgloss.JoinHorizontal(lipgloss.Top, icon, helpText))
 	case "/sessions":
-		sessions, err := m.manager.ListSessions(context.Background())
+		sessions, err := m.swarm.ListSessions(context.Background())
 		if err != nil {
 			m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Render("Failed to list sessions: "+err.Error()))
 			return nil
@@ -1523,7 +1523,7 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 		m.messages = append(m.messages, lipgloss.JoinHorizontal(lipgloss.Top, icon, lipgloss.JoinVertical(lipgloss.Left, lines...)))
 	case "/skills":
 		if len(parts) > 1 && parts[1] == "reload" {
-			if err := m.manager.Reload(); err != nil {
+			if err := m.swarm.Reload(); err != nil {
 				m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Render("Failed to reload skills: "+err.Error()))
 			} else {
 				m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"Skills and agents reloaded successfully.")
@@ -1531,7 +1531,7 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 			return nil
 		}
 
-		skills := m.manager.Skills()
+		skills := m.swarm.Skills()
 		if len(skills) == 0 {
 			m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"No dynamic skills are currently loaded.")
 			return nil
@@ -1570,7 +1570,7 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 
 		newModelName := parts[1]
 
-		// In a real CLI, we would want to reload the AgentManager here,
+		// In a real CLI, we would want to reload the Swarm here,
 		// but since BubbleTea is running, we just persist the preference for the next run.
 		cfg, err := sdk.LoadConfig()
 		if err == nil {
@@ -1585,8 +1585,8 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 			m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Render("Failed to load config: "+err.Error()))
 		}
 	case "/debug":
-		enabled := !m.manager.IsDebug()
-		m.manager.SetDebug(enabled)
+		enabled := !m.swarm.IsDebug()
+		m.swarm.SetDebug(enabled)
 		status := "enabled"
 		if !enabled {
 			status = "disabled"
@@ -1610,7 +1610,7 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 		if len(parts) > 1 {
 			fmt.Sscanf(parts[1], "%d", &n)
 		}
-		if err := m.manager.Rewind(n); err != nil {
+		if err := m.swarm.Rewind(n); err != nil {
 			m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Render("Failed to rewind: "+err.Error()))
 		} else {
 			for _, a := range m.agents {
@@ -1654,7 +1654,7 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 	case "/context":
 		if len(parts) == 1 {
 			// List context
-			files := m.manager.ListContext()
+			files := m.swarm.ListContext()
 			if len(files) == 0 {
 				m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"No files are currently pinned to the context window.")
 				return nil
@@ -1674,7 +1674,7 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 				return nil
 			}
 			filePath := parts[2]
-			if err := m.manager.AddContext(filePath); err != nil {
+			if err := m.swarm.AddContext(filePath); err != nil {
 				m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Render("Error pinning file: "+err.Error()))
 			} else {
 				m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+fmt.Sprintf("Pinned `%s` to the active context window.", filePath))
@@ -1688,7 +1688,7 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 			return nil
 		}
 		filePath := parts[1]
-		m.manager.DropContext(filePath)
+		m.swarm.DropContext(filePath)
 		if filePath == "all" {
 			m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"Cleared all pinned files from the context window.")
 		} else {
@@ -1726,7 +1726,7 @@ func (m *model) updateViewport() {
 			
 			// Refresh activity cache if needed (every 30s or if empty)
 			if m.cachedActivity == "" || time.Since(m.lastActivityRefresh) > 30*time.Second {
-				m.cachedActivity = getRecentActivity(m.manager, rightW)
+				m.cachedActivity = getRecentActivity(m.swarm, rightW)
 				m.lastActivityRefresh = time.Now()
 			}
 

@@ -60,7 +60,7 @@ ______________________________________________________________________
 ## 3. Repository Structure
 
 - `/cmd/swarm/`: The entry point for the CLI binary (Cobra, Bubble Tea TUI).
-- `/pkg/sdk/`: The embeddable Go SDK. Contains the AgentManager, session
+- `/pkg/sdk/`: The embeddable Go SDK. Contains the Swarm, session
   management (SQLite), and the ADK Swarm logic.
 - `/docs/design/`: High-level and detailed architectural documents. **You must
   read relevant documents here before making architectural changes.**

@@ -125,7 +125,7 @@ intelligent, autonomous agent acting on our behalf.
 We recognize that "no plan survives first contact with the enemy." In the real world, almost nothing agentic will work as expected on the first try.
 - **Dynamic Graphs are Essential:** Execution nodes must be able to dynamically make new subplans of their own when encountering obstacles.
 - **Node Autonomy:** Every node in the swarm (Agent, Tool, Remote execution) is responsible for doing its best to fulfill the request correctly and efficiently. We trust nodes to handle their own next steps—whether that's responding directly or orchestrating a subgraph—using the **Planning Agent** as an optional service for help.
-- **Upward Feedback:** Agents must be able to provide hints, context, and feedback back up the chain to the orchestrator to trigger replanning, rather than simply failing and halting execution.
+- **Upward Feedback:** Agents must be able to provide hints, context, and feedback back up the chain to the engine to trigger replanning, rather than simply failing and halting execution.
 
 ## 10. The Byzantine System & Checks and Balances
 

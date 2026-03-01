@@ -69,22 +69,23 @@ When run without arguments, it launches a persistent, interactive terminal sessi
 				fullPrompt = "[SYSTEM: You are in PLAN MODE. You must strictly act as a read-only architectural advisor. Under NO circumstances should you use tools to write files, execute bash commands, or alter git state. Only use tools to read and list files.]\n\nUser: " + fullPrompt
 			}
 
-			manager, err := sdk.NewManager()
+			var swarm sdk.Swarm
+			swarm, err := sdk.NewSwarm()
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 				os.Exit(1)
 			}
 
 			if trajectoryFlag || explainFlag {
-				manager.SetDebug(true)
+				swarm.SetDebug(true)
 			}
 
-			ch, err := manager.Chat(context.Background(), fullPrompt)
+			ch, err := swarm.Chat(context.Background(), fullPrompt)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 				os.Exit(1)
 			}
-			
+
 			var lastTrajectory string
 			for event := range ch {
 				if event.Type == sdk.ChatEventFinalResponse && !trajectoryFlag {
@@ -102,7 +103,7 @@ When run without arguments, it launches a persistent, interactive terminal sessi
 			if explainFlag && lastTrajectory != "" {
 				var traj sdk.Trajectory
 				if err := json.Unmarshal([]byte(lastTrajectory), &traj); err == nil {
-					explanation, err := manager.Explain(context.Background(), traj)
+					explanation, err := swarm.Explain(context.Background(), traj)
 					if err != nil {
 						fmt.Fprintf(os.Stderr, "\nExplanation failed: %v\n", err)
 					} else {

@@ -62,7 +62,7 @@ As the ecosystem evolves, monolithic AI tools (like Claude Code, Codex, or
 Gemini CLI) will become highly capable specialists. The `swarm` CLI should
 not attempt to rewrite these massive, proprietary systems from scratch.
 
-Instead, the `swarm` CLI will act as the **Supreme Orchestrator**.
+Instead, the `swarm` CLI will act as the **Supreme Engine**.
 
 ### The Implementation
 

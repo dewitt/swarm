@@ -25,13 +25,13 @@ entrypoint: main.go
 	err := os.WriteFile(manifestPath, []byte(yamlContent), 0644)
 	assert.NoError(t, err)
 
-	// We only need the defaultManager to call Discover, we don't need a real LLM for this
-	// But Discover is a method on AgentManager.
-	manager, err := sdk.NewManager(sdk.ManagerConfig{Model: &MockModel{}})
+	// We only need the defaultSwarm to call Discover, we don't need a real LLM for this
+	// But Discover is a method on Swarm.
+	swarm, err := sdk.NewSwarm(sdk.SwarmConfig{Model: &MockModel{}})
 	assert.NoError(t, err)
 
 	// Call Discover
-	manifest, err := manager.Discover(context.Background(), tempDir)
+	manifest, err := swarm.Discover(context.Background(), tempDir)
 
 	assert.NoError(t, err)
 	assert.NotNil(t, manifest)
@@ -43,10 +43,10 @@ entrypoint: main.go
 
 func TestDiscover_ManifestNotFound(t *testing.T) {
 	tempDir := t.TempDir()
-	manager, err := sdk.NewManager(sdk.ManagerConfig{Model: &MockModel{}})
+	swarm, err := sdk.NewSwarm(sdk.SwarmConfig{Model: &MockModel{}})
 	assert.NoError(t, err)
 
-	manifest, err := manager.Discover(context.Background(), tempDir)
+	manifest, err := swarm.Discover(context.Background(), tempDir)
 
 	assert.Error(t, err)
 	assert.Nil(t, manifest)
@@ -64,10 +64,10 @@ name: test-agent
 	err := os.WriteFile(manifestPath, []byte(yamlContent), 0644)
 	assert.NoError(t, err)
 
-	manager, err := sdk.NewManager(sdk.ManagerConfig{Model: &MockModel{}})
+	swarm, err := sdk.NewSwarm(sdk.SwarmConfig{Model: &MockModel{}})
 	assert.NoError(t, err)
 
-	manifest, err := manager.Discover(context.Background(), tempDir)
+	manifest, err := swarm.Discover(context.Background(), tempDir)
 
 	assert.Error(t, err)
 	assert.Nil(t, manifest)

@@ -861,9 +861,43 @@ func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan ChatEv
 			prompt = strings.Join(contextDocs, "\n\n") + "\n\nUser Prompt:\n" + prompt
 		}
 
-		// --- Byzantine Swarm Orchestration ---
-		
-		// 1. Initial Plan (Hypothesis)
+		// --- 1. Chat Input Agent (CIA) Pre-processing ---
+		out <- ChatEvent{Type: ChatEventThought, Agent: "CIA", Content: "Classifying intent…"}
+		ciaRespIter := m.flashModel.GenerateContent(ctx, &model.LLMRequest{
+			Contents: []*genai.Content{genai.NewContentFromText(prompt, genai.Role("user"))},
+			Config: &genai.GenerateContentConfig{
+				SystemInstruction: genai.NewContentFromText(m.ciaInstruction, genai.Role("system")),
+			},
+		}, false)
+
+		for ciaResp, err := range ciaRespIter {
+			if err == nil && ciaResp.Content != nil && len(ciaResp.Content.Parts) > 0 {
+				ciaText := ciaResp.Content.Parts[0].Text
+				if strings.HasPrefix(ciaText, "ROUTE TO: ") {
+					target := strings.TrimPrefix(ciaText, "ROUTE TO: ")
+					target = strings.TrimSpace(target)
+					if target != "" && target != "router_agent" {
+						out <- ChatEvent{Type: ChatEventThought, Agent: "CIA", Content: "Rerouting to " + target}
+						// Manual handoff for CIA classification
+						sessResp, err := m.sessionSvc.Get(ctx, &session.GetRequest{
+							AppName:   "swarm-cli",
+							UserID:    m.userID,
+							SessionID: m.sessionID,
+						})
+						if err == nil {
+							transferEvent := session.NewEvent(fmt.Sprintf("cia_%d", time.Now().UnixNano()))
+							transferEvent.Author = "cia"
+							transferEvent.Actions.TransferToAgent = target
+							_ = m.sessionSvc.AppendEvent(ctx, sessResp.Session, transferEvent)
+							out <- ChatEvent{Type: ChatEventHandoff, Content: target}
+						}
+					}
+				}
+			}
+			break
+		}
+
+		// --- 2. Byzantine Swarm Orchestration (Planning) ---
 		out <- ChatEvent{Type: ChatEventThought, Agent: "Architect", Content: "Planning swarm execution…"}
 		graph, err := m.Plan(ctx, prompt)
 		if err != nil {
@@ -871,13 +905,40 @@ func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan ChatEv
 			return
 		}
 
+		// Helper to run COA sanity check
+		runCOA := func(content string) {
+			coaPrompt := fmt.Sprintf(`You are the Chat Output Agent (COA).
+Sanity check the following response from a swarm agent to the user.
+Goal: Ensure the response is helpful, accurate, and respects the user's time.
+
+Response:
+%s
+
+If the response is clearly wrong, hallucinating, or missing the point, output: "FIX: [Reason and suggestion]".
+Otherwise, output: "OK".`, content)
+
+			coaRespIter := m.flashModel.GenerateContent(ctx, &model.LLMRequest{
+				Contents: []*genai.Content{genai.NewContentFromText(coaPrompt, genai.Role("user"))},
+			}, false)
+
+			for coaResp, err := range coaRespIter {
+				if err == nil && coaResp.Content != nil && len(coaResp.Content.Parts) > 0 {
+					text := coaResp.Content.Parts[0].Text
+					if strings.HasPrefix(text, "FIX:") {
+						out <- ChatEvent{Type: ChatEventThought, Agent: "COA", Content: "Sanity check failed: " + strings.TrimPrefix(text, "FIX:")}
+					}
+				}
+				break
+			}
+		}
+
 		if graph.ImmediateResponse != "" {
+			runCOA(graph.ImmediateResponse)
 			out <- ChatEvent{Type: ChatEventFinalResponse, Agent: "Architect", Content: graph.ImmediateResponse}
 			return
 		}
 
-		// 2. Execute the Reactive Task Pool
-		// ExecuteGraph handles the parallel execution, telemetry monitoring, and dynamic branching.
+		// --- 3. Execute the Reactive Task Pool ---
 		events, err := m.ExecuteGraph(ctx, graph)
 		if err != nil {
 			out <- ChatEvent{Type: ChatEventError, Agent: "Orchestrator", Content: "Failed to start swarm: " + err.Error()}
@@ -886,30 +947,7 @@ func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan ChatEv
 
 		for event := range events {
 			if event.Type == ChatEventFinalResponse {
-				// --- Chat Output Agent (COA) Sanity Check ---
-				coaPrompt := fmt.Sprintf(`You are the Chat Output Agent (COA).
-Sanity check the following response from a swarm agent to the user.
-Goal: Ensure the response is helpful, accurate, and respects the user's time.
-
-Response:
-%s
-
-If the response is clearly wrong, hallucinating, or missing the point, output: "FIX: [Reason and suggestion]".
-Otherwise, output: "OK".`, event.Content)
-
-				coaRespIter := m.flashModel.GenerateContent(ctx, &model.LLMRequest{
-					Contents: []*genai.Content{genai.NewContentFromText(coaPrompt, genai.Role("user"))},
-				}, false)
-
-				for coaResp, err := range coaRespIter {
-					if err == nil && coaResp.Content != nil && len(coaResp.Content.Parts) > 0 {
-						text := coaResp.Content.Parts[0].Text
-						if strings.HasPrefix(text, "FIX:") {
-							out <- ChatEvent{Type: ChatEventThought, Agent: "COA", Content: "Sanity check failed: " + strings.TrimPrefix(text, "FIX:")}
-						}
-					}
-					break
-				}
+				runCOA(event.Content)
 			}
 			out <- event
 		}

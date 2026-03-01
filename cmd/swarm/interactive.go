@@ -657,8 +657,8 @@ func initialModel(planMode bool, resume bool) (model, error) {
 	agentSpinner.Style = lipgloss.NewStyle().Foreground(colorActive)
 
 	agents := []*swarmAgent{
-		{name: "Chat Input Agent", icon: "⚙", status: "Idle", state: "idle", spin: agentSpinner, resident: true, lastActive: time.Now()},
-		{name: "Router", icon: "◈", status: "Idle", state: "idle", spin: agentSpinner, resident: true, lastActive: time.Now()},
+		{name: "Input Agent", icon: "⚙", status: "Idle", state: "idle", spin: agentSpinner, resident: true, lastActive: time.Now()},
+		{name: "Swarm Agent", icon: "◈", status: "Idle", state: "idle", spin: agentSpinner, resident: true, lastActive: time.Now()},
 	}
 
 	manager, err := sdk.NewManager(sdk.ManagerConfig{ResumeLastSession: resume})
@@ -1135,6 +1135,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.update("success", "Response ready")
 
 			text := event.Content
+			
+			// Fulfill Requirement 1 & 2: Invisible intermediaries
+			if author == "Input Agent" || author == "COA" {
+				// Still update viewport and panel, but don't show text to user
+				m.updateViewport()
+				return m, tea.Batch(listenForStream(msg.ch), agentCmd)
+			}
+
 			out := text
 			if m.renderer != nil {
 				if rOut, err := m.renderer.Render(text); err == nil {
@@ -1144,7 +1152,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			badge := getAgentBadge(author)
 			m.messages = append(m.messages, badge+"\n"+strings.TrimSpace(out))
-			// Do NOT set m.loading = false or dequeue yet. The swarm might still be working!
 			m.updateViewport()
 			return m, tea.Batch(listenForStream(msg.ch), agentCmd)
 

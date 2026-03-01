@@ -612,8 +612,10 @@ func (m *defaultManager) Reload() error {
 Your job is to classify user input and determine if it should be routed to a specialized sub-agent or the primary router.
 Available agents: %s
 
+CRITICAL: You MUST ONLY route to the specific agent names listed above. DO NOT invent or hallucinate new agent names.
+
 If the user input is a digression from the current task, or a new general request, output: "ROUTE TO: router_agent"
-If the user input is specifically for one of the specialized agents, output: "ROUTE TO: [agent_name]"
+If the user input is specifically for one of the specialized agents listed above, output: "ROUTE TO: [agent_name]"
 Otherwise, output: "CONTINUE"
 
 Keep your analysis silent. ONLY output the routing decision.`, strings.Join(m.subAgentNames, ", "))

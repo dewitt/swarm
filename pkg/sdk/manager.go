@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -103,6 +104,7 @@ type AgentManager interface {
 	AddContext(path string) error; DropContext(path string); ListContext() []string
 	Plan(ctx context.Context, prompt string) (*ExecutionGraph, error)
 	ExecuteGraph(ctx context.Context, g *ExecutionGraph) (<-chan ChatEvent, *Orchestrator, error)
+	ExecuteGraphWithOrchestrator(ctx context.Context, o *Orchestrator, g *ExecutionGraph) (<-chan ChatEvent, *Orchestrator, error)
 	Chat(ctx context.Context, prompt string) (<-chan ChatEvent, error)
 	Reset(); Reload() error; Rewind(n int) error; Skills() []*Skill
 	ListModels(ctx context.Context) ([]ModelInfo, error); ListSessions(ctx context.Context) ([]SessionInfo, error)
@@ -279,39 +281,100 @@ func (m *defaultManager) Plan(ctx context.Context, prompt string) (*ExecutionGra
 func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan ChatEvent, error) {
 	out := make(chan ChatEvent, 1000)
 	go func() {
-		defer close(out); swarmStartTime := time.Now(); out <- ChatEvent{Type: ChatEventThought, Agent: "Input Agent", Content: "Classifying…"}
-		inputIter := m.fastModel.GenerateContent(ctx, &model.LLMRequest{Contents: []*genai.Content{genai.NewContentFromText(prompt, genai.Role("user"))}, Config: &genai.GenerateContentConfig{SystemInstruction: genai.NewContentFromText(m.inputInstruction, genai.Role("system"))}}, false)
+		defer close(out)
+		swarmStartTime := time.Now()
+		
+		// Initialize orchestrator early to capture all spans
+		o := NewOrchestrator(nil)
+
+		// 1. Input Agent Span
+		inputStart := time.Now()
+		out <- ChatEvent{Type: ChatEventThought, Agent: "Input Agent", Content: "Classifying…"}
+		inputIter := m.fastModel.GenerateContent(ctx, &model.LLMRequest{
+			Contents: []*genai.Content{genai.NewContentFromText(prompt, genai.Role("user"))},
+			Config: &genai.GenerateContentConfig{SystemInstruction: genai.NewContentFromText(m.inputInstruction, genai.Role("system"))},
+		}, false)
+		
+		var inputResult string
 		for resp, err := range inputIter {
 			if err != nil { out <- ChatEvent{Type: ChatEventError, Content: err.Error()}; return }
 			if resp.Content != nil && len(resp.Content.Parts) > 0 {
-				t := resp.Content.Parts[0].Text
-				if strings.HasPrefix(t, "RESPONSE: ") {
-					r := strings.TrimPrefix(t, "RESPONSE: ")
-					if m.runCOA(ctx, out, "Input Agent", r) {
-						if m.debugMode { out <- ChatEvent{Type: ChatEventDebug, Agent: "Orchestrator", Content: fmt.Sprintf("Duration: %s", time.Since(swarmStartTime))} }
-						out <- ChatEvent{Type: ChatEventFinalResponse, Agent: "Input Agent", Content: r}; return
-					}
-				}
+				inputResult = resp.Content.Parts[0].Text
 			}
 			break
 		}
-		out <- ChatEvent{Type: ChatEventThought, Agent: "Planning Agent", Content: "Planning…"}
-		graph, err := m.Plan(ctx, prompt); if err != nil { out <- ChatEvent{Type: ChatEventError, Content: err.Error()}; return }
-		if graph.ImmediateResponse != "" {
-			if m.runCOA(ctx, out, "Planning Agent", graph.ImmediateResponse) {
-				if m.debugMode { out <- ChatEvent{Type: ChatEventDebug, Agent: "Orchestrator", Content: fmt.Sprintf("Duration: %s", time.Since(swarmStartTime))} }
-				out <- ChatEvent{Type: ChatEventFinalResponse, Agent: "Planning Agent", Content: graph.ImmediateResponse}; return
+		
+		// Record Input Agent as a span
+		o.AddTasks(Task{
+			ID: "input", Name: "Intent Classification", Agent: "input_agent", 
+			Status: TaskStatusComplete, StartTime: inputStart.Format(time.RFC3339Nano), 
+			EndTime: time.Now().Format(time.RFC3339Nano), Duration: time.Since(inputStart).String(),
+			Attributes: map[string]any{"gen_ai.prompt": prompt, "gen_ai.completion": inputResult},
+		})
+
+		if strings.HasPrefix(inputResult, "RESPONSE: ") {
+			r := strings.TrimPrefix(inputResult, "RESPONSE: ")
+			if m.runCOA(ctx, out, "Input Agent", r) {
+				if m.debugMode {
+					traj := o.GetTrajectory(); traj.TotalDuration = time.Since(swarmStartTime).String()
+					b, _ := json.MarshalIndent(traj, "", "  ")
+					out <- ChatEvent{Type: ChatEventDebug, Agent: "Orchestrator", Content: string(b)}
+				}
+				out <- ChatEvent{Type: ChatEventFinalResponse, Agent: "Input Agent", Content: r}
+				return
 			}
 		}
-		events, orchestrator, err := m.ExecuteGraph(ctx, graph); if err != nil { out <- ChatEvent{Type: ChatEventError, Content: err.Error()}; return }
+
+		// 2. Planning Agent Span
+		planStart := time.Now()
+		out <- ChatEvent{Type: ChatEventThought, Agent: "Planning Agent", Content: "Planning…"}
+		graph, err := m.Plan(ctx, prompt)
+		if err != nil { out <- ChatEvent{Type: ChatEventError, Content: err.Error()}; return }
+		
+		planJSON, _ := json.Marshal(graph)
+		o.AddTasks(Task{
+			ID: "planning", Name: "Graph Generation", Agent: "planning_agent",
+			Status: TaskStatusComplete, StartTime: planStart.Format(time.RFC3339Nano),
+			EndTime: time.Now().Format(time.RFC3339Nano), Duration: time.Since(planStart).String(),
+			Attributes: map[string]any{"gen_ai.prompt": prompt, "gen_ai.completion": string(planJSON)},
+		})
+
+		if graph.ImmediateResponse != "" {
+			if m.runCOA(ctx, out, "Planning Agent", graph.ImmediateResponse) {
+				if m.debugMode {
+					traj := o.GetTrajectory(); traj.TotalDuration = time.Since(swarmStartTime).String()
+					b, _ := json.MarshalIndent(traj, "", "  ")
+					out <- ChatEvent{Type: ChatEventDebug, Agent: "Orchestrator", Content: string(b)}
+				}
+				out <- ChatEvent{Type: ChatEventFinalResponse, Agent: "Planning Agent", Content: graph.ImmediateResponse}
+				return
+			}
+		}
+
+		// 3. Execute the Swarm
+		// Pass the existing orchestrator to ExecuteGraph so spans are combined
+		events, _, err := m.ExecuteGraphWithOrchestrator(ctx, o, graph)
+		if err != nil { out <- ChatEvent{Type: ChatEventError, Content: err.Error()}; return }
 		for event := range events { out <- event }
-		if m.debugMode { traj := orchestrator.GetTrajectory(); b, _ := json.MarshalIndent(traj, "", "  "); out <- ChatEvent{Type: ChatEventDebug, Agent: "Orchestrator", Content: string(b)} }
+		
+		if m.debugMode {
+			traj := o.GetTrajectory(); traj.TotalDuration = time.Since(swarmStartTime).String()
+			b, _ := json.MarshalIndent(traj, "", "  ")
+			out <- ChatEvent{Type: ChatEventDebug, Agent: "Orchestrator", Content: string(b)}
+		}
 	}()
 	return out, nil
 }
 
 func (m *defaultManager) ExecuteGraph(ctx context.Context, g *ExecutionGraph) (<-chan ChatEvent, *Orchestrator, error) {
-	out := make(chan ChatEvent, 1000); o := NewOrchestrator(g); memSvc := NewMemorySessionService()
+	return m.ExecuteGraphWithOrchestrator(ctx, NewOrchestrator(g), g)
+}
+
+func (m *defaultManager) ExecuteGraphWithOrchestrator(ctx context.Context, o *Orchestrator, g *ExecutionGraph) (<-chan ChatEvent, *Orchestrator, error) {
+	out := make(chan ChatEvent, 1000); memSvc := NewMemorySessionService()
+	// Ensure initial tasks are added if not already there
+	if g != nil { o.AddTasks(g.Tasks...) }
+	
 	go func() {
 		defer close(out); type completedTask struct { ID, Result string; Replan bool }; completed := make(chan completedTask, 100); activeTasks := 0; var wg sync.WaitGroup
 		for {
@@ -353,7 +416,22 @@ func (m *defaultManager) ExecuteGraph(ctx context.Context, g *ExecutionGraph) (<
 			select {
 			case <-ctx.Done(): return
 			case done := <-completed: o.MarkComplete(done.ID, done.Result); activeTasks--
-				if done.Replan { newG, err := m.Plan(ctx, "Pivot: "+done.Result); if err == nil { o.AddTasks(newG.Tasks...) } }
+				if done.Replan {
+					newG, err := m.Plan(ctx, "Pivot: "+done.Result); if err == nil { o.AddTasks(newG.Tasks...) }
+				} else if strings.Contains(done.Result, "\"tasks\":") {
+					re := regexp.MustCompile(`(?s)\{.*\}`)
+					match := re.FindString(done.Result)
+					if match != "" {
+						var subGraph ExecutionGraph
+						if err := json.Unmarshal([]byte(match), &subGraph); err == nil {
+							for i := range subGraph.Tasks {
+								subGraph.Tasks[i].ParentID = done.ID
+								subGraph.Tasks[i].ID = fmt.Sprintf("%s_%s", done.ID, subGraph.Tasks[i].ID)
+							}
+							o.AddTasks(subGraph.Tasks...)
+						}
+					}
+				}
 			}
 		}
 		wg.Wait()

@@ -108,10 +108,10 @@ intelligent, autonomous agent acting on our behalf.
 - **The Agent as the Interface:** The user no longer interacts directly with
   raw tools or rigid UIs. Instead, they interact with a coordinating
   intelligence that translates intent into action.
-- **Proactive Conversation Management:** Our "Chat Input Agent" (CIA) is a
-  first-class realization of this principle. By using an agent to proactively
-  classify and route inputs, we ensure that the system remains fluid and
-  aligned with human thought patterns, even when they digress.
+- **Invisible Mediation (Input & Output Agents):** Every interaction is mediated 
+  by an **Input Agent** (preprocessing) and an **Output Agent** (sanity checking).
+  These agents are invisible to the user in the conversation but appear in 
+  system trajectories and the Agent Panel.
 - **Intelligent Output Synthesis:** Just as inputs are mediated, computer-to-human
   outputs should be synthesized by an agent to ensure they are communicated in
   the most effective format, tone, and language for the specific user and
@@ -124,13 +124,14 @@ intelligent, autonomous agent acting on our behalf.
 
 We recognize that "no plan survives first contact with the enemy." In the real world, almost nothing agentic will work as expected on the first try.
 - **Dynamic Graphs are Essential:** Execution nodes must be able to dynamically make new subplans of their own when encountering obstacles.
+- **Node Autonomy:** Every node in the swarm (Agent, Tool, Remote execution) is responsible for doing its best to fulfill the request correctly and efficiently. We trust nodes to handle their own next steps—whether that's responding directly or orchestrating a subgraph—using the **Planning Agent** as an optional service for help.
 - **Upward Feedback:** Agents must be able to provide hints, context, and feedback back up the chain to the orchestrator to trigger replanning, rather than simply failing and halting execution.
 
 ## 10. The Byzantine System & Checks and Balances
 
 We accept that a complex swarm of agents operating concurrently is a byzantine system, and that is a feature, not a bug.
 - **Observer Agents:** We employ observer agents that act as checks and balances. They constantly monitor the execution graph and identify when parts of the system are going wrong or deviating from the goal.
-- **Continuous Improvement:** Our agents are smart and must constantly be on the lookout for opportunities to improve the plan, correct each other's mistakes, and optimize the workflow.
+- **Trust but Verify:** While nodes are autonomous, they are never unsupervised. Continuous observation ensures the byzantine swarm remains aligned with the user's intent.
 
 ## 11. Fall Back on the Smartest Models
 
@@ -138,6 +139,17 @@ When the system is in doubt, stuck in a loop, or facing ambiguous errors, we do 
 - **Wisdom of the Frontier:** We always fall back on the wisdom of our smartest models. Because these models are getting smarter every day, routing complex unresolvable states back to them ensures the system can self-heal and adapt to novel edge cases without requiring brittle custom code.
 
 ## The "Engineering Manager" Paradigm
+
+The ultimate goal of `swarm` is to abstract away the mechanics of agent
+orchestration. A user should be able to type `$ swarm` and give an
+arbitrarily complex directive (e.g., *"Migrate our billing service from Python
+to Go"*).
+
+The system must be intelligent enough to autonomously decompose the task,
+dynamically provision the exact number of specialized agents required (one or
+one hundred), and coordinate their parallel efforts to completion. 
+
+The **Swarm Agent** is the primary realization of this mission—it holds the instructions that define the characteristics, personality, and foundational rules of the entire application.
 
 The ultimate goal of `swarm` is to abstract away the mechanics of agent
 orchestration. A user should be able to type `$ swarm` and give an

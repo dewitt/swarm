@@ -1,79 +1,63 @@
-# Dynamic Swarm Provisioning & Parallel Execution
+# Dynamic Swarm Provisioning & Reactive Orchestration
 
-## The Vision: High-Scale Agentic Orchestration
+## The Vision: The Reactive "Engineering Manager"
 
-The ultimate goal of the `swarm` project is to transition from a serial, single-agent conversation into a multi-agent "Engineering Manager" paradigm. In this model, a user provides a high-level goal, and the CLI autonomously decomposes it into a dependency graph of sub-tasks executed by parallel worker agents.
+The `swarm` project rejects the idea of a static execution plan. In complex agentic systems, **"no plan survives first contact with the enemy."** 
 
-## Architectural Components
+We are moving from a "Waterfall Scheduler" (Plan -> Execute) to a **Reactive Controller** (Seed -> Execute -> Observe -> Mutate). The system operates as a **Byzantine Swarm**, where multiple agents operate concurrently, constantly re-evaluating the path forward based on real-world feedback.
 
-To support complex dynamic graphs with parallel branches, the following architectural components are required in the SDK (`pkg/sdk/`):
+## Architectural Components (The Reactive Model)
 
-### 1. The Graph Planner (The Architect)
+### 1. The Input Agent (Invisible Intermediary)
 
-A specialized agent responsible for task decomposition. 
-- **Input:** High-level user goal + Workspace context.
-- **Output:** A Directed Acyclic Graph (DAG) of tasks. 
-- **Schema:** 
-  ```json
-  {
-    "tasks": [
-      { "id": "task_1", "name": "Research API", "agent": "web_researcher", "dependencies": [] },
-      { "id": "task_2", "name": "Scaffold Backend", "agent": "builder", "dependencies": ["task_1"] },
-      { "id": "task_3", "name": "Design UI Mockups", "agent": "designer", "dependencies": ["task_1"] },
-      { "id": "task_4", "name": "Integrate Frontend", "agent": "builder", "dependencies": ["task_2", "task_3"] }
-    ]
-  }
-  ```
+Every user prompt is processed by the **Input Agent**.
+- **Role:** Invisible preprocessing. It handles social greetings, meta-questions, and intent classification.
+- **Invisibility:** While its actions are recorded in trajectories and the Agent Panel, it does not appear as a speaking participant in the user chat.
 
-### 2. The Swarm Orchestrator (The Scheduler)
+### 2. The Planning Agent (On-Demand Architect)
 
-A new component within the `AgentManager` that manages the execution of the DAG.
-- **Dependency Tracking:** Monitors the status of each task.
-- **Parallel Dispatch:** Identifies "ready" tasks (those whose dependencies are met) and dispatches them to available workers.
-- **Concurrency Control:** Limits the number of simultaneous active agents to manage token costs and local resource usage.
+The **Planning Agent** (formerly the Architect) is an on-demand service for task decomposition.
+- **Node Autonomy:** Nodes are trusted to execute on their own. They only call upon the Planning Agent if they require a structured execution graph to fulfill a complex request.
+- **Triviality Handling:** Trivial tasks skip the Planning Agent entirely, with nodes responding directly to the requester.
 
-### 3. Parallel Execution Loop
+### 3. The Reactive Task Pool (The Living Graph)
 
-The `Runner` must be upgraded to support multiple concurrent agent sessions.
-- **Context Isolation:** Each worker agent must have its own `session.Session` or a scoped sub-session to prevent context contamination.
-- **Shared State (The Blackboard):** Agents need a shared mechanism to pass results (e.g., Task 1's research findings must be available to Task 2 and Task 3). This can be achieved via:
-    - **Local Filesystem:** Standard GitOps workflow.
-    - **Session Service:** Appending events to a shared session with specific metadata.
+The core of the system is a thread-safe **Task Pool**.
+- **Dynamic Mutability:** Tasks can be added, canceled, or branched mid-execution.
+- **Result Sharing (Blackboard):** Every completed node posts its results to a shared Blackboard, making the data available to all concurrent and future nodes.
 
-### 4. Multiplexed Event Stream
+### 4. Continuous Observer Agents (Checks & Balances)
 
-The `ChatEvent` and the `Chat` return channel must be upgraded to support multiple agents streaming events simultaneously.
-- **AgentID Requirement:** Every `ChatEvent` must include a unique `AgentID` (or `TaskID`) so the UI can route the event to the correct Agent Card in the panel.
-- **Event Aggregation:** The SDK must multiplex streams from $N$ workers into a single outbound channel for the UI.
+To manage a byzantine swarm, we need independent oversight.
+- **Sidecar Observers:** Lightweight agents that monitor the live telemetry of workers.
+- **Trust but Verify:** Observers ensure that autonomous nodes stay on track, correcting hallucination loops or intent deviations asynchronously.
 
-### 5. Dynamic Replanning & Feedback Loop
+### 5. The Output Agent (Invisible Shield)
 
-A static DAG is insufficient because "no plan survives first contact with the enemy." Execution nodes must be able to pivot.
-- **Upward Feedback:** Agents must have a tool (e.g., `request_replan`) to yield control back to the Orchestrator with hints and context about why the current task is blocked or how the overall goal should shift.
-- **Graph Mutability:** The Orchestrator must be able to accept a `ReplanRequested` event, pause the dispatch of new tasks, and feed the failed/pivoted task's context back into the Graph Planner.
-- **Sub-planning:** Execution nodes should be able to dynamically spawn their own sub-graphs for localized complex tasks without needing the global Orchestrator to re-evaluate the entire project.
+The **Output Agent** provides the final layer of sanity checking.
+- **Role:** Damage control. It reviews every response destined for the user. If it detects a critical failure, it blocks the output and triggers a replan.
+- **Invisibility:** Like the Input Agent, it is a silent mediator that does not appear in the chat log.
 
-### 6. Observer Agents (Checks and Balances)
+### 6. The Swarm Agent (The Core Persona)
 
-In a highly concurrent, byzantine system, we need continuous monitoring.
-- **Execution Oversight:** Specialized "Observer Agents" run in parallel to the workers. They monitor the event stream, checking for infinite loops, hallucinated tool calls, or deviations from the user's original intent.
-- **Intervention:** When an Observer detects a critical failure path, it can inject a "Stop and Re-evaluate" event into the Orchestrator, forcing a fallback to the smartest available model to untangle the mess.
+The **Swarm Agent** (formerly the Router) is the primary agent.
+- **Role:** It holds the instructions that define the overall persona, characteristics, and rules of the swarm application. It is the agent that "represents" the system to the user.
 
 ## UI Visualization (The Execution Graph)
 
 The Agent Panel must evolve to visualize these dependencies:
-- **Graph View:** Optional transition from a grid of cards to a node-link diagram (using ASCII/Unicode drawing characters).
-- **Indentation/Nesting:** Use indentation in the grid to show which agents are blocked or branched from others.
 - **Status Mapping:** 
     - ⚪ **Pending:** Task discovered but dependencies not met.
     - 🔵 **Active:** Task currently executing.
-    - 🟢 **Complete:** Task finished successfully; results available to dependents.
-    - 🟡 **Blocked:** Dependencies met, but waiting for resources or HITL.
+    - 🟢 **Complete:** Task finished successfully.
+    - 🔴 **Failed:** Task hit an unrecoverable error.
+    - 🟡 **Blocked:** Waiting for user input or resource availability.
+    - 🟣 **Invalidated:** Task pruned due to a pivot in the plan.
 
 ## Implementation Phases
 
-1. **Protocol Definition:** Define the JSON schema for the DAG and update `ChatEvent` struct.
-2. **DAG Planner Agent:** Create a new "Architect" skill that can reliably output the DAG.
-3. **Serial DAG Execution:** Implement the Scheduler but execute tasks one-by-one to verify logic.
-4. **Parallel Dispatch:** Enable concurrent execution of independent branches using Go routines.
-5. **UI Graph Rendering:** Update the Bubble Tea Agent Panel to render dependency lines.
+1. **Naming Consolidation:** Rename all internal symbols to match Input/Output/Planning/Swarm agent conventions.
+2. **Invisible Mediation:** Refactor the UI to hide mediation agents from the chat history while keeping them in the panel.
+3. **Node Autonomy:** Trust worker nodes to handle their own next steps by default.
+4. **Observer Sidecars:** Refactor background monitoring to be truly asynchronous.
+5. **UI Graph Fidelity:** Update the Agent Panel to visualize a **living, shifting graph**.

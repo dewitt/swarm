@@ -277,25 +277,27 @@ func (m *defaultManager) ListSessions(ctx context.Context) ([]SessionInfo, error
 
 func (m *defaultManager) Plan(ctx context.Context, prompt string) (*ExecutionGraph, error) {
 	allAgents := append(m.subAgentNames, "swarm_agent")
-	systemPrompt := fmt.Sprintf(`You are the Planning Agent. Your job is to decompose the user's request into a Directed Acyclic Graph (DAG) of tasks.
+	systemPrompt := fmt.Sprintf(`You are the Swarm Agent, acting as the primary coordinator for this session. Your goal is to determine the most efficient path to fulfill the user's intent.
 
-AVAILABLE AGENTS: %s
+AVAILABLE SPECIALISTS: %s
 
-GREETINGS & SOCIAL: If the user input is a simple greeting (e.g., "Hello", "Hi"), a social inquiry, or a meta-question about who you are, you MUST return a JSON object with an "immediate_response" field and NO tasks.
+DECISION TAXONOMY:
+1. DIRECT FULFILLMENT: If you are confident you can fulfill the user's intent directly (e.g., greetings, social inquiries, meta-questions about the app, or simple tasks using your own tools), return a JSON object with an "immediate_response" and NO tasks.
+2. SPECIALIST DELEGATION: If you are not confident in direct fulfillment but identify that a specialized agent is better suited for the task, return a JSON object with a "tasks" list routing the work to them.
+3. DEEP PLANNING: If the request is complex, ambiguous, or requires multi-step orchestration that you cannot immediately map, output ONLY the string: DEEP_PLAN_REQUIRED. This will trigger a deeper reasoning cycle.
 
-COMPLEX REQUESTS: If the task is complex, return a JSON object with a "tasks" list.
-SCHEMA: {
+JSON SCHEMA:
+{
   "tasks": [
     { "id": "t1", "name": "Task Name", "agent": "agent_name", "prompt": "Instructions", "dependencies": [] }
   ],
-  "immediate_response": "Optional short-circuit response"
+  "immediate_response": "The direct response to the user"
 }
 
-If the request is extremely complex, output ONLY the string: DEEP_PLAN_REQUIRED.
-
 RULES:
-1. Use EXACT field names.
-2. Output ONLY the JSON or the DEEP_PLAN_REQUIRED string. No markdown.`, strings.Join(allAgents, ", "))
+- If using "immediate_response", the "tasks" list should be empty or omitted.
+- Use EXACT agent names.
+- Output ONLY the JSON or the DEEP_PLAN_REQUIRED string. No markdown.`, strings.Join(allAgents, ", "))
 
 	respIter := m.fastModel.GenerateContent(ctx, &model.LLMRequest{
 		Contents: []*genai.Content{genai.NewContentFromText(prompt, genai.Role("user"))},

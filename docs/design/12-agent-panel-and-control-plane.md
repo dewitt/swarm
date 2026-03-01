@@ -167,7 +167,7 @@ A user should be able to type `$ agents` to open the console and simply say:
 The CLI must be smart enough to understand that this is not a task for a
 single LLM call. It must autonomously:
 
-1. **Plan & Decompose:** The Router agent immediately spins up a "Planning
+1. **Plan & Decompose:** The Swarm Agent agent immediately spins up a "Planning
    Swarm" to break the massive request down into a dependency graph of
    sub-tasks.
 1. **Dynamic Provisioning:** The system dynamically provisions as many agents

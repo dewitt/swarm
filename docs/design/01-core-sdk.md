@@ -19,7 +19,7 @@ power the CLI's interactive assistant.
 
 Internally, the SDK uses a multi-agent topology to resolve user commands:
 
-- **Router Agent**: Analyzes user input and determines whether the request is
+- **Swarm Agent**: Analyzes user input and determines whether the request is
   a local file operation, an agent-building task, or a deployment command.
 - **Builder Agent**: Specialized in scaffolding new agent projects across
   different frameworks (ADK, LangGraph).

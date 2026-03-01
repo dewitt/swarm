@@ -72,7 +72,7 @@ Screen" mode, the user's terminal can be left in a broken, unusable state
   cleanly shut down the Bubble Tea program, restore the terminal state, and
   then write the stack trace to `stderr` and the log file.
 - **Sub-Agent Isolation:** If a sub-agent or tool execution fails or panics,
-  the error should be caught by the Router Agent's execution loop and returned
+  the error should be caught by the Swarm Agent's execution loop and returned
   to the user as a standard chat message (e.g., "✦ The gitops_agent
   encountered a fatal error: ..."), rather than crashing the host process.
 

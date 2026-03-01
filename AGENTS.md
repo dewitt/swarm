@@ -61,12 +61,12 @@ ______________________________________________________________________
 
 - `/cmd/swarm/`: The entry point for the CLI binary (Cobra, Bubble Tea TUI).
 - `/pkg/sdk/`: The embeddable Go SDK. Contains the AgentManager, session
-  management (SQLite), and the ADK Router logic.
+  management (SQLite), and the ADK Swarm logic.
 - `/docs/design/`: High-level and detailed architectural documents. **You must
   read relevant documents here before making architectural changes.**
 - `/docs/cuj/`: Critical User Journeys. If you change a workflow, you must
   update or add a CUJ here.
-- `/skills/`: The dynamic Markdown-based skills that teach the core Router
+- `/skills/`: The dynamic Markdown-based skills that teach the core Swarm
   agent new capabilities (e.g., how to scaffold ADK projects, how to wrap
   other CLIs like `gemini-cli` or `claude-code`).
 

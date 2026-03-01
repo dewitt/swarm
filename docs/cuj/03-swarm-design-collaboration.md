@@ -23,7 +23,7 @@ agents
 
 ### 2. Orchestrating the Swarm
 
-The internal Router Agent determines that this requires complex,
+The internal Swarm Agent determines that this requires complex,
 multi-perspective generation. It uses the `Swarm Skill` to instantiate three
 distinct internal agents:
 
@@ -51,7 +51,7 @@ into the debate without overwhelming them.
 
 ### 4. Synthesis and Review
 
-After the swarm concludes its debate, the Router Agent synthesizes the
+After the swarm concludes its debate, the Swarm Agent synthesizes the
 agreed-upon points into the requested file.
 
 > **Swarm CLI:** The swarm has reached a consensus. I have written the

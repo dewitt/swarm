@@ -25,7 +25,7 @@ Cards must be highly elastic, automatically adjusting their size and fidelity ba
 - **Minimum Fidelity (10+ agents):** Compresses down to a minimalist square containing *only* the agent's stable emoji/icon and a color-coded border. This ensures that even massive swarms (50+ agents) remain completely legible within a standard terminal window.
 
 ### 2. Stable Identity and Color Coding
-- **Stable Emoji:** Every agent must have a stable, recognizable emoji (e.g., 🧠 for Router, 🌐 for Web Researcher, 🐙 for GitOps). This anchors the agent's identity, especially at minimum fidelity.
+- **Stable Emoji:** Every agent must have a stable, recognizable emoji (e.g., 🧠 for Swarm, 🌐 for Web Researcher, 🐙 for GitOps). This anchors the agent's identity, especially at minimum fidelity.
 - **Border States:** The card's border acts as a quick-glance status indicator:
   - 🟢 **Green/Blue (Pulsing):** Active and thinking/executing.
   - 🔵 **Cyan:** Success / Task complete.
@@ -57,8 +57,8 @@ agent cards follow an ephemeral lifecycle based on activity.
 - **The Fade-Out:** Once an agent completes its task, its card shifts to a
   "Success" or "Idle" state. After a configured timeout (e.g., 30 seconds),
   the card gracefully fades out and is removed from the Agent Panel.
-- **Resident Agents:** "Always-on" agents like the **Router Agent** or the
-  **Chat Input Agent (CIA)** effectively never fade out because they are
+- **Resident Agents:** "Always-on" agents like the **Swarm Agent** or the
+  **Input Agent (Input Agent)** effectively never fade out because they are
   constantly evaluating inputs. They will remain visible but may drop to a
   dimmed "Idle" state.
 - **Rarely Used Agents:** Specialized agents (e.g., a "DB Migration Expert")
@@ -68,7 +68,7 @@ agent cards follow an ephemeral lifecycle based on activity.
 
 ### 3. Dynamic Relationship Mapping (Future Innovation)
 As an advanced feature, the Agent Panel could utilize terminal drawing characters (e.g., `│`, `└`, `├`, `─`) to draw dynamic dependency lines between cards.
-- If the Router spawns the Investigator, a line connects them.
+- If the Swarm Agent spawns the Investigator, a line connects them.
 - If the Investigator spawns a Web Researcher, the hierarchy deepens.
 - This creates a real-time, living execution graph, making complex multi-agent delegation instantly understandable.
 

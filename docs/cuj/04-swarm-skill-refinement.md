@@ -27,7 +27,7 @@ agents
 
 ### 2. Orchestrating the Swarm and Environment Setup
 
-The internal Router Agent understands the complexity and the need for safety.
+The internal Swarm Agent understands the complexity and the need for safety.
 It first delegates to a GitOps Expert to prepare the workspace, then
 instantiates the Swarm.
 
@@ -49,7 +49,7 @@ skills.
 > **\[Web Researcher\]:** Searching the web for "Google Agent Development Kit
 > Go latest API changes" to validate the `adk-skill`... **\[Web
 > Researcher\]:** Reading `llms.txt` from the official LangGraph repository to
-> update the `builder` skill... **\[Skill Architect\]:** Reviewing the current
+> update the `builder` skill... **\[Skill Builder\]:** Reviewing the current
 > `skills/gitops/SKILL.md`. It lacks instructions for rollback strategies. I
 > will incorporate the Researcher's findings on GitHub Actions rollback
 > patterns.
@@ -59,7 +59,7 @@ skills.
 Before making destructive or broad sweeping changes to the core system
 instructions, the Swarm pauses to get Jordan's opinion on a structural change.
 
-> **\[Skill Architect\]:** I propose splitting the `adk-skill` into separate
+> **\[Skill Builder\]:** I propose splitting the `adk-skill` into separate
 > language-specific Markdown files (e.g., `adk-go.md`, `adk-python.md`) rather
 > than keeping them in one massive `SKILL.md` file to reduce context bloat for
 > the LLM.
@@ -74,7 +74,7 @@ Jordan presses `Y`.
 The swarm proceeds to apply the changes, utilizing local tools to write the
 files and test the formatting.
 
-> **\[Skill Architect\]:** Rewriting `skills/adk-skill/SKILL.md` as a router,
+> **\[Skill Builder\]:** Rewriting `skills/adk-skill/SKILL.md` as a router,
 > and creating `skills/adk-skill/references/adk-go.md`... **\[Git
 > Practitioner\]:** Running `mdformat --wrap 78` on all modified `SKILL.md`
 > files to ensure they meet repository standards. **\[Git Practitioner\]:**

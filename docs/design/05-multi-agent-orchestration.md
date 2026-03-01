@@ -17,12 +17,12 @@ The CLI does not rely on a single massive system prompt. Instead, the core Go
 SDK instantiates a swarm of specialized ADK agents using a cascading model
 architecture:
 
-- **Router Agent**: The front-door, powered by `gemini-2.5-flash` for snappy
+- **Swarm Agent**: The front-door, powered by `gemini-2.5-flash` for snappy
   coordination. It converses with the user, maintains session context, and
   routes specific technical tasks to specialized sub-agents.
 - **Web Researcher Agent**: Specialized in deep web research using the Google
   Search grounding tool to pull down the latest documentation.
-- **Skill Architect Agent**: Maintains and optimizes dynamic `SKILL.md` files,
+- **Skill Planning Agent**: Maintains and optimizes dynamic `SKILL.md` files,
   enforcing human-in-the-loop validation for major changes.
 - **GitOps Agent**: Specialized in crafting CI/CD pipelines, writing GitHub
   Actions, and executing Git operations.
@@ -30,7 +30,7 @@ architecture:
 Sub-agents (Skills) default to `gemini-3.1-pro-preview` for thorough execution
 but can request specific models via their SkillManifest.
 
-When the Router Agent delegates to a sub-agent, the terminal UI visualizes
+When the Swarm Agent delegates to a sub-agent, the terminal UI visualizes
 this handoff in real-time (e.g., "Handoff to builder_agent..."). All agent
 responses are identified by their author in the chat log using colorful agent
 badges for clear multi-agent swarm attribution, making the multi-agent
@@ -53,7 +53,7 @@ to:
 
 Support for new multi-agent patterns (e.g., a "Debate" pattern, or a
 "Supervisor-Worker" pattern) can be added to the CLI via Skills. A Skill can
-provide templates and prompts that teach the internal Architect Agent how to
+provide templates and prompts that teach the internal Planning Agent how to
 scaffold these complex patterns for the user.
 
 ## 4. Third-Party Agent Orchestration
@@ -72,12 +72,12 @@ and `claude-code`.
 
 For example, if a user asks for a massive refactoring of a legacy codebase:
 
-1. The primary **Router Agent** analyzes the request.
+1. The primary **Swarm Agent** analyzes the request.
 1. It delegates the task to the **Gemini CLI Sub-agent**.
 1. The Sub-agent constructs the appropriate bash command (e.g.,
    `gemini -p "refactor everything" --apply`) and executes it using the
    `bash_execute` tool.
-1. The Router Agent reviews the resulting diff and reports back to the user.
+1. The Swarm Agent reviews the resulting diff and reports back to the user.
 
 By treating other AI CLI tools as executable sub-agents, the `swarm` CLI
 becomes the ultimate unified control plane for software development.

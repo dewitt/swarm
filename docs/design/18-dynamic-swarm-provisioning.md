@@ -40,7 +40,7 @@ The **Output Agent** provides the final layer of sanity checking.
 
 ### 6. The Swarm Agent (The Core Persona)
 
-The **Swarm Agent** (formerly the Router) is the primary agent.
+The **Swarm Agent** (formerly the Swarm Agent) is the primary agent.
 - **Role:** It holds the instructions that define the overall persona, characteristics, and rules of the swarm application. It is the agent that "represents" the system to the user.
 
 ## UI Visualization (The Execution Graph)

@@ -40,8 +40,8 @@ The CLI should adopt a non-blocking queue model.
   `Manager.Chat` call, the UI appends the text to an internal `m.inputQueue`.
 - **Visuals:** Queued messages appear in the chat log immediately but are
   styled distinctly (e.g., slightly dimmed or with an hourglass icon `⧖`) to
-  indicate they are "pending ingestion" by the Router.
-- **Processing:** Once the Router's current cognitive cycle frees up, or if an
+  indicate they are "pending ingestion" by the Swarm Agent.
+- **Processing:** Once the Swarm Agent's current cognitive cycle frees up, or if an
   agent specifically requests input, it pops the oldest message from the
   queue.
 
@@ -64,7 +64,7 @@ gracefully without restricting their freedom to type.
   - Border: The border of the input box could shift to a dashed line or a
     specific color (like Yellow) to emphasize the active background state.
 - **HITL Blocking State (Agent Demands Input):**
-  - Prompt: `[Skill Architect] > ` (Google Red/Urgent)
+  - Prompt: `[Skill Builder] > ` (Google Red/Urgent)
   - Placeholder: `Waiting for your confirmation... (Y/n)`
   - The input box becomes the focal point, perhaps dimming the rest of the UI
     slightly to emphasize that the swarm is entirely blocked until the human
@@ -86,7 +86,7 @@ progress.
 - **Trigger:** The user types a message and hits `Enter` while the swarm is
   working.
 - **Mechanism:** The message goes into the Input Queue. An
-  `InterruptionSignal` is sent to the SDK Event Bus. The Router Agent is
+  `InterruptionSignal` is sent to the SDK Event Bus. The Swarm Agent is
   "tapped on the shoulder." It pauses its current chain of thought, reads the
   queued message, and decides how to course-correct the swarm dynamically.
 
@@ -117,7 +117,7 @@ the linear `Chat(prompt) (<-chan string)` signature.
 The SDK should expose a long-lived `SessionContext`.
 
 1. **The Ingress Channel:** The UI pushes strings (or `InputEvent` structs)
-   into a continuous ingress channel. The Router listens to this channel in a
+   into a continuous ingress channel. The Swarm Agent listens to this channel in a
    persistent background goroutine.
 1. **The Egress Channel (Event Bus):** The SDK pushes structured events
    (`AgentSpawned`, `ToolStream`, `TextChunk`, `HITLRequest`) back to the UI.

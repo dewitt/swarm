@@ -27,7 +27,7 @@ consist of:
    permission to run `aws-cli` commands).
 1. `context/`: Best-practice examples of `serverless.yml` files.
 
-When a user asks to deploy to AWS, the Router Agent detects this intent, loads
+When a user asks to deploy to AWS, the Swarm Agent detects this intent, loads
 the AWS Skill, and dynamically acquires the capability to generate and execute
 the deployment.
 

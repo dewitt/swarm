@@ -21,17 +21,17 @@ separation between the CLI and the SDK.
 ## Phase 2: ADK Integration & The Internal Router
 
 **Goal:** Hook up the Google Agent Development Kit (ADK) for Go to power the
-CLI's internal "Router Agent".
+CLI's internal "Swarm Agent".
 
 - **Task 2.1:** Implement the `LlmAgent` from the Go ADK within the SDK's
   core.
 - **Task 2.2:** Build the interactive chat loop in the CLI that sends user
-  input to the internal Router Agent and streams responses back to the
+  input to the internal Swarm Agent and streams responses back to the
   terminal.
-- **Task 2.3:** Implement basic Tool execution for the Router Agent (e.g., a
+- **Task 2.3:** Implement basic Tool execution for the Swarm Agent (e.g., a
   simple `list_local_files` tool) to prove the ADK tool-calling loop works.
 - **Task 2.4:** Write integration tests mocking the LLM endpoint to verify the
-  Router Agent parses user intents correctly.
+  Swarm Agent parses user intents correctly.
 
 ## Phase 3: Manifests & The Builder Agent
 
@@ -85,7 +85,7 @@ transparently on a single user request.
 
 - [x] **Task 6.1:** Implement the multiplexed UI in the terminal to display
   multiple agent streams concurrently.
-- [ ] **Task 6.2:** Create the "Swarm Skill" that teaches the Router Agent how
+- [ ] **Task 6.2:** Create the "Swarm Skill" that teaches the Swarm Agent how
   to instantiate and delegate to specialized sub-agents (Architect, Security
   Expert, Data Engineer).
 - [ ] **Task 6.3:** Ensure this workflow satisfies
@@ -107,6 +107,6 @@ in parallel, and provides an Agent Panel to monitor them.
   status updates (implemented as "Observe Mode" `^O`).
 - **Task 7.4:** Implement Swarm "Control Panel" interactions: pausing,
   resuming, or killing specific agents from the Agent Panel.
-- **Task 7.5:** Implement dynamic auto-provisioning: Teach the Router Agent
+- **Task 7.5:** Implement dynamic auto-provisioning: Teach the Swarm Agent
   how to write a dependency graph and spin up arbitrary, parallel Worker
   Agents based on the graph's complexity.

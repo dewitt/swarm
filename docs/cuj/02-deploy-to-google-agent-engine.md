@@ -21,7 +21,7 @@ agents
 
 ### 2. Capability Discovery
 
-The CLI's internal Router Agent recognizes the deployment request. It checks
+The CLI's internal Swarm Agent recognizes the deployment request. It checks
 its local context and realizes it doesn't natively know the Google Agent
 Engine deployment specifications. It seamlessly downloads the necessary Skill
 from the community registry.

@@ -88,7 +88,7 @@ Because "one agent alone is never enough," the UI must clearly delineate which
 agent is currently acting.
 
 - **Agent Avatars/Tags:** Responses must be clearly tagged with the active
-  persona (e.g., `[Router]`, `[Builder]`, `[GitOps]`).
+  persona (e.g., `[Swarm Agent]`, `[Builder]`, `[GitOps]`).
 - **Swarm Multiplexing:** When multiple agents are operating concurrently
   (e.g., during the Design Swarm CUJ), their logs should be multiplexed
   neatly. The user should see a split-pane or a clean, interleaved log where
@@ -112,7 +112,7 @@ intended for the local client.
   - `/exit`: Gracefully terminates the session.
 - **Agent Handoff:** Certain slash commands might exist to force a manual
   handoff to a specific agent (e.g., `/agent builder`) rather than relying on
-  the Router Agent's natural language inference.
+  the Swarm Agent's natural language inference.
 
 ## 8. Layout & Visual Hierarchy
 

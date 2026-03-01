@@ -4,11 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"math/rand"
-	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -30,127 +27,46 @@ import (
 	"gorm.io/gorm/logger"
 )
 
-type ListFilesArgs struct {
-	Dir       string `json:"dir"`
-	Recursive bool   `json:"recursive,omitempty"`
-}
-type ListFilesResult struct {
-	Files []string `json:"files"`
-	Error string   `json:"error,omitempty"`
-}
-
-func listLocalFiles(ctx tool.Context, args ListFilesArgs) (ListFilesResult, error) {
-	if args.Dir == "" {
-		args.Dir = "."
-	}
-	var files []string
-
-	if args.Recursive {
-		err := filepath.Walk(args.Dir, func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				return nil // Skip errors (like permission denied)
-			}
-			// Skip hidden directories like .git
-			if info.IsDir() && strings.HasPrefix(info.Name(), ".") && info.Name() != "." {
-				return filepath.SkipDir
-			}
-			if path != args.Dir {
-				name := strings.TrimPrefix(path, args.Dir+"/")
-				if info.IsDir() {
-					name += "/"
-				}
-				files = append(files, name)
-			}
-			return nil
-		})
-		if err != nil {
-			return ListFilesResult{Error: err.Error()}, nil
-		}
-	} else {
-		entries, err := os.ReadDir(args.Dir)
-		if err != nil {
-			return ListFilesResult{Error: err.Error()}, nil
-		}
-		for _, entry := range entries {
-			name := entry.Name()
-			if entry.IsDir() {
-				name += "/"
-			}
-			files = append(files, name)
-		}
-	}
-	
-	// Limit to prevent context window explosion
-	if len(files) > 1000 {
-		files = append(files[:1000], fmt.Sprintf("... and %d more. Use grep_search for specific queries.", len(files)-1000))
-	}
-	
-	return ListFilesResult{Files: files}, nil
-}
-
-type ReadFileArgs struct { Path string `json:"path"` }
-type ReadFileResult struct { Content string `json:"content"`; Error string `json:"error,omitempty"` }
-func readLocalFile(ctx tool.Context, args ReadFileArgs) (ReadFileResult, error) {
-	b, err := os.ReadFile(args.Path); if err != nil { return ReadFileResult{Error: err.Error()}, nil }
-	return ReadFileResult{Content: string(b)}, nil
-}
-
-type GrepArgs struct { Pattern string `json:"pattern"`; Dir string `json:"dir"` }
-type GrepResult struct { Matches []string `json:"matches"`; Error string `json:"error,omitempty"` }
-func grepSearch(ctx tool.Context, args GrepArgs) (GrepResult, error) {
-	if args.Dir == "" { args.Dir = "." }
-	cmd := exec.Command("grep", "-r", "-l", args.Pattern, args.Dir)
-	out, err := cmd.Output()
-	if err != nil {
-		if _, ok := err.(*exec.ExitError); ok { return GrepResult{Matches: []string{}}, nil }
-		return GrepResult{Error: err.Error()}, nil
-	}
-	matches := strings.Split(strings.TrimSpace(string(out)), "\n")
-	return GrepResult{Matches: matches}, nil
-}
-
-type WriteFileArgs struct { Path string `json:"path"`; Content string `json:"content"` }
-type WriteFileResult struct { Success bool `json:"success"`; Error string `json:"error,omitempty"` }
-func writeLocalFile(ctx tool.Context, args WriteFileArgs) (WriteFileResult, error) {
-	dir := filepath.Dir(args.Path); if err := os.MkdirAll(dir, 0755); err != nil { return WriteFileResult{Success: false, Error: err.Error()}, nil }
-	if err := os.WriteFile(args.Path, []byte(args.Content), 0644); err != nil { return WriteFileResult{Success: false, Error: err.Error()}, nil }
-	return WriteFileResult{Success: true}, nil
-}
-
-type WebFetchArgs struct { URL string `json:"url"` }
-type WebFetchResult struct { Content string `json:"content"`; Error string `json:"error,omitempty"` }
-func webFetch(ctx tool.Context, args WebFetchArgs) (WebFetchResult, error) {
-	resp, err := http.Get(args.URL); if err != nil { return WebFetchResult{Error: err.Error()}, nil }
-	defer resp.Body.Close()
-	b, err := io.ReadAll(resp.Body); if err != nil { return WebFetchResult{Error: err.Error()}, nil }
-	return WebFetchResult{Content: string(b)}, nil
-}
-
-type GoogleSearchArgs struct { Query string `json:"query"` }
-type GoogleSearchResult struct { Response string `json:"response"`; Error string `json:"error,omitempty"` }
-func googleSearchFunc(ctx tool.Context, args GoogleSearchArgs) (GoogleSearchResult, error) {
-	apiKey := os.Getenv("GOOGLE_API_KEY"); if apiKey == "" { return GoogleSearchResult{Error: "GOOGLE_API_KEY is not set"}, nil }
-	client, err := genai.NewClient(context.Background(), &genai.ClientConfig{APIKey: apiKey}); if err != nil { return GoogleSearchResult{Error: err.Error()}, nil }
-	resp, err := client.Models.GenerateContent(context.Background(), "gemini-2.5-flash", genai.Text(args.Query), &genai.GenerateContentConfig{Tools: []*genai.Tool{{GoogleSearch: &genai.GoogleSearch{}}}}); if err != nil { return GoogleSearchResult{Error: err.Error()}, nil }
-	if len(resp.Candidates) > 0 && resp.Candidates[0].Content != nil && len(resp.Candidates[0].Content.Parts) > 0 { return GoogleSearchResult{Response: resp.Candidates[0].Content.Parts[0].Text}, nil }
-	return GoogleSearchResult{Response: "No results found"}, nil
-}
-
 type AgentManifest struct {
-	Name string `yaml:"name"`; Framework string `yaml:"framework"`; Language string `yaml:"language"`
-	Entrypoint string `yaml:"entrypoint,omitempty"`; Description string `yaml:"description,omitempty"`; Tools []string `yaml:"tools,omitempty"`
+	Name        string   `yaml:"name"`
+	Framework   string   `yaml:"framework"`
+	Language    string   `yaml:"language"`
+	Entrypoint  string   `yaml:"entrypoint,omitempty"`
+	Description string   `yaml:"description,omitempty"`
+	Tools       []string `yaml:"tools,omitempty"`
 }
 
-type SessionInfo struct { ID string; UpdatedAt string; Summary string }
-type ModelInfo struct { Name string; DisplayName string; Description string; Version string }
+type SessionInfo struct {
+	ID        string
+	UpdatedAt string
+	Summary   string
+}
+type ModelInfo struct {
+	Name        string
+	DisplayName string
+	Description string
+	Version     string
+}
 
 type ChatEventType string
+
 const (
-	ChatEventHandoff ChatEventType = "handoff"; ChatEventToolCall ChatEventType = "tool_call"; ChatEventToolResult ChatEventType = "tool_result"
-	ChatEventTelemetry ChatEventType = "telemetry"; ChatEventThought ChatEventType = "thought"; ChatEventObserver ChatEventType = "observer"
-	ChatEventReplan ChatEventType = "replan"; ChatEventDebug ChatEventType = "debug"; ChatEventFinalResponse ChatEventType = "final_response"; ChatEventError ChatEventType = "error"
+	ChatEventHandoff       ChatEventType = "handoff"
+	ChatEventToolCall      ChatEventType = "tool_call"
+	ChatEventToolResult    ChatEventType = "tool_result"
+	ChatEventTelemetry     ChatEventType = "telemetry"
+	ChatEventThought       ChatEventType = "thought"
+	ChatEventObserver      ChatEventType = "observer"
+	ChatEventReplan        ChatEventType = "replan"
+	ChatEventDebug         ChatEventType = "debug"
+	ChatEventFinalResponse ChatEventType = "final_response"
+	ChatEventError         ChatEventType = "error"
 )
-type ChatEvent struct { Type ChatEventType; Agent, TaskID, Content string }
+
+type ChatEvent struct {
+	Type                   ChatEventType
+	Agent, TaskID, Content string
+}
 
 type AgentManager interface {
 	Discover(ctx context.Context, dir string) (*AgentManifest, error)
@@ -174,39 +90,63 @@ type AgentManager interface {
 type telemetryContextKey struct{}
 
 type defaultManager struct {
-	run              *runner.Runner
-	db               *gorm.DB
-	sessionSvc       session.Service
-	userID           string
-	sessionID        string
-	skills           []*Skill
-	clientCfg        *genai.ClientConfig
-	pinnedContext    map[string]string
+	run                 *runner.Runner
+	db                  *gorm.DB
+	sessionSvc          session.Service
+	userID              string
+	sessionID           string
+	skills              []*Skill
+	clientCfg           *genai.ClientConfig
+	pinnedContext       map[string]string
 	inputInstruction    string
 	outputInstruction   string
 	planningInstruction string
 	debugMode           bool
-	flashModel        model.LLM
-	proModel          model.LLM
-	fastModel         model.LLM
-	toolRegistry      map[string]tool.Tool
-	inputAgent        agent.Agent
-	subAgentNames     []string
-	agents            map[string]agent.Agent
-	lastAgent         string // Tracks the last agent to respond
+	flashModel          model.LLM
+	proModel            model.LLM
+	fastModel           model.LLM
+	toolRegistry        map[string]tool.Tool
+	inputAgent          agent.Agent
+	subAgentNames       []string
+	agents              map[string]agent.Agent
+	lastAgent           string // Tracks the last agent to respond
 }
 
-type ManagerConfig struct { Model model.LLM; ResumeLastSession bool }
+type ManagerConfig struct {
+	Model             model.LLM
+	ResumeLastSession bool
+}
 
 func NewManager(cfg ...ManagerConfig) (AgentManager, error) {
-	ctx := context.Background(); var flashModel, proModel, fastModel model.LLM; clientConfig := &genai.ClientConfig{}
-	if len(cfg) > 0 && cfg[0].Model != nil { flashModel = cfg[0].Model; proModel = cfg[0].Model; fastModel = cfg[0].Model } else {
-		if apiKey := os.Getenv("GOOGLE_API_KEY"); apiKey != "" { clientConfig.APIKey = apiKey }
-		userCfg, _ := LoadConfig(); proModelName := "gemini-3.1-pro-preview"; if userCfg != nil && userCfg.Model != "" && userCfg.Model != "auto" { proModelName = userCfg.Model }
+	ctx := context.Background()
+	var flashModel, proModel, fastModel model.LLM
+	clientConfig := &genai.ClientConfig{}
+	if len(cfg) > 0 && cfg[0].Model != nil {
+		flashModel = cfg[0].Model
+		proModel = cfg[0].Model
+		fastModel = cfg[0].Model
+	} else {
+		if apiKey := os.Getenv("GOOGLE_API_KEY"); apiKey != "" {
+			clientConfig.APIKey = apiKey
+		}
+		userCfg, _ := LoadConfig()
+		proModelName := "gemini-3.1-pro-preview"
+		if userCfg != nil && userCfg.Model != "" && userCfg.Model != "auto" {
+			proModelName = userCfg.Model
+		}
 		var err error
-		flashModel, err = gemini.NewModel(ctx, "gemini-2.5-flash", clientConfig); if err != nil { return nil, err }
-		proModel, err = gemini.NewModel(ctx, proModelName, clientConfig); if err != nil { return nil, err }
-		fastModel, err = gemini.NewModel(ctx, "gemini-2.5-flash", clientConfig); if err != nil { return nil, err }
+		flashModel, err = gemini.NewModel(ctx, "gemini-2.5-flash", clientConfig)
+		if err != nil {
+			return nil, err
+		}
+		proModel, err = gemini.NewModel(ctx, proModelName, clientConfig)
+		if err != nil {
+			return nil, err
+		}
+		fastModel, err = gemini.NewModel(ctx, "gemini-2.5-flash", clientConfig)
+		if err != nil {
+			return nil, err
+		}
 	}
 	listTool, _ := functiontool.New(functiontool.Config{Name: "list_local_files"}, listLocalFiles)
 	readTool, _ := functiontool.New(functiontool.Config{Name: "read_local_file"}, readLocalFile)
@@ -221,43 +161,74 @@ func NewManager(cfg ...ManagerConfig) (AgentManager, error) {
 	toolRegistry := map[string]tool.Tool{
 		"list_local_files": listTool, "read_local_file": readTool, "grep_search": grepTool, "write_local_file": writeTool, "git_commit": gitCommit, "git_push": gitPush, "bash_execute": bashExecute, "web_fetch": webFetchTool, "google_search": googleSearchTool, "request_replan": replanTool,
 	}
-	home, _ := os.UserHomeDir(); dbDir := filepath.Join(home, ".config", "swarm"); _ = os.MkdirAll(dbDir, 0755)
-	dbPath := filepath.Join(dbDir, "sessions.db"); dialector := sqlite.Open(dbPath); gormCfg := &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)}
-	db, err := gorm.Open(dialector, gormCfg); if err != nil { return nil, err }
-	sessionSvc, err := database.NewSessionService(dialector, gormCfg); if err != nil { return nil, err }
+	home, _ := os.UserHomeDir()
+	dbDir := filepath.Join(home, ".config", "swarm")
+	_ = os.MkdirAll(dbDir, 0755)
+	dbPath := filepath.Join(dbDir, "sessions.db")
+	dialector := sqlite.Open(dbPath)
+	gormCfg := &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)}
+	db, err := gorm.Open(dialector, gormCfg)
+	if err != nil {
+		return nil, err
+	}
+	sessionSvc, err := database.NewSessionService(dialector, gormCfg)
+	if err != nil {
+		return nil, err
+	}
 	_ = database.AutoMigrate(sessionSvc)
-	sessionID := ""; if len(cfg) > 0 && cfg[0].ResumeLastSession {
+	sessionID := ""
+	if len(cfg) > 0 && cfg[0].ResumeLastSession {
 		resp, err := sessionSvc.List(ctx, &session.ListRequest{AppName: "swarm-cli", UserID: "local_user"})
 		if err == nil && len(resp.Sessions) > 0 {
-			var lastSession session.Session; var lastTime int64
-			for _, s := range resp.Sessions { if s.LastUpdateTime().UnixNano() > lastTime { lastTime = s.LastUpdateTime().UnixNano(); lastSession = s } }
-			if lastSession != nil { sessionID = lastSession.ID() }
+			var lastSession session.Session
+			var lastTime int64
+			for _, s := range resp.Sessions {
+				if s.LastUpdateTime().UnixNano() > lastTime {
+					lastTime = s.LastUpdateTime().UnixNano()
+					lastSession = s
+				}
+			}
+			if lastSession != nil {
+				sessionID = lastSession.ID()
+			}
 		}
 	}
-	if sessionID == "" { sessionID = fmt.Sprintf("session_%d", rand.Int63()) }
+	if sessionID == "" {
+		sessionID = fmt.Sprintf("session_%d", rand.Int63())
+	}
 	_, _ = sessionSvc.Create(ctx, &session.CreateRequest{AppName: "swarm-cli", UserID: "local_user", SessionID: sessionID})
 	m := &defaultManager{
 		db: db, sessionSvc: sessionSvc, userID: "local_user", sessionID: sessionID, clientCfg: clientConfig, pinnedContext: make(map[string]string), flashModel: flashModel, proModel: proModel, fastModel: fastModel, toolRegistry: toolRegistry,
 	}
-	if err := m.Reload(); err != nil { return nil, err }
+	if err := m.Reload(); err != nil {
+		return nil, err
+	}
 	return m, nil
 }
 
-func (m *defaultManager) IsDebug() bool { return m.debugMode }
+func (m *defaultManager) IsDebug() bool         { return m.debugMode }
 func (m *defaultManager) SetDebug(enabled bool) { m.debugMode = enabled }
 
 func (m *defaultManager) Explain(ctx context.Context, traj Trajectory) (string, error) {
 	trajJSON, _ := json.MarshalIndent(traj, "", "  ")
 	prompt := fmt.Sprintf("You are the Swarm Historian. Explain WHY this path was taken. Concisely. Trajectory: %s", string(trajJSON))
 	respIter := m.proModel.GenerateContent(ctx, &model.LLMRequest{Contents: []*genai.Content{genai.NewContentFromText(prompt, genai.Role("user"))}}, false)
-	var exp string; for resp, err := range respIter { if err != nil { return "", err }; if resp.Content != nil && len(resp.Content.Parts) > 0 { exp += resp.Content.Parts[0].Text } }
+	var exp string
+	for resp, err := range respIter {
+		if err != nil {
+			return "", err
+		}
+		if resp.Content != nil && len(resp.Content.Parts) > 0 {
+			exp += resp.Content.Parts[0].Text
+		}
+	}
 	return strings.TrimSpace(exp), nil
 }
 
 func (m *defaultManager) Reload() error {
 	var subAgents []agent.Agent
 	var loadedSkills []*Skill
-	
+
 	// Find the skills directory by searching upwards
 	absPath, _ := filepath.Abs(".")
 	skillsPath := ""
@@ -376,24 +347,62 @@ func (m *defaultManager) Reload() error {
 }
 
 func (m *defaultManager) Skills() []*Skill { return m.skills }
-func (m *defaultManager) AddContext(path string) error { b, err := os.ReadFile(path); if err != nil { return err }; m.pinnedContext[path] = string(b); return nil }
-func (m *defaultManager) DropContext(path string) { if path == "all" { m.pinnedContext = make(map[string]string) } else { delete(m.pinnedContext, path) } }
-func (m *defaultManager) ListContext() []string { var p []string; for path := range m.pinnedContext { p = append(p, path) }; return p }
+func (m *defaultManager) AddContext(path string) error {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	m.pinnedContext[path] = string(b)
+	return nil
+}
+func (m *defaultManager) DropContext(path string) {
+	if path == "all" {
+		m.pinnedContext = make(map[string]string)
+	} else {
+		delete(m.pinnedContext, path)
+	}
+}
+func (m *defaultManager) ListContext() []string {
+	var p []string
+	for path := range m.pinnedContext {
+		p = append(p, path)
+	}
+	return p
+}
 func (m *defaultManager) Reset() { m.sessionID = fmt.Sprintf("session_%d", rand.Int63()) }
 func (m *defaultManager) ListModels(ctx context.Context) ([]ModelInfo, error) {
-	client, err := genai.NewClient(ctx, m.clientCfg); if err != nil { return nil, err }
-	var models []ModelInfo; iter := client.Models.All(ctx)
-	for mo, err := range iter { if err != nil { return nil, err }; name := strings.TrimPrefix(mo.Name, "models/"); models = append(models, ModelInfo{Name: name, DisplayName: mo.DisplayName, Description: mo.Description, Version: mo.Version}) }
+	client, err := genai.NewClient(ctx, m.clientCfg)
+	if err != nil {
+		return nil, err
+	}
+	var models []ModelInfo
+	iter := client.Models.All(ctx)
+	for mo, err := range iter {
+		if err != nil {
+			return nil, err
+		}
+		name := strings.TrimPrefix(mo.Name, "models/")
+		models = append(models, ModelInfo{Name: name, DisplayName: mo.DisplayName, Description: mo.Description, Version: mo.Version})
+	}
 	return models, nil
 }
 
 func (m *defaultManager) ListSessions(ctx context.Context) ([]SessionInfo, error) {
-	resp, err := m.sessionSvc.List(ctx, &session.ListRequest{AppName: "swarm-cli", UserID: m.userID}); if err != nil { return nil, err }
+	resp, err := m.sessionSvc.List(ctx, &session.ListRequest{AppName: "swarm-cli", UserID: m.userID})
+	if err != nil {
+		return nil, err
+	}
 	var infos []SessionInfo
 	for _, s := range resp.Sessions {
-		summary := s.ID(); var event struct{ Content string }
+		summary := s.ID()
+		var event struct{ Content string }
 		err := m.db.Table("events").Select("content").Where("session_id = ? AND author = ?", s.ID(), "user").Order("timestamp DESC").Limit(1).Find(&event).Error
-		if err == nil && event.Content != "" { summary = event.Content }; if len(summary) > 40 { summary = summary[:37] + "..." }
+		if err == nil && event.Content != "" {
+			summary = event.Content
+		}
+		if len(summary) > 40 {
+			summary = summary[:37] + "..."
+		}
 		infos = append(infos, SessionInfo{ID: s.ID(), UpdatedAt: s.LastUpdateTime().Format("2006-01-02 15:04:05"), Summary: summary})
 	}
 	return infos, nil
@@ -414,14 +423,39 @@ func (m *defaultManager) Plan(ctx context.Context, prompt string) (*ExecutionGra
 		Contents: []*genai.Content{genai.NewContentFromText(prompt, genai.Role("user"))},
 		Config:   &genai.GenerateContentConfig{SystemInstruction: genai.NewContentFromText(systemPrompt, genai.Role("system"))},
 	}, false)
-	var jsonStr string; for resp, err := range respIter { if err != nil { return nil, err }; if resp.Content != nil && len(resp.Content.Parts) > 0 { jsonStr += resp.Content.Parts[0].Text } }
+	var jsonStr string
+	for resp, err := range respIter {
+		if err != nil {
+			return nil, err
+		}
+		if resp.Content != nil && len(resp.Content.Parts) > 0 {
+			jsonStr += resp.Content.Parts[0].Text
+		}
+	}
 	jsonStr = strings.TrimSpace(jsonStr)
 	if jsonStr == "DEEP_PLAN_REQUIRED" {
 		respIter = m.proModel.GenerateContent(ctx, &model.LLMRequest{Contents: []*genai.Content{genai.NewContentFromText(prompt, genai.Role("user"))}, Config: &genai.GenerateContentConfig{SystemInstruction: genai.NewContentFromText(systemPrompt, genai.Role("system"))}}, false)
-		jsonStr = ""; for resp, err := range respIter { if err != nil { return nil, err }; if resp.Content != nil && len(resp.Content.Parts) > 0 { jsonStr += resp.Content.Parts[0].Text } }; jsonStr = strings.TrimSpace(jsonStr)
+		jsonStr = ""
+		for resp, err := range respIter {
+			if err != nil {
+				return nil, err
+			}
+			if resp.Content != nil && len(resp.Content.Parts) > 0 {
+				jsonStr += resp.Content.Parts[0].Text
+			}
+		}
+		jsonStr = strings.TrimSpace(jsonStr)
 	}
-	re := regexp.MustCompile("(?s)\\{.*\\}"); match := re.FindString(jsonStr); if match != "" { jsonStr = match }
-	var graph ExecutionGraph; if err := json.Unmarshal([]byte(jsonStr), &graph); err != nil { return nil, err }; return &graph, nil
+	re := regexp.MustCompile("(?s)\\{.*\\}")
+	match := re.FindString(jsonStr)
+	if match != "" {
+		jsonStr = match
+	}
+	var graph ExecutionGraph
+	if err := json.Unmarshal([]byte(jsonStr), &graph); err != nil {
+		return nil, err
+	}
+	return &graph, nil
 }
 
 func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan ChatEvent, error) {
@@ -443,7 +477,7 @@ func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan ChatEv
 		if m.lastAgent != "" {
 			lastAgentName = m.lastAgent
 		}
-		
+
 		dynamicInstruction := m.inputInstruction + fmt.Sprintf("\n\nCURRENT CONTEXT: The last agent to respond was: %s.", lastAgentName)
 
 		inputIter := m.fastModel.GenerateContent(ctx, &model.LLMRequest{
@@ -465,7 +499,7 @@ func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan ChatEv
 
 		o.AddTasks(Task{
 			ID: "input", Name: "Classification", Agent: "input_agent", Status: TaskStatusComplete,
-			Kind: SpanKindPlanner,
+			Kind:      SpanKindPlanner,
 			StartTime: inputStart.Format(time.RFC3339Nano), EndTime: time.Now().Format(time.RFC3339Nano),
 			Duration: time.Since(inputStart).String(), Attributes: map[string]any{"gen_ai.prompt": prompt, "gen_ai.completion": inputResult},
 		})
@@ -497,7 +531,7 @@ func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan ChatEv
 			planJSON, _ := json.Marshal(graph)
 			o.AddTasks(Task{
 				ID: "coordination", Name: "Swarm Planning", Agent: "swarm_agent", Status: TaskStatusComplete,
-				Kind: SpanKindPlanner,
+				Kind:      SpanKindPlanner,
 				StartTime: planStart.Format(time.RFC3339Nano), EndTime: time.Now().Format(time.RFC3339Nano),
 				Duration: time.Since(planStart).String(), Attributes: map[string]any{"gen_ai.prompt": prompt, "gen_ai.completion": string(planJSON)},
 			})
@@ -535,7 +569,6 @@ func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan ChatEv
 	return out, nil
 }
 
-
 func (m *defaultManager) Execute(ctx context.Context, g *ExecutionGraph, o *Orchestrator) (<-chan ChatEvent, *Orchestrator, error) {
 	if o == nil {
 		o = NewOrchestrator(g)
@@ -546,51 +579,51 @@ func (m *defaultManager) Execute(ctx context.Context, g *ExecutionGraph, o *Orch
 	}
 
 	go func() {
-	defer close(out)
-	type completedTask struct {
-		ID     string
-		Result string
-		Status TaskStatus
-		Replan bool
-	}
-	completed := make(chan completedTask, 100)
-	activeTasks := 0
-	var wg sync.WaitGroup
-	replanCount := 0
-	const maxReplans = 3
-
-	for {
-		ready := o.GetReadyTasks()
-		for _, t := range ready {
-			o.MarkActive(t.ID)
-			activeTasks++
-			wg.Add(1)
-			go func(task Task) {
-				defer wg.Done()
-				result, status, needsReplan := m.executeTask(ctx, out, o, task)
-				completed <- completedTask{ID: task.ID, Result: result, Status: status, Replan: needsReplan}
-			}(t)
+		defer close(out)
+		type completedTask struct {
+			ID     string
+			Result string
+			Status TaskStatus
+			Replan bool
 		}
+		completed := make(chan completedTask, 100)
+		activeTasks := 0
+		var wg sync.WaitGroup
+		replanCount := 0
+		const maxReplans = 3
 
-		if activeTasks == 0 {
-			if o.IsComplete() {
-				break
-			} else {
-				out <- ChatEvent{Type: ChatEventError, Agent: "Swarm", Content: "Deadlock detected in execution graph."}
-				break
+		for {
+			ready := o.GetReadyTasks()
+			for _, t := range ready {
+				o.MarkActive(t.ID)
+				activeTasks++
+				wg.Add(1)
+				go func(task Task) {
+					defer wg.Done()
+					result, status, needsReplan := m.executeTask(ctx, out, o, task)
+					completed <- completedTask{ID: task.ID, Result: result, Status: status, Replan: needsReplan}
+				}(t)
 			}
-		}
 
-		select {
-		case <-ctx.Done():
-			return
-		case done := <-completed:
-			if done.Status == TaskStatusComplete {
-				o.MarkComplete(done.ID, done.Result)
-			} else {
-				o.MarkFailed(done.ID)
+			if activeTasks == 0 {
+				if o.IsComplete() {
+					break
+				} else {
+					out <- ChatEvent{Type: ChatEventError, Agent: "Swarm", Content: "Deadlock detected in execution graph."}
+					break
+				}
 			}
-			activeTasks--
+
+			select {
+			case <-ctx.Done():
+				return
+			case done := <-completed:
+				if done.Status == TaskStatusComplete {
+					o.MarkComplete(done.ID, done.Result)
+				} else {
+					o.MarkFailed(done.ID)
+				}
+				activeTasks--
 				// Handle dynamic replanning or subgraph expansion
 				if done.Replan {
 					if replanCount >= maxReplans {
@@ -636,7 +669,7 @@ func (m *defaultManager) executeTask(ctx context.Context, out chan<- ChatEvent, 
 	// Use a unique session ID for this specific task to prevent turn-order corruption
 	// in the shared session service, especially during parallel execution.
 	taskSessionID := fmt.Sprintf("%s/%s", m.sessionID, task.ID)
-	
+
 	// Ensure the task session exists in the database
 	_, _ = m.sessionSvc.Create(ctx, &session.CreateRequest{
 		AppName:   "swarm-cli",
@@ -715,7 +748,7 @@ func (m *defaultManager) executeTask(ctx context.Context, out chan<- ChatEvent, 
 	}
 
 	promptStr := fmt.Sprintf("TASK: %s\nINSTRUCTIONS: %s", task.Name, task.Prompt)
-	
+
 	if len(historyParts) > 0 {
 		promptStr = promptStr + "\n\n### CONVERSATION HISTORY (FOR CONTEXT)\n" + strings.Join(historyParts, "\n")
 	}
@@ -742,14 +775,14 @@ func (m *defaultManager) executeTask(ctx context.Context, out chan<- ChatEvent, 
 						needsReplan = true
 					}
 					out <- ChatEvent{Type: ChatEventToolCall, Agent: targetAgent.Name(), TaskID: task.ID, Content: part.FunctionCall.Name}
-					
+
 					// Record tool span start
 					toolStart := time.Now()
 					toolID := fmt.Sprintf("%s-tool-%s-%d", task.ID, part.FunctionCall.Name, toolStart.UnixNano())
 					toolTask := Task{
 						ID: toolID, ParentID: task.ID, TraceID: task.TraceID,
 						Name: part.FunctionCall.Name, Kind: SpanKindTool, Status: TaskStatusActive,
-						StartTime: toolStart.Format(time.RFC3339Nano),
+						StartTime:  toolStart.Format(time.RFC3339Nano),
 						Attributes: map[string]any{"gen_ai.tool_args": part.FunctionCall.Args},
 					}
 					o.AddTasks(toolTask)
@@ -757,12 +790,12 @@ func (m *defaultManager) executeTask(ctx context.Context, out chan<- ChatEvent, 
 				}
 				if part.FunctionResponse != nil {
 					out <- ChatEvent{Type: ChatEventToolResult, Agent: targetAgent.Name(), TaskID: task.ID, Content: part.FunctionResponse.Name}
-					
+
 					// Record tool span completion (pop from queue)
 					if tasks, ok := activeToolSpans[part.FunctionResponse.Name]; ok && len(tasks) > 0 {
 						t := tasks[0]
 						activeToolSpans[part.FunctionResponse.Name] = tasks[1:]
-						
+
 						now := time.Now()
 						t.Status = TaskStatusComplete
 						t.EndTime = now.Format(time.RFC3339Nano)
@@ -816,8 +849,6 @@ func (m *defaultManager) executeTask(ctx context.Context, out chan<- ChatEvent, 
 	out <- ChatEvent{Type: ChatEventThought, Agent: "Swarm", TaskID: task.ID, Content: "Output Agent rejected the response as problematic."}
 	return "Output Agent rejected response.", TaskStatusComplete, true
 }
-
-
 
 func (m *defaultManager) appendEvent(ctx context.Context, author, content string) {
 	if m.sessionSvc == nil {
@@ -874,8 +905,16 @@ func (m *defaultManager) runOutputAgent(ctx context.Context, out chan<- ChatEven
 }
 
 func (m *defaultManager) Rewind(n int) error {
-	if n <= 0 { return nil }
-	var evs []struct{ Timestamp string }; err := m.db.Table("events").Select("timestamp").Where("session_id = ? AND author = ?", m.sessionID, "user").Order("timestamp DESC").Limit(n).Find(&evs).Error
-	if err != nil { return err }; if len(evs) < n { return m.db.Table("events").Where("session_id = ?", m.sessionID).Delete(nil).Error }
+	if n <= 0 {
+		return nil
+	}
+	var evs []struct{ Timestamp string }
+	err := m.db.Table("events").Select("timestamp").Where("session_id = ? AND author = ?", m.sessionID, "user").Order("timestamp DESC").Limit(n).Find(&evs).Error
+	if err != nil {
+		return err
+	}
+	if len(evs) < n {
+		return m.db.Table("events").Where("session_id = ?", m.sessionID).Delete(nil).Error
+	}
 	return m.db.Table("events").Where("session_id = ? AND timestamp >= ?", m.sessionID, evs[len(evs)-1].Timestamp).Delete(nil).Error
 }

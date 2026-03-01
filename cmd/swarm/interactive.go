@@ -1926,23 +1926,19 @@ func isMediationAgent(name string) bool {
 	name = strings.ToLower(name)
 	return strings.Contains(name, "input") ||
 		strings.Contains(name, "output") ||
-		strings.Contains(name, "planning") ||
-		strings.Contains(name, "coa") ||
-		strings.Contains(name, "cia")
+		strings.Contains(name, "planning")
 }
 
 func getAgentIcon(name string) string {
 	name = strings.ToLower(name)
 	switch {
-	case strings.Contains(name, "chat input") || strings.Contains(name, "chat_input"):
+	case strings.Contains(name, "input"):
 		return "⚙" // Gear (1-cell reliable)
-	case strings.Contains(name, "router"):
+	case strings.Contains(name, "router") || strings.Contains(name, "swarm"):
 		return "◈" // Diamond (1-cell reliable)
 	case strings.Contains(name, "architect"):
 		return "🏛" // Temple/Architect
-	case strings.Contains(name, "cia"):
-		return "⚙" // Gear
-	case strings.Contains(name, "coa"):
+	case strings.Contains(name, "output"):
 		return "🛡" // Shield
 	case strings.Contains(name, "investigator") || strings.Contains(name, "codebase"):
 		return "🔎" // Magnifying glass (usually 2-cell)

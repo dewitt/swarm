@@ -137,16 +137,16 @@ type defaultManager struct {
 	clientCfg        *genai.ClientConfig
 	pinnedContext    map[string]string
 	inputInstruction string
-	coaInstruction   string
-	debugMode        bool
-	flashModel       model.LLM
-	proModel         model.LLM
-	fastModel        model.LLM
-	toolRegistry     map[string]tool.Tool
-	inputAgent       agent.Agent
-	subAgentNames    []string
-	agents           map[string]agent.Agent
-	lastAgent        string // Tracks the last agent to respond
+	outputInstruction string
+	debugMode         bool
+	flashModel        model.LLM
+	proModel          model.LLM
+	fastModel         model.LLM
+	toolRegistry      map[string]tool.Tool
+	inputAgent        agent.Agent
+	subAgentNames     []string
+	agents            map[string]agent.Agent
+	lastAgent         string // Tracks the last agent to respond
 }
 
 type ManagerConfig struct { Model model.LLM; ResumeLastSession bool }
@@ -236,10 +236,10 @@ CRITICAL: ONLY output the ROUTE line. Do NOT output "ROUTE TO: None" or any othe
 
 	inputAgent, _ := llmagent.New(llmagent.Config{Name: "input_agent", Model: m.fastModel, Instruction: inputInstruction})
 	planningAgent, _ := llmagent.New(llmagent.Config{Name: "planning_agent", Model: m.proModel, Instruction: "Plan DAGs."})
-	coaInstruction := "You are the Output Agent. Sanity check responses. Output ONLY 'OK' or 'FIX: [reason]'. Do not be helpful. Do not explain. Just OK or FIX."
-	outputAgent, _ := llmagent.New(llmagent.Config{Name: "output_agent", Model: m.fastModel, Instruction: coaInstruction})
+	outputInstruction := "You are the Output Agent. Your job is to sanity check responses before they are shown to the human. Output ONLY 'OK' or 'FIX: [reason]'. Do not be helpful. Do not explain. Just OK or FIX."
+	outputAgent, _ := llmagent.New(llmagent.Config{Name: "output_agent", Model: m.fastModel, Instruction: outputInstruction})
 	m.run, _ = runner.New(runner.Config{AppName: "swarm-cli", Agent: swarmAgent, SessionService: m.sessionSvc})
-	m.skills = loadedSkills; m.subAgentNames = subAgentNames; m.inputInstruction = inputInstruction; m.inputAgent = inputAgent; m.coaInstruction = coaInstruction
+	m.skills = loadedSkills; m.subAgentNames = subAgentNames; m.inputInstruction = inputInstruction; m.inputAgent = inputAgent; m.outputInstruction = outputInstruction
 	m.agents = make(map[string]agent.Agent); m.agents["swarm_agent"] = swarmAgent; m.agents["input_agent"] = inputAgent; m.agents["planning_agent"] = planningAgent; m.agents["output_agent"] = outputAgent
 	for _, sa := range subAgents { m.agents[sa.Name()] = sa }
 	return nil
@@ -357,7 +357,7 @@ func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan ChatEv
 
 		// 3. Execution
 		if graph.ImmediateResponse != "" {
-			if m.runCOA(ctx, out, o, "Planning Agent", graph.ImmediateResponse) {
+			if m.runOutputAgent(ctx, out, o, "Planning Agent", graph.ImmediateResponse) {
 				out <- ChatEvent{Type: ChatEventFinalResponse, Agent: "Planning Agent", Content: graph.ImmediateResponse}
 			}
 		} else {
@@ -599,23 +599,46 @@ func (m *defaultManager) executeTask(ctx context.Context, out chan<- ChatEvent, 
 	// Update the global state of the last agent to respond
 	m.lastAgent = targetAgent.Name()
 
-	// Output Sanity Check (COA)
-	if m.runCOA(ctx, out, o, targetAgent.Name(), finalText) {
+	// Output Sanity Check (Output Agent)
+	if m.runOutputAgent(ctx, out, o, targetAgent.Name(), finalText) {
 		out <- ChatEvent{Type: ChatEventFinalResponse, Agent: targetAgent.Name(), TaskID: task.ID, Content: finalText}
 		return finalText, needsReplan
 	}
 
-	out <- ChatEvent{Type: ChatEventThought, Agent: "Orchestrator", TaskID: task.ID, Content: "COA rejected response, requesting replan."}
-	return "COA rejected response.", true
+	out <- ChatEvent{Type: ChatEventThought, Agent: "Orchestrator", TaskID: task.ID, Content: "Output Agent rejected the response as problematic."}
+	return "Output Agent rejected response.", true
 }
 
 
 
-func (m *defaultManager) runCOA(ctx context.Context, out chan<- ChatEvent, o *Orchestrator, agentName, content string) bool {
-	coaStart := time.Now(); coaPrompt := fmt.Sprintf("Sanity check worker: %s. Response: %s. RULE: Output ONLY 'OK' or 'FIX: [reason]'.", agentName, content)
-	respIter := m.fastModel.GenerateContent(ctx, &model.LLMRequest{Contents: []*genai.Content{genai.NewContentFromText(coaPrompt, genai.Role("user"))}, Config: &genai.GenerateContentConfig{SystemInstruction: genai.NewContentFromText(m.coaInstruction, genai.Role("system"))}}, false)
-	approved := true; var res string; for resp, err := range respIter { if err == nil && resp.Content != nil && len(resp.Content.Parts) > 0 { res = resp.Content.Parts[0].Text; if strings.HasPrefix(res, "FIX:") { out <- ChatEvent{Type: ChatEventThought, Agent: "Output Agent", Content: "Rejected: " + res}; approved = false } }; break }
-	if o != nil { o.AddTasks(Task{ID: "coa-"+fmt.Sprintf("%d", coaStart.UnixNano()), Name: "Sanity Check", Agent: "output_agent", Status: TaskStatusComplete, StartTime: coaStart.Format(time.RFC3339Nano), EndTime: time.Now().Format(time.RFC3339Nano), Duration: time.Since(coaStart).String(), Attributes: map[string]any{"gen_ai.prompt": coaPrompt, "gen_ai.completion": res}}) }
+func (m *defaultManager) runOutputAgent(ctx context.Context, out chan<- ChatEvent, o *Orchestrator, agentName, content string) bool {
+	coaStart := time.Now()
+	coaPrompt := fmt.Sprintf("Sanity check worker: %s. Response: %s. RULE: Output ONLY 'OK' or 'FIX: [reason]'.", agentName, content)
+	respIter := m.fastModel.GenerateContent(ctx, &model.LLMRequest{
+		Contents: []*genai.Content{genai.NewContentFromText(coaPrompt, genai.Role("user"))},
+		Config:   &genai.GenerateContentConfig{SystemInstruction: genai.NewContentFromText(m.outputInstruction, genai.Role("system"))},
+	}, false)
+
+	approved := true
+	var res string
+	for resp, err := range respIter {
+		if err == nil && resp.Content != nil && len(resp.Content.Parts) > 0 {
+			res = resp.Content.Parts[0].Text
+			if strings.HasPrefix(res, "FIX:") {
+				out <- ChatEvent{Type: ChatEventThought, Agent: "Output Agent", Content: "Rejected: " + res}
+				approved = false
+			}
+		}
+		break
+	}
+
+	if o != nil {
+		o.AddTasks(Task{
+			ID: "output-agent-" + fmt.Sprintf("%d", coaStart.UnixNano()), Name: "Sanity Check", Agent: "output_agent",
+			Status: TaskStatusComplete, StartTime: coaStart.Format(time.RFC3339Nano), EndTime: time.Now().Format(time.RFC3339Nano),
+			Duration: time.Since(coaStart).String(), Attributes: map[string]any{"gen_ai.prompt": coaPrompt, "gen_ai.completion": res},
+		})
+	}
 	return approved
 }
 

@@ -223,7 +223,18 @@ func (m *defaultManager) Reload() error {
 	if err != nil { return err }
 	r, err := runner.New(runner.Config{AppName: "swarm-cli", Agent: swarmAgent, SessionService: m.sessionSvc})
 	if err != nil { return err }
-	inputInstruction := fmt.Sprintf("You are the Input Agent. Invisible. Classify intent. Sub-agents: %s. RESPONSE: [reply] for social. ROUTE TO: [agent].", strings.Join(subAgentNames, ", "))
+	inputInstruction := fmt.Sprintf(`You are the Input Agent.
+Your job is to take the user's keystrokes and classify their intent.
+Available agents: %s
+
+TRIVIAL QUERIES: If the user input is a simple greeting, social inquiry, or meta-question about the app, route it to the "swarm_agent".
+
+ROUTING:
+- If the user input is a new request, digression, or trivial greeting, output: "ROUTE TO: swarm_agent"
+- If the user input is specifically for one of the specialized sub-agents listed above, output: "ROUTE TO: [agent_name]"
+Otherwise, output: "CONTINUE"
+
+Keep your analysis silent. ONLY output the routing decision.`, strings.Join(subAgentNames, ", "))
 	inputAgent, err := llmagent.New(llmagent.Config{Name: "input_agent", Model: m.flashModel, Instruction: inputInstruction})
 	if err != nil { return err }
 	m.run = r; m.skills = loadedSkills; m.subAgentNames = subAgentNames; m.inputInstruction = inputInstruction; m.inputAgent = inputAgent
@@ -340,6 +351,28 @@ func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan ChatEv
 			EndTime: time.Now().Format(time.RFC3339Nano), Duration: time.Since(inputStart).String(),
 			Attributes: map[string]any{"gen_ai.prompt": prompt, "gen_ai.completion": inputResult},
 		})
+
+		if strings.HasPrefix(inputResult, "ROUTE TO: ") {
+			target := strings.TrimPrefix(inputResult, "ROUTE TO: ")
+			target = strings.TrimSpace(target)
+			if target != "" {
+				out <- ChatEvent{Type: ChatEventThought, Agent: "Input Agent", Content: "Routing to " + target}
+				seedGraph := &ExecutionGraph{
+					Tasks: []Task{
+						{ID: "t1", Name: "Fulfill Request", Agent: target, Prompt: prompt, Dependencies: []string{}},
+					},
+				}
+				events, _, err := m.ExecuteGraphWithOrchestrator(ctx, o, seedGraph)
+				if err != nil { out <- ChatEvent{Type: ChatEventError, Content: err.Error()}; return }
+				for event := range events { out <- event }
+				if m.debugMode {
+					traj := o.GetTrajectory(); traj.TotalDuration = time.Since(swarmStartTime).String()
+					b, _ := json.MarshalIndent(traj, "", "  ")
+					out <- ChatEvent{Type: ChatEventDebug, Agent: "Orchestrator", Content: string(b)}
+				}
+				return
+			}
+		}
 
 		if strings.HasPrefix(inputResult, "RESPONSE: ") {
 			r := strings.TrimPrefix(inputResult, "RESPONSE: ")

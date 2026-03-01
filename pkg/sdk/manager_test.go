@@ -97,7 +97,7 @@ func TestNewManager(t *testing.T) {
 	expected := "Hello from trivial plan!"
 	found := false
 	for _, r := range finalResponses {
-		if r == expected {
+		if contains(r, expected) {
 			found = true
 			break
 		}

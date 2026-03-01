@@ -66,7 +66,11 @@ When run without arguments, it launches a persistent, interactive terminal sessi
 				fullPrompt = "[SYSTEM: You are in PLAN MODE. You must strictly act as a read-only architectural advisor. Under NO circumstances should you use tools to write files, execute bash commands, or alter git state. Only use tools to read and list files.]\n\nUser: " + fullPrompt
 			}
 
-			manager := sdk.NewManager()
+			manager, err := sdk.NewManager()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
 			ch, err := manager.Chat(context.Background(), fullPrompt)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)

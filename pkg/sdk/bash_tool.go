@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"sync"
 
 	"google.golang.org/adk/tool"
 )
@@ -57,8 +58,12 @@ func bashExecuteTool(ctx tool.Context, args BashExecuteArgs) (BashExecuteResult,
 		return BashExecuteResult{Success: false, Error: err.Error(), ExitCode: -1}, nil
 	}
 
+	var wg sync.WaitGroup
+	wg.Add(2)
+
 	// Stream stdout and stderr
 	stream := func(r io.Reader, buf *bytes.Buffer) {
+		defer wg.Done()
 		scanner := bufio.NewScanner(r)
 		for scanner.Scan() {
 			line := scanner.Text()
@@ -73,6 +78,7 @@ func bashExecuteTool(ctx tool.Context, args BashExecuteArgs) (BashExecuteResult,
 	go stream(stderrPipe, &stderrBuf)
 
 	err := cmd.Wait()
+	wg.Wait()
 
 	exitCode := 0
 	if err != nil {

@@ -27,7 +27,8 @@ entrypoint: main.go
 
 	// We only need the defaultManager to call Discover, we don't need a real LLM for this
 	// But Discover is a method on AgentManager.
-	manager := sdk.NewManager(sdk.ManagerConfig{Model: &MockModel{}})
+	manager, err := sdk.NewManager(sdk.ManagerConfig{Model: &MockModel{}})
+	assert.NoError(t, err)
 
 	// Call Discover
 	manifest, err := manager.Discover(context.Background(), tempDir)
@@ -42,7 +43,8 @@ entrypoint: main.go
 
 func TestDiscover_ManifestNotFound(t *testing.T) {
 	tempDir := t.TempDir()
-	manager := sdk.NewManager(sdk.ManagerConfig{Model: &MockModel{}})
+	manager, err := sdk.NewManager(sdk.ManagerConfig{Model: &MockModel{}})
+	assert.NoError(t, err)
 
 	manifest, err := manager.Discover(context.Background(), tempDir)
 
@@ -62,7 +64,8 @@ name: test-agent
 	err := os.WriteFile(manifestPath, []byte(yamlContent), 0644)
 	assert.NoError(t, err)
 
-	manager := sdk.NewManager(sdk.ManagerConfig{Model: &MockModel{}})
+	manager, err := sdk.NewManager(sdk.ManagerConfig{Model: &MockModel{}})
+	assert.NoError(t, err)
 
 	manifest, err := manager.Discover(context.Background(), tempDir)
 

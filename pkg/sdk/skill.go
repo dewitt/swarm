@@ -39,20 +39,9 @@ func LoadSkill(skillDir string) (*Skill, error) {
 		Path: skillDir,
 	}
 
-	var skillPath string
-	err = filepath.Walk(skillDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if !info.IsDir() && filepath.Base(path) == "SKILL.md" {
-			skillPath = path
-			return filepath.SkipAll
-		}
-		return nil
-	})
-
-	if skillPath == "" {
-		return nil, fmt.Errorf("could not find SKILL.md in %s", skillDir)
+	skillPath := filepath.Join(skillDir, "SKILL.md")
+	if _, err := os.Stat(skillPath); err != nil {
+		return nil, fmt.Errorf("could not find SKILL.md in %s: %w", skillDir, err)
 	}
 
 	data, err := os.ReadFile(skillPath)

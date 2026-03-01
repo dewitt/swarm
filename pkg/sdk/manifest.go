@@ -52,11 +52,16 @@ func (m *defaultManager) Discover(ctx context.Context, dir string) (*AgentManife
 		return nil, err
 	}
 
-	// Search up the directory tree for agent.yaml (max 5 levels deep)
-	for i := 0; i < 5; i++ {
+	// Search up the directory tree for agent.yaml
+	for {
 		manifestPath := filepath.Join(absPath, "agent.yaml")
 		if _, err := os.Stat(manifestPath); err == nil {
 			return ParseManifest(manifestPath)
+		}
+
+		// Stop if we find a .git directory
+		if _, err := os.Stat(filepath.Join(absPath, ".git")); err == nil {
+			break
 		}
 
 		parentDir := filepath.Dir(absPath)

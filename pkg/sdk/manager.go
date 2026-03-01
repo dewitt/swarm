@@ -299,19 +299,21 @@ type telemetryContextKey struct{}
 
 // defaultManager is the internal implementation of AgentManager.
 type defaultManager struct {
-	run           *runner.Runner
-	sessionSvc    session.Service
-	userID        string
-	sessionID     string
-	skills        []*Skill
-	clientCfg     *genai.ClientConfig
-	pinnedContext map[string]string
+	run            *runner.Runner
+	db             *gorm.DB
+	sessionSvc     session.Service
+	userID         string
+	sessionID      string
+	skills         []*Skill
+	clientCfg      *genai.ClientConfig
+	pinnedContext  map[string]string
+	ciaInstruction string
 
-	flashModel     model.LLM
-	proModel       model.LLM
-	toolRegistry   map[string]tool.Tool
-	ciaAgent       agent.Agent
-	subAgentNames  []string
+	flashModel    model.LLM
+	proModel      model.LLM
+	toolRegistry  map[string]tool.Tool
+	ciaAgent      agent.Agent
+	subAgentNames []string
 }
 
 // ManagerConfig defines configuration for the AgentManager.
@@ -323,7 +325,7 @@ type ManagerConfig struct {
 }
 
 // NewManager creates a new instance of the core SDK AgentManager.
-func NewManager(cfg ...ManagerConfig) AgentManager {
+func NewManager(cfg ...ManagerConfig) (AgentManager, error) {
 	ctx := context.Background()
 
 	var flashModel model.LLM
@@ -349,11 +351,11 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 		var err error
 		flashModel, err = gemini.NewModel(ctx, "gemini-2.5-flash", clientConfig)
 		if err != nil {
-			log.Fatalf("Failed to create flash model: %v", err)
+			return nil, fmt.Errorf("failed to create flash model: %w", err)
 		}
 		proModel, err = gemini.NewModel(ctx, proModelName, clientConfig)
 		if err != nil {
-			log.Fatalf("Failed to create pro model: %v", err)
+			return nil, fmt.Errorf("failed to create pro model: %w", err)
 		}
 	}
 
@@ -363,7 +365,7 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 		Description: "Lists files in the local directory to help understand the current workspace.",
 	}, listLocalFiles)
 	if err != nil {
-		log.Fatalf("Failed to create listTool: %v", err)
+		return nil, fmt.Errorf("failed to create listTool: %w", err)
 	}
 
 	readTool, err := functiontool.New(functiontool.Config{
@@ -371,7 +373,7 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 		Description: "Reads the contents of a local file.",
 	}, readLocalFile)
 	if err != nil {
-		log.Fatalf("Failed to create readTool: %v", err)
+		return nil, fmt.Errorf("failed to create readTool: %w", err)
 	}
 
 	grepTool, err := functiontool.New(functiontool.Config{
@@ -379,7 +381,7 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 		Description: "Searches for a regex pattern within files in a directory.",
 	}, grepSearch)
 	if err != nil {
-		log.Fatalf("Failed to create grepTool: %v", err)
+		return nil, fmt.Errorf("failed to create grepTool: %w", err)
 	}
 
 	writeTool, err := functiontool.New(functiontool.Config{
@@ -387,7 +389,7 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 		Description: "Writes content to a file at the specified path. Creates directories if necessary.",
 	}, writeLocalFile)
 	if err != nil {
-		log.Fatalf("Failed to create writeTool: %v", err)
+		return nil, fmt.Errorf("failed to create writeTool: %w", err)
 	}
 
 	gitCommit, err := functiontool.New(functiontool.Config{
@@ -395,7 +397,7 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 		Description: "Commits the current directory changes to the local Git repository.",
 	}, gitCommitTool)
 	if err != nil {
-		log.Fatalf("Failed to create gitCommit tool: %v", err)
+		return nil, fmt.Errorf("failed to create gitCommit tool: %w", err)
 	}
 
 	gitPush, err := functiontool.New(functiontool.Config{
@@ -403,7 +405,7 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 		Description: "Pushes local commits to the remote Git repository.",
 	}, gitPushTool)
 	if err != nil {
-		log.Fatalf("Failed to create gitPush tool: %v", err)
+		return nil, fmt.Errorf("failed to create gitPush tool: %w", err)
 	}
 
 	bashExecute, err := functiontool.New(functiontool.Config{
@@ -411,7 +413,7 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 		Description: "Executes a shell command using bash. Useful for installing dependencies or testing code.",
 	}, bashExecuteTool)
 	if err != nil {
-		log.Fatalf("Failed to create bashExecute tool: %v", err)
+		return nil, fmt.Errorf("failed to create bashExecute tool: %w", err)
 	}
 
 	// A map to resolve string names from tools.yaml to actual ADK Tool instances
@@ -420,7 +422,7 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 		Description: "Fetches and returns the raw text content of a given HTTP/HTTPS URL.",
 	}, webFetch)
 	if err != nil {
-		log.Fatalf("Failed to create webFetch tool: %v", err)
+		return nil, fmt.Errorf("failed to create webFetch tool: %w", err)
 	}
 
 	googleSearchTool, err := functiontool.New(functiontool.Config{
@@ -428,7 +430,7 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 		Description: "Performs a Google Search to find up-to-date information on the internet. Provide a query string.",
 	}, googleSearchFunc)
 	if err != nil {
-		log.Fatalf("Failed to create googleSearch tool: %v", err)
+		return nil, fmt.Errorf("failed to create googleSearch tool: %w", err)
 	}
 
 	toolRegistry := map[string]tool.Tool{
@@ -446,19 +448,26 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 	// Use persistent SQLite database for sessions
 	home, _ := os.UserHomeDir()
 	dbDir := filepath.Join(home, ".config", "swarm")
-	os.MkdirAll(dbDir, 0755)
+	_ = os.MkdirAll(dbDir, 0755)
 	dbPath := filepath.Join(dbDir, "sessions.db")
 
-	sessionSvc, err := database.NewSessionService(sqlite.Open(dbPath), &gorm.Config{
+	dialector := sqlite.Open(dbPath)
+	gormCfg := &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Silent),
-	})
+	}
+	db, err := gorm.Open(dialector, gormCfg)
 	if err != nil {
-		log.Fatalf("Failed to initialize database session service: %v", err)
+		return nil, fmt.Errorf("failed to open database: %w", err)
+	}
+
+	sessionSvc, err := database.NewSessionService(dialector, gormCfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize database session service: %w", err)
 	}
 
 	// Ensure the database schema is up-to-date
 	if err := database.AutoMigrate(sessionSvc); err != nil {
-		log.Fatalf("Failed to auto-migrate database: %v", err)
+		return nil, fmt.Errorf("failed to auto-migrate database: %w", err)
 	}
 
 	sessionID := ""
@@ -495,6 +504,7 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 	})
 
 	m := &defaultManager{
+		db:            db,
 		sessionSvc:    sessionSvc,
 		userID:        "local_user",
 		sessionID:     sessionID,
@@ -506,10 +516,10 @@ func NewManager(cfg ...ManagerConfig) AgentManager {
 	}
 
 	if err := m.Reload(); err != nil {
-		log.Fatalf("Failed to load agents and skills: %v", err)
+		return nil, fmt.Errorf("failed to load agents and skills: %w", err)
 	}
 
-	return m
+	return m, nil
 }
 
 func (m *defaultManager) Reload() error {
@@ -598,11 +608,6 @@ func (m *defaultManager) Reload() error {
 		return fmt.Errorf("failed to create runner: %v", err)
 	}
 
-	m.run = r
-	m.skills = loadedSkills
-	m.subAgentNames = subAgentNames
-
-	// Initialize the Chat Input Agent (CIA)
 	ciaInstruction := fmt.Sprintf(`You are the Chat Input Agent (CIA).
 Your job is to classify user input and determine if it should be routed to a specialized sub-agent or the primary router.
 Available agents: %s
@@ -611,8 +616,14 @@ If the user input is a digression from the current task, or a new general reques
 If the user input is specifically for one of the specialized agents, output: "ROUTE TO: [agent_name]"
 Otherwise, output: "CONTINUE"
 
-Keep your analysis silent. ONLY output the routing decision.`, strings.Join(subAgentNames, ", "))
+Keep your analysis silent. ONLY output the routing decision.`, strings.Join(m.subAgentNames, ", "))
 
+	m.run = r
+	m.skills = loadedSkills
+	m.subAgentNames = subAgentNames
+	m.ciaInstruction = ciaInstruction
+
+	// Initialize the Chat Input Agent (CIA)
 	ciaAgent, err := llmagent.New(llmagent.Config{
 		Name:        "chat_input_agent",
 		Model:       m.flashModel,
@@ -696,34 +707,26 @@ func (m *defaultManager) ListSessions(ctx context.Context) ([]SessionInfo, error
 		return nil, err
 	}
 
-	home, _ := os.UserHomeDir()
-	dbPath := filepath.Join(home, ".config", "swarm", "sessions.db")
-	db, dbErr := gorm.Open(sqlite.Open(dbPath), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent),
-	})
-
 	var infos []SessionInfo
 	for _, s := range resp.Sessions {
 		summary := s.ID()
-		if dbErr == nil {
-			var event struct {
-				Content string
-			}
-			err := db.Table("events").
-				Select("content").
-				Where("session_id = ? AND author = ?", s.ID(), "user").
-				Order("timestamp DESC").
-				Limit(1).
-				Find(&event).Error
+		var event struct {
+			Content string
+		}
+		err := m.db.Table("events").
+			Select("content").
+			Where("session_id = ? AND author = ?", s.ID(), "user").
+			Order("timestamp DESC").
+			Limit(1).
+			Find(&event).Error
 
-			if err == nil && event.Content != "" {
-				var c map[string]interface{}
-				if json.Unmarshal([]byte(event.Content), &c) == nil {
-					if parts, ok := c["parts"].([]interface{}); ok && len(parts) > 0 {
-						if part, ok := parts[0].(map[string]interface{}); ok {
-							if text, ok := part["text"].(string); ok {
-								summary = text
-							}
+		if err == nil && event.Content != "" {
+			var c map[string]interface{}
+			if json.Unmarshal([]byte(event.Content), &c) == nil {
+				if parts, ok := c["parts"].([]interface{}); ok && len(parts) > 0 {
+					if part, ok := parts[0].(map[string]interface{}); ok {
+						if text, ok := part["text"].(string); ok {
+							summary = text
 						}
 					}
 				}
@@ -776,71 +779,13 @@ func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan ChatEv
 			prompt = strings.Join(contextDocs, "\n\n") + "\n\nUser Prompt:\n" + prompt
 		}
 
-		if os.Getenv("AGENTS_DRY_RUN") == "true" {
-			// Provide fast, deterministic mock responses for vhs tape recordings
-			lowerPrompt := strings.ToLower(prompt)
-			if strings.Contains(lowerPrompt, "what can you do") {
-				out <- ChatEvent{Type: ChatEventFinalResponse, Agent: "router_agent", Content: "I am an AI Swarm Orchestrator. I can help you investigate codebases, build/test applications, and manage GitOps deployments by coordinating specialized agents."}
-				return
-			}
-			if strings.Contains(lowerPrompt, "build") || strings.Contains(lowerPrompt, "test") {
-				out <- ChatEvent{Type: ChatEventHandoff, Content: "codebase_investigator"}
-				out <- ChatEvent{Type: ChatEventThought, Agent: "codebase_investigator", Content: "Analyzing repository structure…"}
-				time.Sleep(1 * time.Second)
-				out <- ChatEvent{Type: ChatEventTelemetry, Content: "Reading src/legacy/auth.go..."}
-				out <- ChatEvent{Type: ChatEventTelemetry, Content: "Found 3 related files."}
-				time.Sleep(1 * time.Second)
-				
-				out <- ChatEvent{Type: ChatEventHandoff, Content: "builder_agent"}
-				out <- ChatEvent{Type: ChatEventThought, Agent: "builder_agent", Content: "Compiling and testing…"}
-				out <- ChatEvent{Type: ChatEventToolCall, Content: "bash_execute"}
-				// Simulate some build/test logs
-				out <- ChatEvent{Type: ChatEventTelemetry, Content: "pip install -r requirements.txt..."}
-				time.Sleep(500 * time.Millisecond)
-				out <- ChatEvent{Type: ChatEventTelemetry, Content: "Collecting google-genai..."}
-				time.Sleep(500 * time.Millisecond)
-				out <- ChatEvent{Type: ChatEventTelemetry, Content: "Successfully installed google-genai-1.40.0"}
-				time.Sleep(500 * time.Millisecond)
-				out <- ChatEvent{Type: ChatEventTelemetry, Content: "python agent.py --test"}
-				time.Sleep(500 * time.Millisecond)
-				out <- ChatEvent{Type: ChatEventTelemetry, Content: "Test Passed: test_init"}
-				time.Sleep(500 * time.Millisecond)
-				out <- ChatEvent{Type: ChatEventTelemetry, Content: "Test Passed: test_chat"}
-				
-				out <- ChatEvent{Type: ChatEventFinalResponse, Agent: "builder_agent", Content: "I have successfully audited, built, and tested the repository. All 14 tests passed!"}
-				return
-			}
-			if strings.Contains(strings.ToLower(prompt), "deploy") {
-				out <- ChatEvent{Type: ChatEventHandoff, Content: "gitops_agent"}
-				out <- ChatEvent{Type: ChatEventThought, Agent: "gitops_agent", Content: "Preparing deployment pipeline…"}
-				time.Sleep(1 * time.Second)
-				out <- ChatEvent{Type: ChatEventTelemetry, Content: "git add .github/workflows/deploy.yml"}
-				out <- ChatEvent{Type: ChatEventTelemetry, Content: "git commit -m 'Setup GAE deployment'"}
-				out <- ChatEvent{Type: ChatEventTelemetry, Content: "git push origin main"}
-				time.Sleep(1 * time.Second)
-				out <- ChatEvent{Type: ChatEventFinalResponse, Agent: "gitops_agent", Content: "Deployment successful! I have generated the GitHub Actions workflow and pushed it to main. Your application is now live at https://swarm-cli-demo.google.com"}
-				return
-			}
-			out <- ChatEvent{Type: ChatEventFinalResponse, Agent: "router_agent", Content: "This is a deterministic dry-run response."}
-			return
-		}
-
 		// --- Chat Input Agent (CIA) Pre-processing ---
 		out <- ChatEvent{Type: ChatEventThought, Agent: "Chat Input Agent", Content: "Classifying input…"}
-		ciaInstruction := fmt.Sprintf(`You are the Chat Input Agent (CIA).
-Your job is to classify user input and determine if it should be routed to a specialized sub-agent or the primary router.
-Available agents: %s
-
-If the user input is a digression from the current task, or a new general request, output: "ROUTE TO: router_agent"
-If the user input is specifically for one of the specialized agents, output: "ROUTE TO: [agent_name]"
-Otherwise, output: "CONTINUE"
-
-Keep your analysis silent. ONLY output the routing decision.`, strings.Join(m.subAgentNames, ", "))
 
 		ciaRespIter := m.flashModel.GenerateContent(ctx, &model.LLMRequest{
 			Contents: []*genai.Content{genai.NewContentFromText(prompt, genai.Role("user"))},
 			Config: &genai.GenerateContentConfig{
-				SystemInstruction: genai.NewContentFromText(ciaInstruction, genai.Role("system")),
+				SystemInstruction: genai.NewContentFromText(m.ciaInstruction, genai.Role("system")),
 			},
 		}, false)
 
@@ -850,7 +795,7 @@ Keep your analysis silent. ONLY output the routing decision.`, strings.Join(m.su
 				if strings.HasPrefix(ciaText, "ROUTE TO: ") {
 					target := strings.TrimPrefix(ciaText, "ROUTE TO: ")
 					target = strings.TrimSpace(target)
-					if target != "" {
+					if target != "" && target != "router_agent" {
 						out <- ChatEvent{Type: ChatEventThought, Agent: "Chat Input Agent", Content: "Rerouting to " + target}
 						// Perform a manual handoff by appending a transfer event to the session
 						sessResp, err := m.sessionSvc.Get(ctx, &session.GetRequest{
@@ -876,22 +821,24 @@ Keep your analysis silent. ONLY output the routing decision.`, strings.Join(m.su
 
 		// Setup telemetry channel for tools
 		telemetryChan := make(chan string, 100)
-		toolCtx := context.WithValue(ctx, telemetryContextKey{}, (chan<- string)(telemetryChan))
+		toolCtx, cancelToolCtx := context.WithCancel(context.WithValue(ctx, telemetryContextKey{}, (chan<- string)(telemetryChan)))
+		defer cancelToolCtx()
 
 		// Listen for telemetry in the background and pipe to output
+		telemetryDone := make(chan struct{})
 		go func() {
 			for line := range telemetryChan {
 				out <- ChatEvent{Type: ChatEventTelemetry, Content: line}
 			}
+			close(telemetryDone)
 		}()
-		defer close(telemetryChan)
 
 		events := m.run.Run(toolCtx, m.userID, m.sessionID, genai.NewContentFromText(prompt, genai.Role("user")), agent.RunConfig{})
 
 		for event, err := range events {
 			if err != nil {
 				out <- ChatEvent{Type: ChatEventError, Content: err.Error()}
-				return
+				break
 			}
 
 			if event.Actions.TransferToAgent != "" {
@@ -955,6 +902,8 @@ Keep your analysis silent. ONLY output the routing decision.`, strings.Join(m.su
 				out <- ChatEvent{Type: ChatEventFinalResponse, Agent: author, Content: fullResponse.String()}
 			}
 		}
+		close(telemetryChan)
+		<-telemetryDone
 	}()
 
 	return out, nil
@@ -965,21 +914,12 @@ func (m *defaultManager) Rewind(n int) error {
 		return nil
 	}
 
-	home, _ := os.UserHomeDir()
-	dbPath := filepath.Join(home, ".config", "swarm", "sessions.db")
-	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent),
-	})
-	if err != nil {
-		return fmt.Errorf("failed to open database: %w", err)
-	}
-
 	// Find the Nth most recent user event for this session
 	var events []struct {
 		Timestamp string
 	}
 
-	err = db.Table("events").
+	err := m.db.Table("events").
 		Select("timestamp").
 		Where("session_id = ? AND author = ?", m.sessionID, "user").
 		Order("timestamp DESC").
@@ -992,10 +932,10 @@ func (m *defaultManager) Rewind(n int) error {
 
 	if len(events) < n {
 		// Not enough user events, just delete all events for this session
-		return db.Table("events").Where("session_id = ?", m.sessionID).Delete(nil).Error
+		return m.db.Table("events").Where("session_id = ?", m.sessionID).Delete(nil).Error
 	}
 
 	// Delete all events >= the timestamp of the Nth user event
 	targetTime := events[len(events)-1].Timestamp
-	return db.Table("events").Where("session_id = ? AND timestamp >= ?", m.sessionID, targetTime).Delete(nil).Error
+	return m.db.Table("events").Where("session_id = ? AND timestamp >= ?", m.sessionID, targetTime).Delete(nil).Error
 }

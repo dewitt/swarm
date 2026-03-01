@@ -601,7 +601,7 @@ func getRecentActivity(manager sdk.AgentManager, width int) string {
 	return sb.String()
 }
 
-func initialModel(planMode bool, resume bool) model {
+func initialModel(planMode bool, resume bool) (model, error) {
 	ta := textarea.New()
 	ta.Placeholder = "Type your message or /help (Alt+Enter or ^J for newline)"
 	ta.Focus()
@@ -661,7 +661,10 @@ func initialModel(planMode bool, resume bool) model {
 		{name: "Router", icon: "◈", status: "Idle", state: "idle", spin: agentSpinner, resident: true, lastActive: time.Now()},
 	}
 
-	manager := sdk.NewManager(sdk.ManagerConfig{ResumeLastSession: resume})
+	manager, err := sdk.NewManager(sdk.ManagerConfig{ResumeLastSession: resume})
+	if err != nil {
+		return model{}, err
+	}
 
 	// Prepare splash screen components for dynamic rendering in View()
 	greeting := fmt.Sprintf("\n\n%s %s!", lipgloss.NewStyle().Foreground(tipColor).Render("Welcome back,"), lipgloss.NewStyle().Bold(true).Render(getUserName()))
@@ -689,7 +692,7 @@ func initialModel(planMode bool, resume bool) model {
 		agents:         agents,
 		showAgentPanel: true,
 		welcomeScreen:  []string{logoAndGreeting, recentActivity},
-	}
+	}, nil
 }
 
 func (m model) Init() tea.Cmd {
@@ -1965,7 +1968,11 @@ func (m model) View() string {
 }
 
 func launchInteractiveShell(planMode bool, resume bool) error {
-	p := tea.NewProgram(initialModel(planMode, resume), tea.WithAltScreen(), tea.WithMouseCellMotion())
+	m, err := initialModel(planMode, resume)
+	if err != nil {
+		return err
+	}
+	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion())
 	if _, err := p.Run(); err != nil {
 		return fmt.Errorf("error: %w", err)
 	}

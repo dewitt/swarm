@@ -611,7 +611,7 @@ func initialModel(planMode bool, resume bool) (model, error) {
 	ta.SetHeight(3)
 	ta.SetPromptFunc(2, func(lineIdx int) string {
 		if lineIdx == 0 {
-			return promptStyle.Render("> ")
+			return "> "
 		}
 		return "  "
 	})
@@ -1701,7 +1701,7 @@ func (m *model) updateInputStyle() {
 		m.textArea.Placeholder = "Agents are working. Type to queue a message or press Esc to interrupt..."
 		m.textArea.SetPromptFunc(2, func(lineIdx int) string {
 			if lineIdx == 0 {
-				return lipgloss.NewStyle().Foreground(googleYellow).Render("⧖ ")
+				return "⧖ "
 			}
 			return "  "
 		})
@@ -1709,7 +1709,7 @@ func (m *model) updateInputStyle() {
 		m.textArea.Placeholder = "Type your shell command"
 		m.textArea.SetPromptFunc(2, func(lineIdx int) string {
 			if lineIdx == 0 {
-				return lipgloss.NewStyle().Foreground(googleYellow).Bold(true).Render("! ")
+				return "! "
 			}
 			return "  "
 		})
@@ -1717,7 +1717,7 @@ func (m *model) updateInputStyle() {
 		m.textArea.Placeholder = "Type your message or /help (Alt+Enter or ^J for newline)"
 		m.textArea.SetPromptFunc(2, func(lineIdx int) string {
 			if lineIdx == 0 {
-				return promptStyle.Render("> ")
+				return "> "
 			}
 			return "  "
 		})

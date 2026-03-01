@@ -1137,7 +1137,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			text := event.Content
 			
 			// Fulfill Requirement 1 & 2: Invisible intermediaries
-			if author == "Input Agent" || author == "COA" {
+			if isMediationAgent(author) {
 				// Still update viewport and panel, but don't show text to user
 				m.updateViewport()
 				return m, tea.Batch(listenForStream(msg.ch), agentCmd)
@@ -1920,6 +1920,15 @@ func (m *model) findAgent(name string) *swarmAgent {
 		}
 	}
 	return nil
+}
+
+func isMediationAgent(name string) bool {
+	name = strings.ToLower(name)
+	return strings.Contains(name, "input") ||
+		strings.Contains(name, "output") ||
+		strings.Contains(name, "planning") ||
+		strings.Contains(name, "coa") ||
+		strings.Contains(name, "cia")
 }
 
 func getAgentIcon(name string) string {

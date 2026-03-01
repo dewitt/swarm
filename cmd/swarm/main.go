@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -15,6 +16,7 @@ var promptFlag string
 var planFlag bool
 var resumeFlag bool
 var trajectoryFlag bool
+var explainFlag bool
 
 var configCmd = &cobra.Command{
 	Use:   "config",
@@ -73,7 +75,7 @@ When run without arguments, it launches a persistent, interactive terminal sessi
 				os.Exit(1)
 			}
 
-			if trajectoryFlag {
+			if trajectoryFlag || explainFlag {
 				manager.SetDebug(true)
 			}
 
@@ -82,13 +84,30 @@ When run without arguments, it launches a persistent, interactive terminal sessi
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 				os.Exit(1)
 			}
+			
+			var lastTrajectory string
 			for event := range ch {
 				if event.Type == sdk.ChatEventFinalResponse && !trajectoryFlag {
 					fmt.Printf("[%s] %s\n", event.Agent, event.Content)
 				} else if event.Type == sdk.ChatEventError {
 					fmt.Fprintf(os.Stderr, "Error: %s\n", event.Content)
-				} else if event.Type == sdk.ChatEventDebug && trajectoryFlag {
-					fmt.Println(event.Content)
+				} else if event.Type == sdk.ChatEventDebug {
+					lastTrajectory = event.Content
+					if trajectoryFlag {
+						fmt.Println(event.Content)
+					}
+				}
+			}
+
+			if explainFlag && lastTrajectory != "" {
+				var traj sdk.Trajectory
+				if err := json.Unmarshal([]byte(lastTrajectory), &traj); err == nil {
+					explanation, err := manager.Explain(context.Background(), traj)
+					if err != nil {
+						fmt.Fprintf(os.Stderr, "\nExplanation failed: %v\n", err)
+					} else {
+						fmt.Printf("\n--- Swarm Explanation ---\n%s\n", explanation)
+					}
 				}
 			}
 			return
@@ -110,6 +129,7 @@ func init() {
 	rootCmd.Flags().BoolVar(&planFlag, "plan", false, "Start the agent in read-only plan mode")
 	rootCmd.Flags().BoolVar(&resumeFlag, "resume", false, "Resume the last interactive session")
 	rootCmd.Flags().BoolVar(&trajectoryFlag, "trajectory", false, "Output the full swarm trajectory JSON to stdout instead of the response")
+	rootCmd.Flags().BoolVar(&explainFlag, "explain", false, "Provide a human-readable explanation of the swarm trajectory")
 	rootCmd.AddCommand(configCmd)
 }
 func main() {

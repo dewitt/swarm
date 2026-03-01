@@ -94,7 +94,11 @@ func (o *Orchestrator) AddTasks(tasks ...Task) {
 		}
 		o.tasks[t.ID] = t
 		if _, exists := o.status[t.ID]; !exists {
-			o.status[t.ID] = TaskStatusPending
+			if t.Status != "" {
+				o.status[t.ID] = t.Status
+			} else {
+				o.status[t.ID] = TaskStatusPending
+			}
 		}
 	}
 }

@@ -99,6 +99,14 @@ type AgentManifest struct {
 type SessionInfo struct { ID string; UpdatedAt string; Summary string }
 type ModelInfo struct { Name string; DisplayName string; Description string; Version string }
 
+type ChatEventType string
+const (
+	ChatEventHandoff ChatEventType = "handoff"; ChatEventToolCall ChatEventType = "tool_call"; ChatEventToolResult ChatEventType = "tool_result"
+	ChatEventTelemetry ChatEventType = "telemetry"; ChatEventThought ChatEventType = "thought"; ChatEventObserver ChatEventType = "observer"
+	ChatEventReplan ChatEventType = "replan"; ChatEventDebug ChatEventType = "debug"; ChatEventFinalResponse ChatEventType = "final_response"; ChatEventError ChatEventType = "error"
+)
+type ChatEvent struct { Type ChatEventType; Agent, TaskID, Content string }
+
 type AgentManager interface {
 	Discover(ctx context.Context, dir string) (*AgentManifest, error)
 	AddContext(path string) error; DropContext(path string); ListContext() []string
@@ -108,13 +116,13 @@ type AgentManager interface {
 	Chat(ctx context.Context, prompt string) (<-chan ChatEvent, error)
 	Reset(); Reload() error; Rewind(n int) error; Skills() []*Skill
 	ListModels(ctx context.Context) ([]ModelInfo, error); ListSessions(ctx context.Context) ([]SessionInfo, error)
-	SetDebug(enabled bool); IsDebug() bool
+	SetDebug(enabled bool); IsDebug() bool; Explain(ctx context.Context, traj Trajectory) (string, error)
 }
 
 type telemetryContextKey struct{}
 
 type defaultManager struct {
-	run *runner.Runner; db *gorm.DB; sessionSvc session.Service; userID string; sessionID string; skills []*Skill; clientCfg *genai.ClientConfig; pinnedContext map[string]string; inputInstruction string; debugMode bool
+	run *runner.Runner; db *gorm.DB; sessionSvc session.Service; userID string; sessionID string; skills []*Skill; clientCfg *genai.ClientConfig; pinnedContext map[string]string; inputInstruction string; coaInstruction string; debugMode bool
 	flashModel model.LLM; proModel model.LLM; fastModel model.LLM; toolRegistry map[string]tool.Tool; inputAgent agent.Agent; subAgentNames []string; agents map[string]agent.Agent
 }
 
@@ -197,61 +205,49 @@ func (s *MemorySessionService) Delete(ctx context.Context, req *session.DeleteRe
 
 func (m *defaultManager) IsDebug() bool { return m.debugMode }
 func (m *defaultManager) SetDebug(enabled bool) { m.debugMode = enabled }
+
+func (m *defaultManager) Explain(ctx context.Context, traj Trajectory) (string, error) {
+	trajJSON, _ := json.MarshalIndent(traj, "", "  ")
+	prompt := fmt.Sprintf("You are the Swarm Historian. Explain WHY this path was taken. Concisely. Trajectory: %s", string(trajJSON))
+	respIter := m.proModel.GenerateContent(ctx, &model.LLMRequest{Contents: []*genai.Content{genai.NewContentFromText(prompt, genai.Role("user"))}}, false)
+	var exp string; for resp, err := range respIter { if err != nil { return "", err }; if resp.Content != nil && len(resp.Content.Parts) > 0 { exp += resp.Content.Parts[0].Text } }
+	return strings.TrimSpace(exp), nil
+}
+
 func (m *defaultManager) Reload() error {
 	var subAgents []agent.Agent; var loadedSkills []*Skill; skillDirs := []string{}
-	entries, err := os.ReadDir("skills")
-	if err == nil { for _, entry := range entries { if entry.IsDir() { skillDirs = append(skillDirs, filepath.Join("skills", entry.Name())) } } }
+	entries, _ := os.ReadDir("skills"); for _, entry := range entries { if entry.IsDir() { skillDirs = append(skillDirs, filepath.Join("skills", entry.Name())) } }
 	for _, dir := range skillDirs {
 		skill, err := LoadSkill(dir); if err != nil { continue }
 		loadedSkills = append(loadedSkills, skill); var skillTools []tool.Tool; skillTools = append(skillTools, m.toolRegistry["request_replan"])
 		for _, toolName := range skill.Manifest.Tools { if t, ok := m.toolRegistry[toolName]; ok { skillTools = append(skillTools, t) } }
 		targetModel := m.proModel; if skill.Manifest.Model == "flash" { targetModel = m.flashModel }
-		skillAgent, err := llmagent.New(llmagent.Config{
-			Name: skill.Manifest.Name, Model: targetModel, Description: skill.Manifest.Description,
-			Instruction: skill.Instructions, Tools: skillTools,
-		})
-		if err != nil { return err }
+		skillAgent, _ := llmagent.New(llmagent.Config{Name: skill.Manifest.Name, Model: targetModel, Description: skill.Manifest.Description, Instruction: skill.Instructions, Tools: skillTools})
 		subAgents = append(subAgents, skillAgent)
 	}
 	var subAgentNames []string; for _, sa := range subAgents { subAgentNames = append(subAgentNames, sa.Name()) }
-	swarmInstruction := fmt.Sprintf("You are the primary Swarm Agent. Help the user build, test, and deploy AI agents. NODE AUTONOMY: You are responsible for doing your best to fulfill the request. You can respond with output directly, or orchestrate sub-tasks yourself. You can call upon the Planning Agent if you require a structured execution graph. Available sub-agents: %s", strings.Join(subAgentNames, ", "))
-	swarmAgent, err := llmagent.New(llmagent.Config{
-		Name: "swarm_agent", Model: m.flashModel, Instruction: swarmInstruction,
-		Tools: []tool.Tool{m.toolRegistry["list_local_files"], m.toolRegistry["read_local_file"], m.toolRegistry["grep_search"]},
-		SubAgents: subAgents,
-	})
-	if err != nil { return err }
-	r, err := runner.New(runner.Config{AppName: "swarm-cli", Agent: swarmAgent, SessionService: m.sessionSvc})
-	if err != nil { return err }
+	swarmInstruction := fmt.Sprintf("You are the Swarm Agent. Persona of this app. NODE AUTONOMY: Respond directly or orchestrate. Use Planning Agent for complex graphs. Sub-agents: %s", strings.Join(subAgentNames, ", "))
+	swarmAgent, _ := llmagent.New(llmagent.Config{Name: "swarm_agent", Model: m.flashModel, Instruction: swarmInstruction, Tools: []tool.Tool{m.toolRegistry["list_local_files"], m.toolRegistry["read_local_file"], m.toolRegistry["grep_search"]}, SubAgents: subAgents})
 	inputInstruction := fmt.Sprintf(`You are the Input Agent.
 Your job is to take the user's keystrokes and classify their intent.
 Available agents: %s
 
-TRIVIAL QUERIES: If the user input is a simple greeting, social inquiry, or meta-question about the app, route it to the "swarm_agent".
+TRIVIAL QUERIES: If the user input is a greeting (e.g. "Hello"), social inquiry, or meta-question about the app, you MUST output: "ROUTE TO: swarm_agent".
 
-ROUTING:
-- If the user input is a new request, digression, or trivial greeting, output: "ROUTE TO: swarm_agent"
-- If the user input is specifically for one of the specialized sub-agents listed above, output: "ROUTE TO: [agent_name]"
-Otherwise, output: "CONTINUE"
+ROUTING RULES:
+- For a new request, digression, or greeting, output: "ROUTE TO: swarm_agent"
+- For a specific technical task matching a sub-agent, output: "ROUTE TO: [agent_name]"
+- Otherwise, output: "CONTINUE"
 
-CRITICAL: Do NOT explain your reasoning. Do NOT output anything other than the ROUTE line. Be instant.`, strings.Join(subAgentNames, ", "))
-	m.run = r; m.skills = loadedSkills; m.subAgentNames = subAgentNames; m.inputInstruction = inputInstruction
-	
-	// Principle 1 & 2: Mediation agents must exist in the registry for observability
+CRITICAL: ONLY output the ROUTE line. Do NOT output "ROUTE TO: None" or any other text. Be instant.`, strings.Join(subAgentNames, ", "))
+
 	inputAgent, _ := llmagent.New(llmagent.Config{Name: "input_agent", Model: m.fastModel, Instruction: inputInstruction})
-	m.inputAgent = inputAgent
-
-	planAgents := append(subAgentNames, "swarm_agent", "planning_agent")
-	planInstruction := fmt.Sprintf("You are the Planning Agent. Decompose into DAG JSON. TRIVIAL: use immediate_response. Agents: %s", strings.Join(planAgents, ", "))
-	planningAgent, _ := llmagent.New(llmagent.Config{Name: "planning_agent", Model: m.proModel, Instruction: planInstruction})
-
-	outputAgent, _ := llmagent.New(llmagent.Config{Name: "output_agent", Model: m.fastModel, Instruction: "Sanity check agent responses."})
-
-	m.agents = make(map[string]agent.Agent)
-	m.agents["swarm_agent"] = swarmAgent
-	m.agents["input_agent"] = inputAgent
-	m.agents["planning_agent"] = planningAgent
-	m.agents["output_agent"] = outputAgent
+	planningAgent, _ := llmagent.New(llmagent.Config{Name: "planning_agent", Model: m.proModel, Instruction: "Plan DAGs."})
+	coaInstruction := "You are the Output Agent. Sanity check responses. Output ONLY 'OK' or 'FIX: [reason]'. Do not be helpful. Do not explain. Just OK or FIX."
+	outputAgent, _ := llmagent.New(llmagent.Config{Name: "output_agent", Model: m.fastModel, Instruction: coaInstruction})
+	m.run, _ = runner.New(runner.Config{AppName: "swarm-cli", Agent: swarmAgent, SessionService: m.sessionSvc})
+	m.skills = loadedSkills; m.subAgentNames = subAgentNames; m.inputInstruction = inputInstruction; m.inputAgent = inputAgent; m.coaInstruction = coaInstruction
+	m.agents = make(map[string]agent.Agent); m.agents["swarm_agent"] = swarmAgent; m.agents["input_agent"] = inputAgent; m.agents["planning_agent"] = planningAgent; m.agents["output_agent"] = outputAgent
 	for _, sa := range subAgents { m.agents[sa.Name()] = sa }
 	return nil
 }
@@ -268,14 +264,6 @@ func (m *defaultManager) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	return models, nil
 }
 
-type ChatEventType string
-const (
-	ChatEventHandoff ChatEventType = "handoff"; ChatEventToolCall ChatEventType = "tool_call"; ChatEventToolResult ChatEventType = "tool_result"
-	ChatEventTelemetry ChatEventType = "telemetry"; ChatEventThought ChatEventType = "thought"; ChatEventObserver ChatEventType = "observer"
-	ChatEventReplan ChatEventType = "replan"; ChatEventDebug ChatEventType = "debug"; ChatEventFinalResponse ChatEventType = "final_response"; ChatEventError ChatEventType = "error"
-)
-type ChatEvent struct { Type ChatEventType; Agent, TaskID, Content string }
-
 func (m *defaultManager) ListSessions(ctx context.Context) ([]SessionInfo, error) {
 	resp, err := m.sessionSvc.List(ctx, &session.ListRequest{AppName: "swarm-cli", UserID: m.userID}); if err != nil { return nil, err }
 	var infos []SessionInfo
@@ -289,163 +277,58 @@ func (m *defaultManager) ListSessions(ctx context.Context) ([]SessionInfo, error
 }
 
 func (m *defaultManager) Plan(ctx context.Context, prompt string) (*ExecutionGraph, error) {
-	allAgents := append(m.subAgentNames, "swarm_agent", "planning_agent")
-	systemPrompt := fmt.Sprintf(`You are the Planning Agent.
-Decompose the user's request into a Directed Acyclic Graph (DAG) of tasks.
-
-SCHEMA RULES:
-1. You MUST output ONLY raw JSON. No markdown blocks.
-2. The root object must have a "tasks" array.
-3. Each task must have: "id", "name", "agent", "prompt", and "dependencies" (array of IDs).
-4. Use the exact field names: "tasks" (not nodes) and "prompt" (not instruction).
-
-TRIVIAL QUERIES: If the request is a simple greeting, use the "immediate_response" field instead of tasks.
-
-AVAILABLE AGENTS: %s
-
-EXAMPLE:
-{
-  "tasks": [
-    { "id": "t1", "name": "Research", "agent": "web_researcher_agent", "prompt": "Find X", "dependencies": [] },
-    { "id": "t2", "name": "Write", "agent": "claude_code_agent", "prompt": "Write code based on t1", "dependencies": ["t1"] }
-  ]
-}`, strings.Join(allAgents, ", "))
+	allAgents := append(m.subAgentNames, "swarm_agent")
+	systemPrompt := fmt.Sprintf(`You are the Planning Agent. Decompose request into DAG JSON. SCHEMA: { "tasks": [{ "id": "t1", "name": "N", "agent": "A", "prompt": "P", "dependencies": [] }] }. GREETINGS: use immediate_response. COMPLEX: DEEP_PLAN_REQUIRED. AVAILABLE: %s. RULE: Use EXACT field names. NO markdown.`, strings.Join(allAgents, ", "))
 	respIter := m.fastModel.GenerateContent(ctx, &model.LLMRequest{Contents: []*genai.Content{genai.NewContentFromText(prompt, genai.Role("user"))}, Config: &genai.GenerateContentConfig{SystemInstruction: genai.NewContentFromText(systemPrompt, genai.Role("system"))}}, false)
 	var jsonStr string; for resp, err := range respIter { if err != nil { return nil, err }; if resp.Content != nil && len(resp.Content.Parts) > 0 { jsonStr += resp.Content.Parts[0].Text } }
 	jsonStr = strings.TrimSpace(jsonStr)
 	if jsonStr == "DEEP_PLAN_REQUIRED" {
 		respIter = m.proModel.GenerateContent(ctx, &model.LLMRequest{Contents: []*genai.Content{genai.NewContentFromText(prompt, genai.Role("user"))}, Config: &genai.GenerateContentConfig{SystemInstruction: genai.NewContentFromText(systemPrompt, genai.Role("system"))}}, false)
-		jsonStr = ""; for resp, err := range respIter { if err != nil { return nil, err }; if resp.Content != nil && len(resp.Content.Parts) > 0 { jsonStr += resp.Content.Parts[0].Text } }
-		jsonStr = strings.TrimSpace(jsonStr)
+		jsonStr = ""; for resp, err := range respIter { if err != nil { return nil, err }; if resp.Content != nil && len(resp.Content.Parts) > 0 { jsonStr += resp.Content.Parts[0].Text } }; jsonStr = strings.TrimSpace(jsonStr)
 	}
-	if strings.HasPrefix(jsonStr, "```json") { jsonStr = strings.TrimPrefix(jsonStr, "```json"); jsonStr = strings.TrimSuffix(jsonStr, "```"); jsonStr = strings.TrimSpace(jsonStr) }
+	re := regexp.MustCompile("(?s)\\{.*\\}"); match := re.FindString(jsonStr); if match != "" { jsonStr = match }
 	var graph ExecutionGraph; if err := json.Unmarshal([]byte(jsonStr), &graph); err != nil { return nil, err }; return &graph, nil
 }
 
 func (m *defaultManager) Chat(ctx context.Context, prompt string) (<-chan ChatEvent, error) {
 	out := make(chan ChatEvent, 1000)
 	go func() {
-		defer close(out)
-		swarmStartTime := time.Now()
-		
-		// Initialize orchestrator early to capture all spans
-		o := NewOrchestrator(nil)
-
-		// 1. Input Agent Span
-		inputStart := time.Now()
-		out <- ChatEvent{Type: ChatEventThought, Agent: "Input Agent", Content: "Classifying…"}
-		inputIter := m.fastModel.GenerateContent(ctx, &model.LLMRequest{
-			Contents: []*genai.Content{genai.NewContentFromText(prompt, genai.Role("user"))},
-			Config: &genai.GenerateContentConfig{SystemInstruction: genai.NewContentFromText(m.inputInstruction, genai.Role("system"))},
-		}, false)
-		
-		var inputResult string
-		for resp, err := range inputIter {
-			if err != nil { out <- ChatEvent{Type: ChatEventError, Content: err.Error()}; return }
-			if resp.Content != nil && len(resp.Content.Parts) > 0 {
-				inputResult = resp.Content.Parts[0].Text
-			}
-			break
-		}
-		
-		// Record Input Agent as a span
-		o.AddTasks(Task{
-			ID: "input", Name: "Intent Classification", Agent: "input_agent", 
-			Status: TaskStatusComplete, StartTime: inputStart.Format(time.RFC3339Nano), 
-			EndTime: time.Now().Format(time.RFC3339Nano), Duration: time.Since(inputStart).String(),
-			Attributes: map[string]any{"gen_ai.prompt": prompt, "gen_ai.completion": inputResult},
-		})
-
+		defer close(out); swarmStartTime := time.Now(); o := NewOrchestrator(nil)
+		inputStart := time.Now(); out <- ChatEvent{Type: ChatEventThought, Agent: "Input Agent", Content: "Classifying…"}
+		inputIter := m.fastModel.GenerateContent(ctx, &model.LLMRequest{Contents: []*genai.Content{genai.NewContentFromText(prompt, genai.Role("user"))}, Config: &genai.GenerateContentConfig{SystemInstruction: genai.NewContentFromText(m.inputInstruction, genai.Role("system"))}}, false)
+		var inputResult string; for resp, err := range inputIter { if err != nil { out <- ChatEvent{Type: ChatEventError, Content: err.Error()}; return }; if resp.Content != nil && len(resp.Content.Parts) > 0 { inputResult = resp.Content.Parts[0].Text }; break }
+		o.AddTasks(Task{ID: "input", Name: "Classification", Agent: "input_agent", Status: TaskStatusComplete, StartTime: inputStart.Format(time.RFC3339Nano), EndTime: time.Now().Format(time.RFC3339Nano), Duration: time.Since(inputStart).String(), Attributes: map[string]any{"gen_ai.prompt": prompt, "gen_ai.completion": inputResult}})
 		if strings.HasPrefix(inputResult, "ROUTE TO: ") {
-			target := strings.TrimPrefix(inputResult, "ROUTE TO: ")
-			target = strings.TrimSpace(target)
+			target := strings.TrimSpace(strings.TrimPrefix(inputResult, "ROUTE TO: "))
 			if target != "" {
 				out <- ChatEvent{Type: ChatEventThought, Agent: "Input Agent", Content: "Routing to " + target}
-				seedGraph := &ExecutionGraph{
-					Tasks: []Task{
-						{ID: "t1", Name: "Fulfill Request", Agent: target, Prompt: prompt, Dependencies: []string{}},
-					},
-				}
-				events, _, err := m.ExecuteGraphWithOrchestrator(ctx, o, seedGraph)
-				if err != nil { out <- ChatEvent{Type: ChatEventError, Content: err.Error()}; return }
-				for event := range events { out <- event }
-				if m.debugMode {
-					traj := o.GetTrajectory(); traj.TotalDuration = time.Since(swarmStartTime).String()
-					b, _ := json.MarshalIndent(traj, "", "  ")
-					out <- ChatEvent{Type: ChatEventDebug, Agent: "Orchestrator", Content: string(b)}
-				}
-				return
+				events, _, err := m.ExecuteGraphWithOrchestrator(ctx, o, &ExecutionGraph{Tasks: []Task{{ID: "t1", Name: "Fulfill", Agent: target, Prompt: prompt, Dependencies: []string{}}}})
+				if err != nil { out <- ChatEvent{Type: ChatEventError, Content: err.Error()}; return }; for event := range events { out <- event }
+				if m.debugMode { traj := o.GetTrajectory(); traj.TotalDuration = time.Since(swarmStartTime).String(); b, _ := json.MarshalIndent(traj, "", "  "); out <- ChatEvent{Type: ChatEventDebug, Agent: "Orchestrator", Content: string(b)} }; return
 			}
 		}
-
-		if strings.HasPrefix(inputResult, "RESPONSE: ") {
-			r := strings.TrimPrefix(inputResult, "RESPONSE: ")
-			if m.runCOA(ctx, out, o, "Input Agent", r) {
-				if m.debugMode {
-					traj := o.GetTrajectory(); traj.TotalDuration = time.Since(swarmStartTime).String()
-					b, _ := json.MarshalIndent(traj, "", "  ")
-					out <- ChatEvent{Type: ChatEventDebug, Agent: "Orchestrator", Content: string(b)}
-				}
-				out <- ChatEvent{Type: ChatEventFinalResponse, Agent: "Input Agent", Content: r}
-				return
-			}
-		}
-
-		// 2. Planning Agent Span
-		planStart := time.Now()
 		out <- ChatEvent{Type: ChatEventThought, Agent: "Planning Agent", Content: "Planning…"}
-		graph, err := m.Plan(ctx, prompt)
-		if err != nil { out <- ChatEvent{Type: ChatEventError, Content: err.Error()}; return }
-		
-		planJSON, _ := json.Marshal(graph)
-		o.AddTasks(Task{
-			ID: "planning", Name: "Graph Generation", Agent: "planning_agent",
-			Status: TaskStatusComplete, StartTime: planStart.Format(time.RFC3339Nano),
-			EndTime: time.Now().Format(time.RFC3339Nano), Duration: time.Since(planStart).String(),
-			Attributes: map[string]any{"gen_ai.prompt": prompt, "gen_ai.completion": string(planJSON)},
-		})
-
+		planStart := time.Now(); graph, err := m.Plan(ctx, prompt); if err != nil { out <- ChatEvent{Type: ChatEventError, Content: err.Error()}; return }
+		planJSON, _ := json.Marshal(graph); o.AddTasks(Task{ID: "planning", Name: "Graph Generation", Agent: "planning_agent", Status: TaskStatusComplete, StartTime: planStart.Format(time.RFC3339Nano), EndTime: time.Now().Format(time.RFC3339Nano), Duration: time.Since(planStart).String(), Attributes: map[string]any{"gen_ai.prompt": prompt, "gen_ai.completion": string(planJSON)}})
 		if graph.ImmediateResponse != "" {
 			if m.runCOA(ctx, out, o, "Planning Agent", graph.ImmediateResponse) {
-				if m.debugMode {
-					traj := o.GetTrajectory(); traj.TotalDuration = time.Since(swarmStartTime).String()
-					b, _ := json.MarshalIndent(traj, "", "  ")
-					out <- ChatEvent{Type: ChatEventDebug, Agent: "Orchestrator", Content: string(b)}
-				}
-				out <- ChatEvent{Type: ChatEventFinalResponse, Agent: "Planning Agent", Content: graph.ImmediateResponse}
-				return
+				if m.debugMode { traj := o.GetTrajectory(); traj.TotalDuration = time.Since(swarmStartTime).String(); b, _ := json.MarshalIndent(traj, "", "  "); out <- ChatEvent{Type: ChatEventDebug, Agent: "Orchestrator", Content: string(b)} }
+				out <- ChatEvent{Type: ChatEventFinalResponse, Agent: "Planning Agent", Content: graph.ImmediateResponse}; return
 			}
 		}
-
-		// 3. Execute the Swarm
-		// Pass the existing orchestrator to ExecuteGraph so spans are combined
-		events, _, err := m.ExecuteGraphWithOrchestrator(ctx, o, graph)
-		if err != nil { out <- ChatEvent{Type: ChatEventError, Content: err.Error()}; return }
-		for event := range events { out <- event }
-		
-		if m.debugMode {
-			traj := o.GetTrajectory(); traj.TotalDuration = time.Since(swarmStartTime).String()
-			b, _ := json.MarshalIndent(traj, "", "  ")
-			out <- ChatEvent{Type: ChatEventDebug, Agent: "Orchestrator", Content: string(b)}
-		}
+		events, _, err := m.ExecuteGraphWithOrchestrator(ctx, o, graph); if err != nil { out <- ChatEvent{Type: ChatEventError, Content: err.Error()}; return }; for event := range events { out <- event }
+		if m.debugMode { traj := o.GetTrajectory(); traj.TotalDuration = time.Since(swarmStartTime).String(); b, _ := json.MarshalIndent(traj, "", "  "); out <- ChatEvent{Type: ChatEventDebug, Agent: "Orchestrator", Content: string(b)} }
 	}()
 	return out, nil
 }
 
-func (m *defaultManager) ExecuteGraph(ctx context.Context, g *ExecutionGraph) (<-chan ChatEvent, *Orchestrator, error) {
-	return m.ExecuteGraphWithOrchestrator(ctx, NewOrchestrator(g), g)
-}
-
+func (m *defaultManager) ExecuteGraph(ctx context.Context, g *ExecutionGraph) (<-chan ChatEvent, *Orchestrator, error) { return m.ExecuteGraphWithOrchestrator(ctx, NewOrchestrator(g), g) }
 func (m *defaultManager) ExecuteGraphWithOrchestrator(ctx context.Context, o *Orchestrator, g *ExecutionGraph) (<-chan ChatEvent, *Orchestrator, error) {
-	out := make(chan ChatEvent, 1000); memSvc := NewMemorySessionService()
-	// Ensure initial tasks are added if not already there
-	if g != nil { o.AddTasks(g.Tasks...) }
-	
+	out := make(chan ChatEvent, 1000); memSvc := NewMemorySessionService(); if g != nil { o.AddTasks(g.Tasks...) }
 	go func() {
 		defer close(out); type completedTask struct { ID, Result string; Replan bool }; completed := make(chan completedTask, 100); activeTasks := 0; var wg sync.WaitGroup
 		for {
-			ready := o.GetReadyTasks()
-			for _, t := range ready {
+			ready := o.GetReadyTasks(); for _, t := range ready {
 				o.MarkActive(t.ID); activeTasks++; wg.Add(1)
 				go func(task Task) {
 					defer wg.Done(); var taskResult string; var needsReplan bool; defer func() { completed <- completedTask{ID: task.ID, Result: taskResult, Replan: needsReplan} }()
@@ -460,8 +343,7 @@ func (m *defaultManager) ExecuteGraphWithOrchestrator(ctx context.Context, o *Or
 							out <- ChatEvent{Type: ChatEventTelemetry, Agent: targetAgent.Name(), TaskID: task.ID, Content: line}; lastLines = append(lastLines, line)
 							if len(lastLines) >= 10 {
 								wg.Add(1); go func(history []string) {
-									defer wg.Done(); obsCtx, _ := context.WithTimeout(ctx, 10*time.Second)
-									obsPrompt := fmt.Sprintf("Monitor: %s. Telemetry: %s", targetAgent.Name(), strings.Join(history, "\n"))
+									defer wg.Done(); obsCtx, _ := context.WithTimeout(ctx, 10*time.Second); obsPrompt := fmt.Sprintf("Monitor: %s. Telemetry: %s. If loop output INTERVENE: [reason]. Else OK.", targetAgent.Name(), strings.Join(history, "\n"))
 									respIter := m.fastModel.GenerateContent(obsCtx, &model.LLMRequest{Contents: []*genai.Content{genai.NewContentFromText(obsPrompt, genai.Role("user"))}}, false)
 									for resp, err := range respIter { if err == nil && resp.Content != nil && len(resp.Content.Parts) > 0 && strings.HasPrefix(resp.Content.Parts[0].Text, "INTERVENE:") { out <- ChatEvent{Type: ChatEventObserver, Agent: "Observer", TaskID: task.ID, Content: resp.Content.Parts[0].Text} }; break }
 								}(lastLines); lastLines = nil
@@ -475,26 +357,29 @@ func (m *defaultManager) ExecuteGraphWithOrchestrator(ctx context.Context, o *Or
 						if err != nil { out <- ChatEvent{Type: ChatEventError, Agent: targetAgent.Name(), TaskID: task.ID, Content: err.Error()}; break }
 						if event.Content != nil { for _, part := range event.Content.Parts { if part.FunctionCall != nil { if part.FunctionCall.Name == "request_replan" { needsReplan = true }; out <- ChatEvent{Type: ChatEventToolCall, Agent: targetAgent.Name(), TaskID: task.ID, Content: part.FunctionCall.Name} }; if part.FunctionResponse != nil { out <- ChatEvent{Type: ChatEventToolResult, Agent: targetAgent.Name(), TaskID: task.ID, Content: part.FunctionResponse.Name} }; if part.Text != "" && !part.Thought { full.WriteString(part.Text) } } }
 					}
-					finalText := full.String(); if m.runCOA(ctx, out, o, targetAgent.Name(), finalText) { out <- ChatEvent{Type: ChatEventFinalResponse, Agent: targetAgent.Name(), TaskID: task.ID, Content: finalText}; taskResult = finalText } else { needsReplan = true; taskResult = "COA rejected." }; close(telemetryChan); <-telemetryDone
+					finalText := full.String()
+					if finalText != "" {
+						if m.runCOA(ctx, out, o, targetAgent.Name(), finalText) {
+							out <- ChatEvent{Type: ChatEventFinalResponse, Agent: targetAgent.Name(), TaskID: task.ID, Content: finalText}
+							taskResult = finalText
+						} else {
+							needsReplan = true
+							taskResult = "COA rejected response."
+						}
+					} else {
+						taskResult = "No response emitted by agent."
+					}
+					close(telemetryChan); <-telemetryDone
 				}(t)
 			}
 			if activeTasks == 0 { if o.IsComplete() { break } else { out <- ChatEvent{Type: ChatEventError, Content: "Deadlock"}; break } }
 			select {
 			case <-ctx.Done(): return
 			case done := <-completed: o.MarkComplete(done.ID, done.Result); activeTasks--
-				if done.Replan {
-					newG, err := m.Plan(ctx, "Pivot: "+done.Result); if err == nil { o.AddTasks(newG.Tasks...) }
-				} else if strings.Contains(done.Result, "\"tasks\":") {
-					re := regexp.MustCompile(`(?s)\{.*\}`)
-					match := re.FindString(done.Result)
-					if match != "" {
-						var subGraph ExecutionGraph
-						if err := json.Unmarshal([]byte(match), &subGraph); err == nil {
-							for i := range subGraph.Tasks {
-								subGraph.Tasks[i].ParentID = done.ID
-								subGraph.Tasks[i].ID = fmt.Sprintf("%s_%s", done.ID, subGraph.Tasks[i].ID)
-							}
-							o.AddTasks(subGraph.Tasks...)
+				if done.Replan { newG, err := m.Plan(ctx, "Pivot: "+done.Result); if err == nil { o.AddTasks(newG.Tasks...) } } else if strings.Contains(done.Result, "\"tasks\":") {
+					re := regexp.MustCompile("(?s)\\{.*\\}"); match := re.FindString(done.Result); if match != "" {
+						var subGraph ExecutionGraph; if err := json.Unmarshal([]byte(match), &subGraph); err == nil {
+							for i := range subGraph.Tasks { subGraph.Tasks[i].ParentID = done.ID; subGraph.Tasks[i].ID = fmt.Sprintf("%s_%s", done.ID, subGraph.Tasks[i].ID) }; o.AddTasks(subGraph.Tasks...)
 						}
 					}
 				}
@@ -506,35 +391,10 @@ func (m *defaultManager) ExecuteGraphWithOrchestrator(ctx context.Context, o *Or
 }
 
 func (m *defaultManager) runCOA(ctx context.Context, out chan<- ChatEvent, o *Orchestrator, agentName, content string) bool {
-	coaStart := time.Now()
-	coaPrompt := fmt.Sprintf("Sanity check worker: %s. Response: %s. If toxic/hallucinating output FIX: [reason]. Else OK.", agentName, content)
-	respIter := m.fastModel.GenerateContent(ctx, &model.LLMRequest{Contents: []*genai.Content{genai.NewContentFromText(coaPrompt, genai.Role("user"))}}, false)
-	
-	approved := true
-	var coaResult string
-	for resp, err := range respIter {
-		if err == nil && resp.Content != nil && len(resp.Content.Parts) > 0 {
-			coaResult = resp.Content.Parts[0].Text
-			if strings.HasPrefix(coaResult, "FIX:") {
-				out <- ChatEvent{Type: ChatEventThought, Agent: "Output Agent", Content: "Rejected: " + coaResult}
-				approved = false
-			}
-		}
-		break
-	}
-
-	// Record Output Agent as a span if we have an orchestrator
-	if o != nil {
-		o.AddTasks(Task{
-			ID: "coa-" + fmt.Sprintf("%d", coaStart.UnixNano()), Name: "Sanity Check: " + agentName,
-			Agent: "output_agent", Status: TaskStatusComplete,
-			StartTime: coaStart.Format(time.RFC3339Nano),
-			EndTime: time.Now().Format(time.RFC3339Nano),
-			Duration: time.Since(coaStart).String(),
-			Attributes: map[string]any{"gen_ai.prompt": coaPrompt, "gen_ai.completion": coaResult},
-		})
-	}
-
+	coaStart := time.Now(); coaPrompt := fmt.Sprintf("Sanity check worker: %s. Response: %s. RULE: Output ONLY 'OK' or 'FIX: [reason]'.", agentName, content)
+	respIter := m.fastModel.GenerateContent(ctx, &model.LLMRequest{Contents: []*genai.Content{genai.NewContentFromText(coaPrompt, genai.Role("user"))}, Config: &genai.GenerateContentConfig{SystemInstruction: genai.NewContentFromText(m.coaInstruction, genai.Role("system"))}}, false)
+	approved := true; var res string; for resp, err := range respIter { if err == nil && resp.Content != nil && len(resp.Content.Parts) > 0 { res = resp.Content.Parts[0].Text; if strings.HasPrefix(res, "FIX:") { out <- ChatEvent{Type: ChatEventThought, Agent: "Output Agent", Content: "Rejected: " + res}; approved = false } }; break }
+	if o != nil { o.AddTasks(Task{ID: "coa-"+fmt.Sprintf("%d", coaStart.UnixNano()), Name: "Sanity Check", Agent: "output_agent", Status: TaskStatusComplete, StartTime: coaStart.Format(time.RFC3339Nano), EndTime: time.Now().Format(time.RFC3339Nano), Duration: time.Since(coaStart).String(), Attributes: map[string]any{"gen_ai.prompt": coaPrompt, "gen_ai.completion": res}}) }
 	return approved
 }
 

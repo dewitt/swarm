@@ -854,6 +854,7 @@ func (m *defaultSwarm) executeSpan(ctx context.Context, out chan<- ObservableEve
 
 	// Telemetry and Observation
 	telemetryChan := make(chan string, 100)
+	// Bind the telemetry channel context to the spanCtx so it cancels immediately when the runner returns
 	spanCtx, cancel := context.WithCancel(context.WithValue(ctx, telemetryContextKey{}, (chan<- string)(telemetryChan)))
 	defer cancel()
 
@@ -874,7 +875,7 @@ func (m *defaultSwarm) executeSpan(ctx context.Context, out chan<- ObservableEve
 
 		for {
 			select {
-			case <-ctx.Done():
+			case <-spanCtx.Done(): // Fix: Use spanCtx instead of ctx to immediately stop the observer when the agent finishes
 				return
 			case line, ok := <-telemetryChan:
 				if !ok {
@@ -894,8 +895,8 @@ func (m *defaultSwarm) executeSpan(ctx context.Context, out chan<- ObservableEve
 					obsWg.Add(1)
 					go func(hist []string) {
 						defer obsWg.Done()
-						obsCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-						defer cancel()
+						obsCtx, obsCancel := context.WithTimeout(spanCtx, 10*time.Second) // Fix: Tie observer timeout directly to spanCtx
+						defer obsCancel()
 
 						obsPrompt := fmt.Sprintf("Monitor: %s. Recent Telemetry:\n%s\n\nTask: Output a concise 3-8 word phrase summarizing the current activity (e.g., 'Searching for authentication logic...' or 'Running unit tests...'). If you detect an infinite loop or severe error, output 'INTERVENE: [reason]'.", targetAgent.Name(), strings.Join(hist, "\n"))
 
@@ -1171,7 +1172,7 @@ func (m *defaultSwarm) saveTrajectory(traj Trajectory) {
 	if err != nil {
 		return
 	}
-	dir := filepath.Join(home, ".swarm", "trajectories")
+	dir := filepath.Join(home, ".config", "swarm", "trajectories")
 	_ = os.MkdirAll(dir, 0755)
 
 	filename := fmt.Sprintf("%s.json", traj.TraceID)

@@ -1197,6 +1197,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.statusMsg = ""
 		m.activeAgent = "Swarm"
 		m.observeLog = nil
+		m.spans = make(map[string]*uiSpan)
 		m.updateViewport()
 		return m, m.dequeueAndRun()
 

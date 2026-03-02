@@ -695,13 +695,7 @@ func (m *defaultSwarm) Chat(ctx context.Context, prompt string) (<-chan Observab
 		}
 
 		// 3. Execution
-		if graph.ImmediateResponse != "" {
-			if m.runOutputAgent(ctx, out, o, "Swarm Agent", graph.ImmediateResponse) {
-				// Record the immediate response in the persistent session
-				m.appendEvent(ctx, "model", graph.ImmediateResponse)
-				out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm Agent", SpanID: "coordination", TaskName: "Swarm Planning", State: AgentStateComplete, FinalContent: graph.ImmediateResponse}
-			}
-		} else {
+		if len(graph.Spans) > 0 {
 			events, _, err := m.Execute(ctx, graph, o)
 			if err != nil {
 				out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm", SpanID: "execution", TaskName: "Graph Execution", State: AgentStateError, Error: fmt.Errorf("Execution failed: %w", err)}
@@ -709,6 +703,15 @@ func (m *defaultSwarm) Chat(ctx context.Context, prompt string) (<-chan Observab
 			}
 			for event := range events {
 				out <- event
+			}
+			
+			// If there was an immediate response bundled with the spans, we might want to still show it,
+			// or assume the final span handles the output. Let's rely on the execution graph to provide the final output.
+		} else if graph.ImmediateResponse != "" {
+			if m.runOutputAgent(ctx, out, o, "Swarm Agent", graph.ImmediateResponse) {
+				// Record the immediate response in the persistent session
+				m.appendEvent(ctx, "model", graph.ImmediateResponse)
+				out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm Agent", SpanID: "coordination", TaskName: "Swarm Planning", State: AgentStateComplete, FinalContent: graph.ImmediateResponse}
 			}
 		}
 

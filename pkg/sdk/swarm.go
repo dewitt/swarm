@@ -115,6 +115,7 @@ type defaultSwarm struct {
 	subAgentNames       []string
 	agents              map[string]agent.Agent
 	lastAgent           string // Tracks the last agent to respond
+	activeEngine        *Engine // The currently executing Engine, used for dynamic task mutability
 }
 
 type SwarmConfig struct {
@@ -237,9 +238,10 @@ func NewSwarm(cfg ...SwarmConfig) (Swarm, error) {
 
 	readStateTool, _ := functiontool.New(functiontool.Config{Name: "read_state"}, m.readState)
 	writeStateTool, _ := functiontool.New(functiontool.Config{Name: "write_state"}, m.writeState)
+	spawnSubtaskTool, _ := functiontool.New(functiontool.Config{Name: "spawn_subtask"}, m.spawnSubtask)
 	m.toolRegistry = map[string]tool.Tool{
 		"list_local_files": listTool, "read_local_file": readTool, "grep_search": grepTool, "write_local_file": writeTool, "git_commit": gitCommit, "git_push": gitPush, "bash_execute": bashExecute, "web_fetch": webFetchTool, "google_search": googleSearchTool, "request_replan": replanTool,
-		"read_state": readStateTool, "write_state": writeStateTool,
+		"read_state": readStateTool, "write_state": writeStateTool, "spawn_subtask": spawnSubtaskTool,
 	}
 
 	if err := m.Reload(); err != nil {
@@ -283,6 +285,41 @@ func (m *defaultSwarm) writeState(ctx tool.Context, req struct {
 
 	err = m.sessionSvc.AppendEvent(context.Background(), resp.Session, ev)
 	return "State updated successfully.", nil
+}
+
+func (m *defaultSwarm) spawnSubtask(ctx tool.Context, req struct {
+	ID           string   `json:"id"`
+	Name         string   `json:"name"`
+	Agent        string   `json:"agent"`
+	Prompt       string   `json:"prompt"`
+	Dependencies []string `json:"dependencies"`
+	ParentID     string   `json:"parent_id,omitempty"`
+}) (string, error) {
+	if m.activeEngine == nil {
+		return "", fmt.Errorf("no active execution engine")
+	}
+	
+	// Prefix the new ID with the ParentID to ensure uniqueness if needed,
+	// or let the agent handle it. Let's just use what they provide.
+	span := Span{
+		ID:           req.ID,
+		Name:         req.Name,
+		Agent:        req.Agent,
+		Prompt:       req.Prompt,
+		Dependencies: req.Dependencies,
+		ParentID:     req.ParentID,
+		Kind:         SpanKindAgent,
+		Status:       SpanStatusPending,
+	}
+	m.activeEngine.AddSpans(span)
+	
+	// Send an event to the observable stream so the UI updates immediately
+	// Wait, we don't have direct access to 'out' here. The UI will pick it up
+	// on the next loop or we can add a specific event if needed.
+	// Actually, the engine state changes, the UI needs to know.
+	// We'll address UI next.
+	
+	return fmt.Sprintf("Subtask '%s' (%s) successfully spawned and added to the execution graph.", req.Name, req.ID), nil
 }
 
 func (m *defaultSwarm) IsDebug() bool         { return m.debugMode }
@@ -401,7 +438,7 @@ func (m *defaultSwarm) Reload() error {
 
 	var swarmTools []tool.Tool
 	swarmTools = append(swarmTools, m.toolRegistry["list_local_files"], m.toolRegistry["read_local_file"], m.toolRegistry["grep_search"])
-	swarmTools = append(swarmTools, m.toolRegistry["read_state"], m.toolRegistry["write_state"])
+	swarmTools = append(swarmTools, m.toolRegistry["read_state"], m.toolRegistry["write_state"], m.toolRegistry["spawn_subtask"])
 
 	swarmAgent, _ = llmagent.New(llmagent.Config{
 		Name:        "swarm_agent",
@@ -673,6 +710,7 @@ func (m *defaultSwarm) Execute(ctx context.Context, g *ExecutionGraph, o *Engine
 	if o == nil {
 		o = NewEngine(g)
 	}
+	m.activeEngine = o
 	out := make(chan ObservableEvent, 1000)
 	if g != nil {
 		o.AddSpans(g.Spans...)
@@ -680,6 +718,11 @@ func (m *defaultSwarm) Execute(ctx context.Context, g *ExecutionGraph, o *Engine
 
 	go func() {
 		defer close(out)
+		defer func() {
+			if m.activeEngine == o {
+				m.activeEngine = nil
+			}
+		}()
 		type completedSpan struct {
 			ID     string
 			Result string
@@ -736,19 +779,6 @@ func (m *defaultSwarm) Execute(ctx context.Context, g *ExecutionGraph, o *Engine
 					newG, err := m.Plan(ctx, "Pivot: "+done.Result)
 					if err == nil {
 						o.AddSpans(newG.Spans...)
-					}
-				} else if strings.Contains(done.Result, "```json") && strings.Contains(done.Result, "\"spans\":") {
-					re := regexp.MustCompile("(?s)```json\n(\\{.*\\})\n```")
-					match := re.FindStringSubmatch(done.Result)
-					if len(match) > 1 {
-						var subGraph ExecutionGraph
-						if err := json.Unmarshal([]byte(match[1]), &subGraph); err == nil {
-							for i := range subGraph.Spans {
-								subGraph.Spans[i].ParentID = done.ID
-								subGraph.Spans[i].ID = fmt.Sprintf("%s_%s", done.ID, subGraph.Spans[i].ID)
-							}
-							o.AddSpans(subGraph.Spans...)
-						}
 					}
 				}
 			}
@@ -911,6 +941,7 @@ func (m *defaultSwarm) executeSpan(ctx context.Context, out chan<- ObservableEve
 	}
 
 	promptStr := fmt.Sprintf("TASK: %s\nINSTRUCTIONS: %s", span.Name, span.Prompt)
+	promptStr += fmt.Sprintf("\n\n### TASK CONTEXT\nYour current Task ID is: %s\nIf you need to spawn subtasks, use this ID as their 'parent_id' or explicitly in their 'dependencies' list to ensure they block this task's completion if necessary.", span.ID)
 
 	if len(stateParts) > 0 {
 		promptStr = promptStr + "\n\n### SESSION STATE\n" + strings.Join(stateParts, "\n")

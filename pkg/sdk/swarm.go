@@ -120,10 +120,15 @@ type defaultSwarm struct {
 type SwarmConfig struct {
 	Model             model.LLM
 	ResumeLastSession bool
+	Debug             bool
 }
 
 func NewSwarm(cfg ...SwarmConfig) (Swarm, error) {
 	ctx := context.Background()
+	debugMode := false
+	if len(cfg) > 0 && cfg[0].Debug {
+		debugMode = true
+	}
 	var flashModel, proModel, fastModel model.LLM
 	clientConfig := &genai.ClientConfig{}
 	if len(cfg) > 0 && cfg[0].Model != nil {
@@ -188,9 +193,7 @@ func NewSwarm(cfg ...SwarmConfig) (Swarm, error) {
 	webFetchTool, _ := functiontool.New(functiontool.Config{Name: "web_fetch"}, webFetch)
 	googleSearchTool, _ := functiontool.New(functiontool.Config{Name: "google_search"}, googleSearchFunc)
 	replanTool, _ := functiontool.New(functiontool.Config{Name: "request_replan"}, requestReplan)
-	toolRegistry := map[string]tool.Tool{
-		"list_local_files": listTool, "read_local_file": readTool, "grep_search": grepTool, "write_local_file": writeTool, "git_commit": gitCommit, "git_push": gitPush, "bash_execute": bashExecute, "web_fetch": webFetchTool, "google_search": googleSearchTool, "request_replan": replanTool,
-	}
+
 	home, _ := os.UserHomeDir()
 	dbDir := filepath.Join(home, ".config", "swarm")
 	_ = os.MkdirAll(dbDir, 0755)
@@ -227,13 +230,59 @@ func NewSwarm(cfg ...SwarmConfig) (Swarm, error) {
 		sessionID = fmt.Sprintf("session_%d", rand.Int63())
 	}
 	_, _ = sessionSvc.Create(ctx, &session.CreateRequest{AppName: "swarm-cli", UserID: "local_user", SessionID: sessionID})
+
 	m := &defaultSwarm{
-		db: db, sessionSvc: sessionSvc, userID: "local_user", sessionID: sessionID, clientCfg: clientConfig, pinnedContext: make(map[string]string), flashModel: flashModel, proModel: proModel, fastModel: fastModel, toolRegistry: toolRegistry,
+		db: db, sessionSvc: sessionSvc, userID: "local_user", sessionID: sessionID, clientCfg: clientConfig, pinnedContext: make(map[string]string), flashModel: flashModel, proModel: proModel, fastModel: fastModel, debugMode: debugMode,
 	}
+
+	readStateTool, _ := functiontool.New(functiontool.Config{Name: "read_state"}, m.readState)
+	writeStateTool, _ := functiontool.New(functiontool.Config{Name: "write_state"}, m.writeState)
+	m.toolRegistry = map[string]tool.Tool{
+		"list_local_files": listTool, "read_local_file": readTool, "grep_search": grepTool, "write_local_file": writeTool, "git_commit": gitCommit, "git_push": gitPush, "bash_execute": bashExecute, "web_fetch": webFetchTool, "google_search": googleSearchTool, "request_replan": replanTool,
+		"read_state": readStateTool, "write_state": writeStateTool,
+	}
+
 	if err := m.Reload(); err != nil {
 		return nil, err
 	}
 	return m, nil
+}
+
+func (m *defaultSwarm) readState(ctx tool.Context, req struct{ Key string }) (string, error) {
+	resp, err := m.sessionSvc.Get(context.Background(), &session.GetRequest{AppName: "swarm-cli", UserID: m.userID, SessionID: m.sessionID})
+	if err != nil {
+		return "", err
+	}
+	val, err := resp.Session.State().Get(req.Key)
+	if err != nil {
+		return "", err
+	}
+	b, _ := json.Marshal(val)
+	return string(b), nil
+}
+
+func (m *defaultSwarm) writeState(ctx tool.Context, req struct {
+	Key   string
+	Value any
+}) (string, error) {
+	resp, err := m.sessionSvc.Get(context.Background(), &session.GetRequest{AppName: "swarm-cli", UserID: m.userID, SessionID: m.sessionID})
+	if err != nil {
+		return "", err
+	}
+	err = resp.Session.State().Set(req.Key, req.Value)
+	if err != nil {
+		return "", err
+	}
+	// We must also manually trigger a save since we are bypassing the Runner's auto-delta commit
+	ev := session.NewEvent("")
+	ev.Author = "System"
+	ev.LLMResponse = model.LLMResponse{
+		Content: genai.NewContentFromText(fmt.Sprintf("State updated: %s", req.Key), genai.Role("system")),
+	}
+	ev.Actions = session.EventActions{StateDelta: map[string]any{req.Key: req.Value}}
+
+	err = m.sessionSvc.AppendEvent(context.Background(), resp.Session, ev)
+	return "State updated successfully.", nil
 }
 
 func (m *defaultSwarm) IsDebug() bool         { return m.debugMode }
@@ -258,6 +307,8 @@ func (m *defaultSwarm) Explain(ctx context.Context, traj Trajectory) (string, er
 func (m *defaultSwarm) Reload() error {
 	var subAgents []agent.Agent
 	var loadedSkills []*Skill
+	var skill *Skill
+	var instruction string
 
 	// Find the skills directory by searching upwards
 	absPath, _ := filepath.Abs(".")
@@ -296,7 +347,8 @@ func (m *defaultSwarm) Reload() error {
 
 	// 1. Load all skills into agents
 	for _, dir := range skillDirs {
-		skill, err := LoadSkill(dir)
+		var err error
+		skill, err = LoadSkill(dir)
 		if err != nil {
 			continue
 		}
@@ -315,7 +367,7 @@ func (m *defaultSwarm) Reload() error {
 		}
 
 		// Core agents might need to skip the sub-agent suffix
-		instruction := skill.Instructions
+		instruction = skill.Instructions
 		if skill.Manifest.Name != "input_agent" && skill.Manifest.Name != "output_agent" && skill.Manifest.Name != "swarm_agent" && skill.Manifest.Name != "planning_agent" {
 			instruction += "\n\nSUB-AGENT MODE: You are being invoked by the Swarm Agent to perform a specific span. Skip all greetings and introductory talk. Focus ONLY on executing the span and providing the results."
 			subAgentNames = append(subAgentNames, skill.Manifest.Name)
@@ -344,13 +396,18 @@ func (m *defaultSwarm) Reload() error {
 	}
 
 	// Re-initialize Swarm Agent with sub-agents and dynamically injected specialist names and descriptions
-	skill, _ := LoadSkill(filepath.Join(skillsPath, "swarm-agent"))
-	instruction := fmt.Sprintf(skill.Instructions, specialistsList)
+	skill, _ = LoadSkill(filepath.Join(skillsPath, "swarm-agent"))
+	instruction = fmt.Sprintf(skill.Instructions, specialistsList)
+
+	var swarmTools []tool.Tool
+	swarmTools = append(swarmTools, m.toolRegistry["list_local_files"], m.toolRegistry["read_local_file"], m.toolRegistry["grep_search"])
+	swarmTools = append(swarmTools, m.toolRegistry["read_state"], m.toolRegistry["write_state"])
+
 	swarmAgent, _ = llmagent.New(llmagent.Config{
 		Name:        "swarm_agent",
 		Model:       m.fastModel,
 		Instruction: instruction,
-		Tools:       []tool.Tool{m.toolRegistry["list_local_files"], m.toolRegistry["read_local_file"], m.toolRegistry["grep_search"]},
+		Tools:       swarmTools,
 		SubAgents:   subAgents,
 	})
 	m.agents["swarm_agent"] = swarmAgent
@@ -809,6 +866,20 @@ func (m *defaultSwarm) executeSpan(ctx context.Context, out chan<- ObservableEve
 		}
 	}()
 
+	// Fetch and inject structured Session State (Node Autonomy coordination)
+	var stateParts []string
+	if sessResp, err := m.sessionSvc.Get(ctx, &session.GetRequest{AppName: "swarm-cli", UserID: m.userID, SessionID: m.sessionID}); err == nil {
+		sessionState := sessResp.Session.State()
+		stateMap := make(map[string]any)
+		for k, v := range sessionState.All() {
+			stateMap[k] = v
+		}
+		if len(stateMap) > 0 {
+			stateJSON, _ := json.MarshalIndent(stateMap, "", "  ")
+			stateParts = append(stateParts, fmt.Sprintf("CURRENT SESSION STATE (Structured Data):\n%s", string(stateJSON)))
+		}
+	}
+
 	// Inject results from dependencies into the prompt (Node Autonomy)
 	contextMap := o.GetContext()
 	var contextParts []string
@@ -841,6 +912,9 @@ func (m *defaultSwarm) executeSpan(ctx context.Context, out chan<- ObservableEve
 
 	promptStr := fmt.Sprintf("TASK: %s\nINSTRUCTIONS: %s", span.Name, span.Prompt)
 
+	if len(stateParts) > 0 {
+		promptStr = promptStr + "\n\n### SESSION STATE\n" + strings.Join(stateParts, "\n")
+	}
 	if len(historyParts) > 0 {
 		promptStr = promptStr + "\n\n### CONVERSATION HISTORY (FOR CONTEXT)\n" + strings.Join(historyParts, "\n")
 	}

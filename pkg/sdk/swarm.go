@@ -45,6 +45,7 @@ type ModelInfo struct {
 type AgentState string
 
 const (
+	AgentStatePending   AgentState = "pending"
 	AgentStateSpawning  AgentState = "spawning"
 	AgentStateThinking  AgentState = "thinking"
 	AgentStateExecuting AgentState = "executing"
@@ -57,6 +58,10 @@ type ObservableEvent struct {
 	Timestamp time.Time
 	AgentName string
 	SpanID    string
+
+	// Topology context
+	TaskName string
+	ParentID string
 
 	// Core State Update
 	State AgentState
@@ -116,6 +121,7 @@ type defaultSwarm struct {
 	agents              map[string]agent.Agent
 	lastAgent           string // Tracks the last agent to respond
 	activeEngine        *Engine // The currently executing Engine, used for dynamic task mutability
+	outChan             chan<- ObservableEvent
 }
 
 type SwarmConfig struct {
@@ -313,11 +319,16 @@ func (m *defaultSwarm) spawnSubtask(ctx tool.Context, req struct {
 	}
 	m.activeEngine.AddSpans(span)
 	
-	// Send an event to the observable stream so the UI updates immediately
-	// Wait, we don't have direct access to 'out' here. The UI will pick it up
-	// on the next loop or we can add a specific event if needed.
-	// Actually, the engine state changes, the UI needs to know.
-	// We'll address UI next.
+	if m.outChan != nil {
+		m.outChan <- ObservableEvent{
+			Timestamp: time.Now(),
+			AgentName: req.Agent,
+			SpanID:    req.ID,
+			TaskName:  req.Name,
+			ParentID:  req.ParentID,
+			State:     AgentStatePending,
+		}
+	}
 	
 	return fmt.Sprintf("Subtask '%s' (%s) successfully spawned and added to the execution graph.", req.Name, req.ID), nil
 }
@@ -607,7 +618,7 @@ func (m *defaultSwarm) Chat(ctx context.Context, prompt string) (<-chan Observab
 
 		// 1. Input Classification (Fast Path / CIA)
 		inputStart := time.Now()
-		out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Input Agent", State: AgentStateThinking, Thought: "Classifying intent…"}
+		out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Input Agent", SpanID: "input", TaskName: "Classification", State: AgentStateThinking, Thought: "Classifying intent…"}
 
 		// Dynamically inject the last active agent to help the CIA detect digressions
 		lastAgentName := "None (Starting new conversation)"
@@ -625,7 +636,7 @@ func (m *defaultSwarm) Chat(ctx context.Context, prompt string) (<-chan Observab
 		var inputResult string
 		for resp, err := range inputIter {
 			if err != nil {
-				out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Input Agent", State: AgentStateError, Error: fmt.Errorf("Input classification failed: %w", err)}
+				out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Input Agent", SpanID: "input", TaskName: "Classification", State: AgentStateError, Error: fmt.Errorf("Input classification failed: %w", err)}
 				return
 			}
 			if resp.Content != nil && len(resp.Content.Parts) > 0 {
@@ -643,7 +654,7 @@ func (m *defaultSwarm) Chat(ctx context.Context, prompt string) (<-chan Observab
 
 		var target string
 		if strings.HasPrefix(inputResult, "ROUTE TO: swarm_agent") {
-			out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Input Agent", State: AgentStateExecuting, Thought: "Rerouting to Swarm Agent…"}
+			out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Input Agent", SpanID: "input", TaskName: "Classification", State: AgentStateExecuting, Thought: "Rerouting to Swarm Agent…"}
 			target = "swarm_agent"
 		} else {
 			target = "swarm_agent"
@@ -651,7 +662,7 @@ func (m *defaultSwarm) Chat(ctx context.Context, prompt string) (<-chan Observab
 				target = m.lastAgent
 			}
 		}
-		out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Input Agent", State: AgentStateComplete}
+		out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Input Agent", SpanID: "input", TaskName: "Classification", State: AgentStateComplete}
 
 		var graph *ExecutionGraph
 		var err error
@@ -659,16 +670,16 @@ func (m *defaultSwarm) Chat(ctx context.Context, prompt string) (<-chan Observab
 		// 2. Swarm Coordination / Planning
 		// If we are starting fresh or rerouting to Swarm Agent, we let it plan.
 		if target == "swarm_agent" {
-			out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm Agent", State: AgentStateThinking, Thought: "Analyzing request…"}
+			out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm Agent", SpanID: "coordination", TaskName: "Swarm Planning", State: AgentStateThinking, Thought: "Analyzing request…"}
 			planStart := time.Now()
 			graph, err = m.Plan(ctx, prompt)
 			if err != nil {
-				out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm Agent", State: AgentStateError, Error: fmt.Errorf("Coordination failed: %w", err)}
+				out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm Agent", SpanID: "coordination", TaskName: "Swarm Planning", State: AgentStateError, Error: fmt.Errorf("Coordination failed: %w", err)}
 				return
 			}
 
 			if graph != nil && graph.ImmediateResponse == "" {
-				out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm Agent", State: AgentStateComplete}
+				out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm Agent", SpanID: "coordination", TaskName: "Swarm Planning", State: AgentStateComplete}
 			}
 
 			planJSON, _ := json.Marshal(graph)
@@ -688,12 +699,12 @@ func (m *defaultSwarm) Chat(ctx context.Context, prompt string) (<-chan Observab
 			if m.runOutputAgent(ctx, out, o, "Swarm Agent", graph.ImmediateResponse) {
 				// Record the immediate response in the persistent session
 				m.appendEvent(ctx, "model", graph.ImmediateResponse)
-				out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm Agent", State: AgentStateComplete, FinalContent: graph.ImmediateResponse}
+				out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm Agent", SpanID: "coordination", TaskName: "Swarm Planning", State: AgentStateComplete, FinalContent: graph.ImmediateResponse}
 			}
 		} else {
 			events, _, err := m.Execute(ctx, graph, o)
 			if err != nil {
-				out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm", State: AgentStateError, Error: fmt.Errorf("Execution failed: %w", err)}
+				out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm", SpanID: "execution", TaskName: "Graph Execution", State: AgentStateError, Error: fmt.Errorf("Execution failed: %w", err)}
 				return
 			}
 			for event := range events {
@@ -712,8 +723,20 @@ func (m *defaultSwarm) Execute(ctx context.Context, g *ExecutionGraph, o *Engine
 	}
 	m.activeEngine = o
 	out := make(chan ObservableEvent, 1000)
+	m.outChan = out
 	if g != nil {
 		o.AddSpans(g.Spans...)
+		// Broadcast initial topology so UI can build the tree immediately
+		for _, s := range g.Spans {
+			out <- ObservableEvent{
+				Timestamp: time.Now(),
+				AgentName: s.Agent,
+				SpanID:    s.ID,
+				TaskName:  s.Name,
+				ParentID:  s.ParentID,
+				State:     AgentStatePending,
+			}
+		}
 	}
 
 	go func() {
@@ -721,6 +744,7 @@ func (m *defaultSwarm) Execute(ctx context.Context, g *ExecutionGraph, o *Engine
 		defer func() {
 			if m.activeEngine == o {
 				m.activeEngine = nil
+				m.outChan = nil
 			}
 		}()
 		type completedSpan struct {
@@ -779,6 +803,17 @@ func (m *defaultSwarm) Execute(ctx context.Context, g *ExecutionGraph, o *Engine
 					newG, err := m.Plan(ctx, "Pivot: "+done.Result)
 					if err == nil {
 						o.AddSpans(newG.Spans...)
+						// Broadcast replanned topology so UI can build the tree immediately
+						for _, s := range newG.Spans {
+							out <- ObservableEvent{
+								Timestamp: time.Now(),
+								AgentName: s.Agent,
+								SpanID:    s.ID,
+								TaskName:  s.Name,
+								ParentID:  s.ParentID,
+								State:     AgentStatePending,
+							}
+						}
 					}
 				}
 			}
@@ -794,7 +829,7 @@ func (m *defaultSwarm) Execute(ctx context.Context, g *ExecutionGraph, o *Engine
 func (m *defaultSwarm) executeSpan(ctx context.Context, out chan<- ObservableEvent, o *Engine, span Span) (string, SpanStatus, bool) {
 	targetAgent, ok := m.agents[span.Agent]
 	if !ok {
-		out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm", SpanID: span.ID, State: AgentStateError, Error: fmt.Errorf("Agent not found: %s", span.Agent)}
+		out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm", SpanID: span.ID, TaskName: span.Name, ParentID: span.ParentID, State: AgentStateError, Error: fmt.Errorf("Agent not found: %s", span.Agent)}
 		return "Agent not found", SpanStatusFailed, false
 	}
 
@@ -815,7 +850,7 @@ func (m *defaultSwarm) executeSpan(ctx context.Context, out chan<- ObservableEve
 		SessionService: m.sessionSvc,
 	})
 
-	out <- ObservableEvent{Timestamp: time.Now(), AgentName: targetAgent.Name(), SpanID: span.ID, State: AgentStateSpawning, Thought: "Starting…"}
+	out <- ObservableEvent{Timestamp: time.Now(), AgentName: targetAgent.Name(), SpanID: span.ID, TaskName: span.Name, ParentID: span.ParentID, State: AgentStateSpawning, Thought: "Starting…"}
 
 	// Telemetry and Observation
 	telemetryChan := make(chan string, 100)
@@ -873,10 +908,10 @@ func (m *defaultSwarm) executeSpan(ctx context.Context, out chan<- ObservableEve
 							if resp.Content != nil && len(resp.Content.Parts) > 0 {
 								text := strings.TrimSpace(resp.Content.Parts[0].Text)
 								if strings.HasPrefix(text, "INTERVENE:") {
-									out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Observer", SpanID: span.ID, State: AgentStateWaiting, ObserverSummary: text}
+									out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Observer", SpanID: span.ID, TaskName: span.Name, ParentID: span.ParentID, State: AgentStateWaiting, ObserverSummary: text}
 								} else {
 									text = strings.TrimSuffix(text, ".")
-									out <- ObservableEvent{Timestamp: time.Now(), AgentName: targetAgent.Name(), SpanID: span.ID, State: AgentStateExecuting, ObserverSummary: text}
+									out <- ObservableEvent{Timestamp: time.Now(), AgentName: targetAgent.Name(), SpanID: span.ID, TaskName: span.Name, ParentID: span.ParentID, State: AgentStateExecuting, ObserverSummary: text}
 								}
 							}
 							break
@@ -962,7 +997,7 @@ func (m *defaultSwarm) executeSpan(ctx context.Context, out chan<- ObservableEve
 
 	for event, err := range events {
 		if err != nil {
-			out <- ObservableEvent{Timestamp: time.Now(), AgentName: targetAgent.Name(), SpanID: span.ID, State: AgentStateError, Error: fmt.Errorf("Error encountered: %w", err)}
+			out <- ObservableEvent{Timestamp: time.Now(), AgentName: targetAgent.Name(), SpanID: span.ID, TaskName: span.Name, ParentID: span.ParentID, State: AgentStateError, Error: fmt.Errorf("Error encountered: %w", err)}
 			full.WriteString("\n\nERROR: " + err.Error())
 			needsReplan = true
 			break
@@ -974,7 +1009,7 @@ func (m *defaultSwarm) executeSpan(ctx context.Context, out chan<- ObservableEve
 					if part.FunctionCall.Name == "request_replan" {
 						needsReplan = true
 					}
-					out <- ObservableEvent{Timestamp: time.Now(), AgentName: targetAgent.Name(), SpanID: span.ID, State: AgentStateExecuting, ToolName: part.FunctionCall.Name, ToolArgs: part.FunctionCall.Args}
+					out <- ObservableEvent{Timestamp: time.Now(), AgentName: targetAgent.Name(), SpanID: span.ID, TaskName: span.Name, ParentID: span.ParentID, State: AgentStateExecuting, ToolName: part.FunctionCall.Name, ToolArgs: part.FunctionCall.Args}
 
 					// Record tool span start
 					toolStart := time.Now()
@@ -989,7 +1024,7 @@ func (m *defaultSwarm) executeSpan(ctx context.Context, out chan<- ObservableEve
 					activeToolSpans[part.FunctionCall.Name] = append(activeToolSpans[part.FunctionCall.Name], toolTask)
 				}
 				if part.FunctionResponse != nil {
-					out <- ObservableEvent{Timestamp: time.Now(), AgentName: targetAgent.Name(), SpanID: span.ID, State: AgentStateThinking, ToolName: part.FunctionResponse.Name}
+					out <- ObservableEvent{Timestamp: time.Now(), AgentName: targetAgent.Name(), SpanID: span.ID, TaskName: span.Name, ParentID: span.ParentID, State: AgentStateThinking, ToolName: part.FunctionResponse.Name}
 
 					// Record tool span completion (pop from queue)
 					if spans, ok := activeToolSpans[part.FunctionResponse.Name]; ok && len(spans) > 0 {
@@ -1010,7 +1045,7 @@ func (m *defaultSwarm) executeSpan(ctx context.Context, out chan<- ObservableEve
 				}
 				if part.Thought {
 					if !thoughtBroadcasted {
-						out <- ObservableEvent{Timestamp: time.Now(), AgentName: targetAgent.Name(), SpanID: span.ID, State: AgentStateThinking, Thought: "Thinking deeply..."}
+						out <- ObservableEvent{Timestamp: time.Now(), AgentName: targetAgent.Name(), SpanID: span.ID, TaskName: span.Name, ParentID: span.ParentID, State: AgentStateThinking, Thought: "Thinking deeply..."}
 						thoughtBroadcasted = true
 					}
 				} else if part.Text != "" {
@@ -1046,7 +1081,7 @@ func (m *defaultSwarm) executeSpan(ctx context.Context, out chan<- ObservableEve
 	// If there was a hard error, skip Output Agent and immediately return with failed status and replan flag
 	if strings.Contains(finalText, "\n\nERROR: ") && needsReplan {
 		m.appendEvent(ctx, "model", fmt.Sprintf("[%s]: %s", targetAgent.Name(), finalText))
-		out <- ObservableEvent{Timestamp: time.Now(), AgentName: targetAgent.Name(), SpanID: span.ID, State: AgentStateError, FinalContent: finalText}
+		out <- ObservableEvent{Timestamp: time.Now(), AgentName: targetAgent.Name(), SpanID: span.ID, TaskName: span.Name, ParentID: span.ParentID, State: AgentStateError, FinalContent: finalText}
 		return finalText, SpanStatusFailed, true
 	}
 
@@ -1054,11 +1089,11 @@ func (m *defaultSwarm) executeSpan(ctx context.Context, out chan<- ObservableEve
 	if m.runOutputAgent(ctx, out, o, targetAgent.Name(), finalText) {
 		// Record the response in the main conversation history
 		m.appendEvent(ctx, "model", fmt.Sprintf("[%s]: %s", targetAgent.Name(), finalText))
-		out <- ObservableEvent{Timestamp: time.Now(), AgentName: targetAgent.Name(), SpanID: span.ID, State: AgentStateComplete, FinalContent: finalText}
+		out <- ObservableEvent{Timestamp: time.Now(), AgentName: targetAgent.Name(), SpanID: span.ID, TaskName: span.Name, ParentID: span.ParentID, State: AgentStateComplete, FinalContent: finalText}
 		return finalText, SpanStatusComplete, needsReplan
 	}
 
-	out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm", SpanID: span.ID, State: AgentStateThinking, Thought: "Output Agent rejected the response as problematic."}
+	out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm", SpanID: span.ID, TaskName: span.Name, ParentID: span.ParentID, State: AgentStateThinking, Thought: "Output Agent rejected the response as problematic."}
 	return "Output Agent rejected response.", SpanStatusComplete, true
 }
 

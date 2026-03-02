@@ -271,6 +271,16 @@ func getWorkspaceFiles() []string {
 	return items
 }
 
+type uiSpan struct {
+	ID       string
+	Name     string
+	ParentID string
+	Agent    string
+	Status   string
+	Thought  string
+	ToolName string
+}
+
 type model struct {
 	textArea     textarea.Model
 	viewport     viewport.Model
@@ -306,6 +316,7 @@ type model struct {
 
 	// Agent Panel state
 	agents         []*swarmAgent
+	spans          map[string]*uiSpan
 	ticks          int
 	showAgentPanel bool
 
@@ -697,6 +708,7 @@ func initialModel(planMode bool, resume bool) (model, error) {
 		activeModel:    activeModel,
 		renderer:       renderer,
 		agents:         agents,
+		spans:          make(map[string]*uiSpan),
 		showAgentPanel: true,
 		welcomeScreen:  []string{logoAndGreeting, recentActivity},
 	}, nil
@@ -1017,7 +1029,37 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		event := msg.event
 		var agentCmd tea.Cmd
 
+		if event.SpanID != "" {
+			span, ok := m.spans[event.SpanID]
+			if !ok {
+				span = &uiSpan{
+					ID:       event.SpanID,
+					Name:     event.TaskName,
+					ParentID: event.ParentID,
+					Agent:    event.AgentName,
+				}
+				if span.Name == "" {
+					span.Name = "Task"
+				}
+				m.spans[event.SpanID] = span
+			}
+			span.Status = string(event.State)
+			if event.Thought != "" {
+				span.Thought = event.Thought
+			}
+			if event.ToolName != "" {
+				span.ToolName = event.ToolName
+			}
+			if event.ObserverSummary != "" {
+				span.Thought = event.ObserverSummary
+			}
+		}
+
 		switch event.State {
+		case sdk.AgentStatePending:
+			m.updateViewport()
+			return m, listenForStream(msg.ch)
+
 		case sdk.AgentStateSpawning:
 			targetAgentName := event.AgentName
 			if targetAgentName == "" {
@@ -1305,6 +1347,7 @@ func (m *model) dequeueAndRun() tea.Cmd {
 	}
 
 	// Reset AgentPanel for new span
+	m.spans = make(map[string]*uiSpan)
 	for _, a := range m.agents {
 		a.update("idle", "Idle")
 	}
@@ -1735,158 +1778,103 @@ func (m *model) updateInputStyle() {
 }
 
 func (m model) renderAgentPanel() string {
-	var visibleAgents []*swarmAgent
-	now := time.Now()
-	for _, a := range m.agents {
-		if a.resident || a.state == "active" || a.state == "waiting" || now.Sub(a.lastActive) < 30*time.Second {
-			visibleAgents = append(visibleAgents, a)
-		}
-	}
-
-	if len(visibleAgents) == 0 {
-		return ""
-	}
-
-	// Calculate optimal columns based on count and width
-	cols := 4
-	if m.width < 100 {
-		cols = 2
-	} else if m.width < 140 {
-		cols = 3
-	}
-
-	fidelity := "high"
-	if len(visibleAgents) > cols*2 {
-		fidelity = "medium"
-	}
-	if len(visibleAgents) > 16 {
-		fidelity = "low"
-	}
-
-	availableWidth := m.width - 4
-	if availableWidth < 20 {
-		availableWidth = 20
-	}
-
-	cardWidth := availableWidth / cols
-	if fidelity == "low" {
-		cols = availableWidth / 8
-		if cols < 1 {
-			cols = 1
-		}
-		cardWidth = 8
-	}
-
-	// Helper to render a perfectly aligned line using two columns.
-	// Prefix is exactly 3 cells wide.
-	renderLine := func(prefix string, text string, style lipgloss.Style, width int) string {
-		prefixComp := lipgloss.NewStyle().Width(3).Render(prefix)
-		contentWidth := width - 3
-		if runewidth.StringWidth(text) > contentWidth {
-			text = runewidth.Truncate(text, contentWidth-1, "…")
-		}
-		contentComp := style.Width(contentWidth).Render(text)
-		return lipgloss.JoinHorizontal(lipgloss.Left, prefixComp, contentComp)
-	}
-
-	var cards []string
-	for _, a := range visibleAgents {
-		color := colorIdle
-		border := lipgloss.NormalBorder()
-		if a.state == "active" {
-			color = colorActive
-			border = lipgloss.ThickBorder()
-		} else if a.state == "success" {
-			color = colorSuccess
-		} else if a.state == "waiting" {
-			color = colorWaiting
-		} else if a.state == "error" {
-			color = colorError
-		}
-
-		cardStyle := lipgloss.NewStyle().
-			Border(border).
-			BorderForeground(color).
-			BorderBottom(false).
+	if len(m.spans) == 0 {
+		return lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(borderColor).
 			Padding(0, 1).
-			Width(cardWidth - 2)
+			MarginBottom(1).
+			Width(m.width - 2).
+			Render("⚪ Waiting for tasks...")
+	}
 
-		iconStr := "  "
-		if a.state == "active" {
-			iconStr = a.spin.View()
-		} else if a.state == "success" {
-			iconStr = "⚒" // Use 1-cell glyph that runewidth understands
-		} else if a.state == "error" {
-			iconStr = "✖"
-		} else if a.state == "waiting" {
-			iconStr = "⌚"
-		}
+	// Build tree
+	type treeNode struct {
+		span     *uiSpan
+		children []*treeNode
+	}
 
-		stateLabel := strings.Title(a.state)
-		if a.state == "idle" {
-			stateLabel = "Ready"
-		} else if a.state == "success" {
-			stateLabel = "Complete"
-		}
+	nodes := make(map[string]*treeNode)
+	var roots []*treeNode
 
-		contentWidth := cardWidth - 4
-		line1 := renderLine(a.icon, a.name, lipgloss.NewStyle().Foreground(color).Bold(true), contentWidth)
+	// First pass: create nodes
+	for _, s := range m.spans {
+		nodes[s.ID] = &treeNode{span: s}
+	}
 
-		mainText := a.status
-		if len(a.telemetry) > 0 && a.state == "active" {
-			mainText = a.telemetry[len(a.telemetry)-1]
-		}
-		line2 := renderLine(iconStr, mainText, lipgloss.NewStyle().Foreground(tipColor), contentWidth)
-
-		var cardContent string
-		if fidelity == "high" || fidelity == "medium" {
-			cardContent = lipgloss.JoinVertical(lipgloss.Left, line1, line2)
-			cardStyle = cardStyle.Height(2)
+	// Second pass: link children
+	for _, s := range m.spans {
+		node := nodes[s.ID]
+		if s.ParentID != "" && nodes[s.ParentID] != nil {
+			parent := nodes[s.ParentID]
+			parent.children = append(parent.children, node)
 		} else {
-			cardStyle = lipgloss.NewStyle().Border(border).BorderForeground(color).Width(6).Height(1).Padding(0, 1)
-			cardContent = lipgloss.NewStyle().Width(4).Align(lipgloss.Center).Render(a.icon)
+			roots = append(roots, node)
 		}
-
-		renderedCard := cardStyle.Render(cardContent)
-
-		if fidelity == "high" || fidelity == "medium" {
-			label := " " + stateLabel + " "
-			labelLen := runewidth.StringWidth(label)
-			remaining := cardWidth - 2 - labelLen
-			rightDashCount := 2
-			leftDashCount := remaining - rightDashCount
-			if leftDashCount < 1 {
-				leftDashCount = 1
-				rightDashCount = remaining - leftDashCount
-				if rightDashCount < 0 {
-					rightDashCount = 0
-				}
-			}
-
-			bottomLine := lipgloss.NewStyle().Foreground(color).Render(
-				border.BottomLeft +
-					strings.Repeat(border.Bottom, leftDashCount) +
-					label +
-					strings.Repeat(border.Bottom, rightDashCount) +
-					border.BottomRight,
-			)
-			renderedCard = lipgloss.JoinVertical(lipgloss.Left, renderedCard, bottomLine)
-		}
-		cards = append(cards, renderedCard)
 	}
 
-	var rows []string
-	rowStyle := lipgloss.NewStyle().Width(availableWidth)
-	for i := 0; i < len(cards); i += cols {
-		end := i + cols
-		if end > len(cards) {
-			end = len(cards)
+	// Sort roots by some criteria if needed, let's leave them as is for now
+
+	var formatNode func(node *treeNode, prefix string, isLast bool) string
+	formatNode = func(node *treeNode, prefix string, isLast bool) string {
+		s := node.span
+
+		color := colorIdle
+		iconStr := "⚪"
+		if s.Status == "spawning" || s.Status == "thinking" || s.Status == "executing" {
+			color = colorActive
+			iconStr = m.spinner.View()
+		} else if s.Status == "complete" {
+			color = colorSuccess
+			iconStr = "🟢"
+		} else if s.Status == "error" {
+			color = colorError
+			iconStr = "🔴"
+		} else if s.Status == "waiting" {
+			color = colorWaiting
+			iconStr = "🔵"
 		}
-		row := lipgloss.JoinHorizontal(lipgloss.Top, cards[i:end]...)
-		rows = append(rows, rowStyle.Render(row))
+
+		connector := "├── "
+		childPrefix := prefix + "│   "
+		if isLast {
+			connector = "└── "
+			childPrefix = prefix + "    "
+		}
+		if prefix == "" { // Root nodes shouldn't have connector lines if we don't want them, but let's keep them for consistency or remove them
+			connector = ""
+			childPrefix = "    "
+		}
+
+		agentName := s.Agent
+		if agentName == "" {
+			agentName = "System"
+		}
+		label := fmt.Sprintf("[%s] %s", agentName, s.Name)
+		if s.ToolName != "" {
+			label += fmt.Sprintf(" (Tool: %s)", s.ToolName)
+		} else if s.Thought != "" {
+			label += fmt.Sprintf(" - %s", s.Thought)
+		}
+
+		// Truncate to available width
+		availableWidth := m.width - 6 - runewidth.StringWidth(prefix+connector+iconStr+" ")
+		if availableWidth > 0 && runewidth.StringWidth(label) > availableWidth {
+			label = runewidth.Truncate(label, availableWidth, "…")
+		}
+
+		line := prefix + connector + iconStr + " " + lipgloss.NewStyle().Foreground(color).Render(label) + "\n"
+
+		for i, child := range node.children {
+			line += formatNode(child, childPrefix, i == len(node.children)-1)
+		}
+		return line
 	}
 
-	grid := lipgloss.JoinVertical(lipgloss.Left, rows...)
+	var treeStr string
+	for i, root := range roots {
+		treeStr += formatNode(root, "", i == len(roots)-1)
+	}
 
 	return lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
@@ -1894,7 +1882,7 @@ func (m model) renderAgentPanel() string {
 		Padding(0, 1).
 		MarginBottom(1).
 		Width(m.width - 2).
-		Render(grid)
+		Render(strings.TrimRight(treeStr, "\n"))
 }
 
 func (m *model) findAgent(name string) *swarmAgent {

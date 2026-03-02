@@ -205,7 +205,7 @@ func NewSwarm(cfg ...SwarmConfig) (Swarm, error) {
 	dbDir := filepath.Join(home, ".config", "swarm")
 	_ = os.MkdirAll(dbDir, 0755)
 	dbPath := filepath.Join(dbDir, "sessions.db")
-	dialector := sqlite.Open(dbPath)
+	dialector := sqlite.Open(dbPath + "?_journal_mode=WAL&_busy_timeout=5000")
 	gormCfg := &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)}
 	db, err := gorm.Open(dialector, gormCfg)
 	if err != nil {

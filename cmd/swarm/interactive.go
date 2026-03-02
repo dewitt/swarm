@@ -1797,12 +1797,10 @@ func (m model) renderAgentPanel() string {
 	nodes := make(map[string]*treeNode)
 	var roots []*treeNode
 
-	// First pass: create nodes
 	for _, s := range m.spans {
 		nodes[s.ID] = &treeNode{span: s}
 	}
 
-	// Second pass: link children
 	for _, s := range m.spans {
 		node := nodes[s.ID]
 		if s.ParentID != "" && nodes[s.ParentID] != nil {
@@ -1813,57 +1811,114 @@ func (m model) renderAgentPanel() string {
 		}
 	}
 
-	// Sort roots by some criteria if needed, let's leave them as is for now
-
 	var formatNode func(node *treeNode, prefix string, isLast bool) string
 	formatNode = func(node *treeNode, prefix string, isLast bool) string {
 		s := node.span
 
+		// Card Styling
 		color := colorIdle
+		border := lipgloss.NormalBorder()
 		iconStr := "⚪"
-		if s.Status == "spawning" || s.Status == "thinking" || s.Status == "executing" {
+		statusLabel := "Pending"
+
+		isActive := s.Status == "spawning" || s.Status == "thinking" || s.Status == "executing"
+		if isActive {
 			color = colorActive
+			border = lipgloss.ThickBorder()
 			iconStr = m.spinner.View()
+			statusLabel = "Active"
 		} else if s.Status == "complete" {
 			color = colorSuccess
 			iconStr = "🟢"
+			statusLabel = "Complete"
 		} else if s.Status == "error" {
 			color = colorError
 			iconStr = "🔴"
+			statusLabel = "Failed"
 		} else if s.Status == "waiting" {
 			color = colorWaiting
 			iconStr = "🔵"
+			statusLabel = "Waiting"
 		}
 
+		// Connectors
 		connector := "├── "
 		childPrefix := prefix + "│   "
 		if isLast {
 			connector = "└── "
 			childPrefix = prefix + "    "
 		}
-		if prefix == "" { // Root nodes shouldn't have connector lines if we don't want them, but let's keep them for consistency or remove them
+		if prefix == "" {
 			connector = ""
 			childPrefix = "    "
+		}
+
+		// Card Content
+		agentIcon := "🤖"
+		if a := m.findAgent(s.Agent); a != nil {
+			agentIcon = a.icon
 		}
 
 		agentName := s.Agent
 		if agentName == "" {
 			agentName = "System"
 		}
-		label := fmt.Sprintf("[%s] %s", agentName, s.Name)
+
+		// Construct the card
+		availableCardWidth := m.width - 8 - runewidth.StringWidth(prefix+connector)
+		if availableCardWidth < 30 {
+			availableCardWidth = 30
+		}
+
+		titleStyle := lipgloss.NewStyle().Foreground(color).Bold(true)
+		title := titleStyle.Render(fmt.Sprintf("%s %s %s: %s", iconStr, agentIcon, agentName, s.Name))
+
+		statusText := s.Thought
 		if s.ToolName != "" {
-			label += fmt.Sprintf(" (Tool: %s)", s.ToolName)
-		} else if s.Thought != "" {
-			label += fmt.Sprintf(" - %s", s.Thought)
+			statusText = "Running Tool: " + s.ToolName
 		}
-
-		// Truncate to available width
-		availableWidth := m.width - 6 - runewidth.StringWidth(prefix+connector+iconStr+" ")
-		if availableWidth > 0 && runewidth.StringWidth(label) > availableWidth {
-			label = runewidth.Truncate(label, availableWidth, "…")
+		if statusText == "" {
+			statusText = "..."
 		}
+		statusStyle := lipgloss.NewStyle().Foreground(tipColor).Italic(true)
+		statusLine := statusStyle.Render(statusText)
 
-		line := prefix + connector + iconStr + " " + lipgloss.NewStyle().Foreground(color).Render(label) + "\n"
+		// Sub-label for status
+		label := " " + statusLabel + " "
+		labelLen := runewidth.StringWidth(label)
+		remaining := availableCardWidth - 2 - labelLen
+		if remaining < 2 {
+			remaining = 2
+		}
+		leftDashCount := remaining / 2
+		rightDashCount := remaining - leftDashCount
+
+		bottomLine := lipgloss.NewStyle().Foreground(color).Render(
+			border.BottomLeft +
+				strings.Repeat(border.Bottom, leftDashCount) +
+				label +
+				strings.Repeat(border.Bottom, rightDashCount) +
+				border.BottomRight,
+		)
+
+		cardContent := lipgloss.JoinVertical(lipgloss.Left,
+			title,
+			statusLine,
+		)
+
+		card := lipgloss.NewStyle().
+			Border(border).
+			BorderForeground(color).
+			BorderBottom(false).
+			Padding(0, 1).
+			Width(availableCardWidth - 2).
+			Render(cardContent)
+
+		cardWithBottom := lipgloss.JoinVertical(lipgloss.Left, card, bottomLine)
+
+		// Join connector and card
+		prefixComp := lipgloss.NewStyle().Foreground(borderColor).Render(prefix + connector)
+		line := lipgloss.JoinHorizontal(lipgloss.Top, prefixComp, cardWithBottom) + "\n"
 
 		for i, child := range node.children {
 			line += formatNode(child, childPrefix, i == len(node.children)-1)

@@ -1792,6 +1792,7 @@ func (m model) renderAgentPanel() string {
 	type treeNode struct {
 		span     *uiSpan
 		children []*treeNode
+		depth    int
 	}
 
 	nodes := make(map[string]*treeNode)
@@ -1811,11 +1812,67 @@ func (m model) renderAgentPanel() string {
 		}
 	}
 
-	var formatNode func(node *treeNode, prefix string, isLast bool) string
-	formatNode = func(node *treeNode, prefix string, isLast bool) string {
+	var linearSpans []*treeNode
+	var traverse func(node *treeNode, depth int)
+	traverse = func(node *treeNode, depth int) {
+		node.depth = depth
+		linearSpans = append(linearSpans, node)
+		for _, child := range node.children {
+			traverse(child, depth+1)
+		}
+	}
+
+	for _, root := range roots {
+		traverse(root, 0)
+	}
+
+	// Calculate optimal columns based on count and width
+	cols := 4
+	if m.width < 100 {
+		cols = 2
+	} else if m.width < 140 {
+		cols = 3
+	}
+
+	fidelity := "high"
+	if len(linearSpans) > cols*2 {
+		fidelity = "medium"
+	}
+	if len(linearSpans) > 16 {
+		fidelity = "low"
+	}
+
+	availableWidth := m.width - 4
+	if availableWidth < 20 {
+		availableWidth = 20
+	}
+
+	cardWidth := availableWidth / cols
+	if fidelity == "low" {
+		cols = availableWidth / 8
+		if cols < 1 {
+			cols = 1
+		}
+		cardWidth = 8
+	}
+
+	renderLine := func(prefix string, text string, style lipgloss.Style, width int) string {
+		prefixComp := lipgloss.NewStyle().Width(3).Render(prefix)
+		contentWidth := width - 3
+		if contentWidth < 1 {
+			contentWidth = 1
+		}
+		if runewidth.StringWidth(text) > contentWidth {
+			text = runewidth.Truncate(text, contentWidth-1, "…")
+		}
+		contentComp := style.Width(contentWidth).Render(text)
+		return lipgloss.JoinHorizontal(lipgloss.Left, prefixComp, contentComp)
+	}
+
+	var cards []string
+	for _, node := range linearSpans {
 		s := node.span
 
-		// Card Styling
 		color := colorIdle
 		border := lipgloss.NormalBorder()
 		iconStr := "⚪"
@@ -1829,107 +1886,106 @@ func (m model) renderAgentPanel() string {
 			statusLabel = "Active"
 		} else if s.Status == "complete" {
 			color = colorSuccess
-			iconStr = "🟢"
+			iconStr = "⚒" // 1-cell glyph
 			statusLabel = "Complete"
 		} else if s.Status == "error" {
 			color = colorError
-			iconStr = "🔴"
+			iconStr = "✖"
 			statusLabel = "Failed"
 		} else if s.Status == "waiting" {
 			color = colorWaiting
-			iconStr = "🔵"
+			iconStr = "⌚"
 			statusLabel = "Waiting"
 		}
 
-		// Connectors
-		connector := "├── "
-		childPrefix := prefix + "│   "
-		if isLast {
-			connector = "└── "
-			childPrefix = prefix + "    "
-		}
-		if prefix == "" {
-			connector = ""
-			childPrefix = "    "
-		}
-
-		// Card Content
 		agentIcon := "🤖"
 		if a := m.findAgent(s.Agent); a != nil {
 			agentIcon = a.icon
 		}
 
-		agentName := s.Agent
-		if agentName == "" {
-			agentName = "System"
-		}
-
-		// Construct the card
-		availableCardWidth := m.width - 8 - runewidth.StringWidth(prefix+connector)
-		if availableCardWidth < 30 {
-			availableCardWidth = 30
-		}
-
-		titleStyle := lipgloss.NewStyle().Foreground(color).Bold(true)
-		title := titleStyle.Render(fmt.Sprintf("%s %s %s: %s", iconStr, agentIcon, agentName, s.Name))
-
-		statusText := s.Thought
-		if s.ToolName != "" {
-			statusText = "Running Tool: " + s.ToolName
-		}
-		if statusText == "" {
-			statusText = "..."
-		}
-		statusStyle := lipgloss.NewStyle().Foreground(tipColor).Italic(true)
-		statusLine := statusStyle.Render(statusText)
-
-		// Sub-label for status
-		label := " " + statusLabel + " "
-		labelLen := runewidth.StringWidth(label)
-		remaining := availableCardWidth - 2 - labelLen
-		if remaining < 2 {
-			remaining = 2
-		}
-		leftDashCount := remaining / 2
-		rightDashCount := remaining - leftDashCount
-
-		bottomLine := lipgloss.NewStyle().Foreground(color).Render(
-			border.BottomLeft +
-				strings.Repeat(border.Bottom, leftDashCount) +
-				label +
-				strings.Repeat(border.Bottom, rightDashCount) +
-				border.BottomRight,
-		)
-
-		cardContent := lipgloss.JoinVertical(lipgloss.Left,
-			title,
-			statusLine,
-		)
-
-		card := lipgloss.NewStyle().
+		cardStyle := lipgloss.NewStyle().
 			Border(border).
 			BorderForeground(color).
 			BorderBottom(false).
 			Padding(0, 1).
-			Width(availableCardWidth - 2).
-			Render(cardContent)
+			Width(cardWidth - 2)
 
-		cardWithBottom := lipgloss.JoinVertical(lipgloss.Left, card, bottomLine)
-
-		// Join connector and card
-		prefixComp := lipgloss.NewStyle().Foreground(borderColor).Render(prefix + connector)
-		line := lipgloss.JoinHorizontal(lipgloss.Top, prefixComp, cardWithBottom) + "\n"
-
-		for i, child := range node.children {
-			line += formatNode(child, childPrefix, i == len(node.children)-1)
+		contentWidth := cardWidth - 4
+		if contentWidth < 1 {
+			contentWidth = 1
 		}
-		return line
+
+		// Depth indentation for title
+		indent := strings.Repeat(" ", node.depth)
+		if node.depth > 0 {
+			indent += "↳ "
+		}
+		// Let's ensure the indent doesn't consume all the width
+		if runewidth.StringWidth(indent) > contentWidth/2 {
+			indent = strings.Repeat(" ", contentWidth/2)
+		}
+
+		titleText := indent + s.Name
+		line1 := renderLine(agentIcon, titleText, lipgloss.NewStyle().Foreground(color).Bold(true), contentWidth)
+
+		statusText := s.Thought
+		if s.ToolName != "" {
+			statusText = "Tool: " + s.ToolName
+		}
+		if statusText == "" {
+			statusText = "..."
+		}
+		line2 := renderLine(iconStr, statusText, lipgloss.NewStyle().Foreground(tipColor), contentWidth)
+
+		var cardContent string
+		if fidelity == "high" || fidelity == "medium" {
+			cardContent = lipgloss.JoinVertical(lipgloss.Left, line1, line2)
+			cardStyle = cardStyle.Height(2)
+		} else {
+			cardStyle = lipgloss.NewStyle().Border(border).BorderForeground(color).Width(6).Height(1).Padding(0, 1)
+			cardContent = lipgloss.NewStyle().Width(4).Align(lipgloss.Center).Render(agentIcon)
+		}
+
+		renderedCard := cardStyle.Render(cardContent)
+
+		if fidelity == "high" || fidelity == "medium" {
+			label := " " + statusLabel + " "
+			labelLen := runewidth.StringWidth(label)
+			remaining := cardWidth - 2 - labelLen
+			rightDashCount := 2
+			leftDashCount := remaining - rightDashCount
+			if leftDashCount < 1 {
+				leftDashCount = 1
+				rightDashCount = remaining - leftDashCount
+				if rightDashCount < 0 {
+					rightDashCount = 0
+				}
+			}
+
+			bottomLine := lipgloss.NewStyle().Foreground(color).Render(
+				border.BottomLeft +
+					strings.Repeat(border.Bottom, leftDashCount) +
+					label +
+					strings.Repeat(border.Bottom, rightDashCount) +
+					border.BottomRight,
+			)
+			renderedCard = lipgloss.JoinVertical(lipgloss.Left, renderedCard, bottomLine)
+		}
+		cards = append(cards, renderedCard)
 	}
 
-	var treeStr string
-	for i, root := range roots {
-		treeStr += formatNode(root, "", i == len(roots)-1)
+	var rows []string
+	rowStyle := lipgloss.NewStyle().Width(availableWidth)
+	for i := 0; i < len(cards); i += cols {
+		end := i + cols
+		if end > len(cards) {
+			end = len(cards)
+		}
+		row := lipgloss.JoinHorizontal(lipgloss.Top, cards[i:end]...)
+		rows = append(rows, rowStyle.Render(row))
 	}
+
+	grid := lipgloss.JoinVertical(lipgloss.Left, rows...)
 
 	return lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
@@ -1937,7 +1993,7 @@ func (m model) renderAgentPanel() string {
 		Padding(0, 1).
 		MarginBottom(1).
 		Width(m.width - 2).
-		Render(strings.TrimRight(treeStr, "\n"))
+		Render(grid)
 }
 
 func (m *model) findAgent(name string) *swarmAgent {

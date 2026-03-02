@@ -9,9 +9,9 @@ import (
 	"os/user"
 	"path/filepath"
 	"runtime/debug"
-	"time"
-
+	"sort"
 	"strings"
+	"time"
 
 	"github.com/atotto/clipboard"
 	"github.com/charmbracelet/bubbles/list"
@@ -1783,7 +1783,9 @@ func (m *model) updateViewport() {
 		if m.globalSummary != "" {
 			status = m.globalSummary
 		}
-		renderedMessages = append(renderedMessages, "\n"+m.spinner.View()+" "+lipgloss.NewStyle().Foreground(googleBlue).Italic(true).Render(status))
+		// The user requested '⣾' or a braille spinner. The default spinner in bubbles is dot/braille.
+		// So we will just use m.spinner.View().
+		renderedMessages = append(renderedMessages, m.spinner.View()+" "+lipgloss.NewStyle().Foreground(googleBlue).Italic(true).Render(status))
 	}
 
 	m.viewport.SetContent(strings.Join(renderedMessages, "\n\n"))
@@ -1862,11 +1864,19 @@ func (m model) renderAgentPanel() string {
 		}
 	}
 
+	// Sort to stabilize UI rendering
+	sort.Slice(roots, func(i, j int) bool {
+		return roots[i].span.ID < roots[j].span.ID
+	})
+
 	var linearSpans []*treeNode
 	var traverse func(node *treeNode, depth int)
 	traverse = func(node *treeNode, depth int) {
 		node.depth = depth
 		linearSpans = append(linearSpans, node)
+		sort.Slice(node.children, func(i, j int) bool {
+			return node.children[i].span.ID < node.children[j].span.ID
+		})
 		for _, child := range node.children {
 			traverse(child, depth+1)
 		}

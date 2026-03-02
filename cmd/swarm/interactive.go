@@ -213,6 +213,9 @@ type responseMsg struct {
 	isShell bool
 }
 
+type globalSummaryMsg string
+type triggerGlobalSummaryMsg struct{}
+
 type modelsLoadedMsg struct {
 	models []sdk.ModelInfo
 	err    error
@@ -319,6 +322,7 @@ type model struct {
 	spans          map[string]*uiSpan
 	ticks          int
 	showAgentPanel bool
+	globalSummary  string
 
 	welcomeScreen       []string
 	cachedActivity      string
@@ -1025,6 +1029,22 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var vpCmd tea.Cmd
 		m.viewport, vpCmd = m.viewport.Update(msg)
 		return m, vpCmd
+	case triggerGlobalSummaryMsg:
+		if m.loading {
+			return m, m.fetchGlobalSummary()
+		}
+		return m, nil
+
+	case globalSummaryMsg:
+		if m.loading {
+			m.globalSummary = string(msg)
+			m.updateViewport()
+			return m, tea.Tick(3*time.Second, func(t time.Time) tea.Msg {
+				return triggerGlobalSummaryMsg{}
+			})
+		}
+		return m, nil
+
 	case streamMsg:
 		event := msg.event
 		var agentCmd tea.Cmd
@@ -1162,8 +1182,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						out = rOut
 					}
 				}
-				badge := getAgentBadge(author)
-				m.messages = append(m.messages, badge+"\n"+strings.TrimSpace(out))
+				m.messages = append(m.messages, agentMsgStyle.Render("✦\n")+strings.TrimSpace(out))
 			} else {
 				a.update("idle", "Completed task")
 			}
@@ -1360,9 +1379,13 @@ func (m *model) dequeueAndRun() tea.Cmd {
 	m.inputQueue = m.inputQueue[1:]
 
 	m.loading = true
+	m.globalSummary = "Starting execution..."
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancelChat = cancel
-	return m.callSDK(ctx, nextInput)
+	return tea.Batch(
+		m.callSDK(ctx, nextInput),
+		tea.Tick(3*time.Second, func(t time.Time) tea.Msg { return triggerGlobalSummaryMsg{} }),
+	)
 }
 
 func listenForStream(ch <-chan sdk.ObservableEvent) tea.Cmd {
@@ -1372,6 +1395,36 @@ func listenForStream(ch <-chan sdk.ObservableEvent) tea.Cmd {
 			return streamDoneMsg{}
 		}
 		return streamMsg{event: event, ch: ch}
+	}
+}
+
+func (m *model) fetchGlobalSummary() tea.Cmd {
+	return func() tea.Msg {
+		if len(m.spans) == 0 {
+			return globalSummaryMsg("Waiting for tasks to start...")
+		}
+		var lines []string
+		for _, s := range m.spans {
+			if s.Status == "executing" || s.Status == "thinking" || s.Status == "spawning" {
+				thought := s.Thought
+				if s.ToolName != "" {
+					thought = "Running " + s.ToolName
+				}
+				lines = append(lines, fmt.Sprintf("- [%s] %s: %s", s.Agent, s.Name, thought))
+			}
+		}
+		if len(lines) == 0 {
+			return globalSummaryMsg("Waiting for tasks to start...")
+		}
+		
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		
+		summary, err := m.swarm.SummarizeState(ctx, strings.Join(lines, "\n"))
+		if err != nil {
+			return globalSummaryMsg("")
+		}
+		return globalSummaryMsg(summary)
 	}
 }
 
@@ -1726,15 +1779,11 @@ func (m *model) updateViewport() {
 			renderedMessages = append(renderedMessages, observeBox)
 		}
 
-		status := "Thinking…"
-		if m.statusMsg != "" {
-			status = m.statusMsg
+		status := "Thinking..."
+		if m.globalSummary != "" {
+			status = m.globalSummary
 		}
-		agentLabel := m.activeAgent
-		if agentLabel == "" {
-			agentLabel = "Swarm"
-		}
-		renderedMessages = append(renderedMessages, agentMsgStyle.Render(fmt.Sprintf("✦ [%s] ", agentLabel))+m.spinner.View()+" "+status)
+		renderedMessages = append(renderedMessages, "\n"+m.spinner.View()+" "+lipgloss.NewStyle().Foreground(googleBlue).Italic(true).Render(status))
 	}
 
 	m.viewport.SetContent(strings.Join(renderedMessages, "\n\n"))

@@ -191,6 +191,12 @@ func (o *Engine) MarkFailed(spanID string) {
 	o.status[spanID] = SpanStatusFailed
 	t := o.spans[spanID]
 	t.Status = SpanStatusFailed
+	now := time.Now()
+	t.EndTime = now.Format(time.RFC3339Nano)
+	if t.StartTime != "" {
+		start, _ := time.Parse(time.RFC3339Nano, t.StartTime)
+		t.Duration = now.Sub(start).String()
+	}
 	o.spans[spanID] = t
 
 	// Recursively invalidate all dependents to prevent deadlock

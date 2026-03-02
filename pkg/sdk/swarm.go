@@ -86,6 +86,7 @@ type Swarm interface {
 	Plan(ctx context.Context, prompt string) (*ExecutionGraph, error)
 	Execute(ctx context.Context, g *ExecutionGraph, o *Engine) (<-chan ObservableEvent, *Engine, error)
 	Chat(ctx context.Context, prompt string) (<-chan ObservableEvent, error)
+	SummarizeState(ctx context.Context, state string) (string, error)
 	Reset()
 	Reload() error
 	Rewind(n int) error
@@ -593,6 +594,28 @@ func (m *defaultSwarm) Plan(ctx context.Context, prompt string) (*ExecutionGraph
 	return &graph, nil
 }
 
+func (m *defaultSwarm) SummarizeState(ctx context.Context, state string) (string, error) {
+	prompt := fmt.Sprintf("You are an observer monitoring a swarm of AI agents. Here is their current activity:\n%s\n\nWrite a single, concise sentence (max 8 words) summarizing their overall progress to the user. Start with an action verb (e.g., 'Investigating the codebase', 'Running tests and debugging').", state)
+	
+	respIter := m.fastModel.GenerateContent(ctx, &model.LLMRequest{
+		Contents: []*genai.Content{genai.NewContentFromText(prompt, genai.Role("user"))},
+	}, false)
+
+	for resp, err := range respIter {
+		if err != nil {
+			return "", err
+		}
+		if resp.Content != nil && len(resp.Content.Parts) > 0 {
+			text := strings.TrimSpace(resp.Content.Parts[0].Text)
+			text = strings.TrimPrefix(text, "\"")
+			text = strings.TrimSuffix(text, "\"")
+			return text, nil
+		}
+		break
+	}
+	return "Working...", nil
+}
+
 func (m *defaultSwarm) Chat(ctx context.Context, prompt string) (<-chan ObservableEvent, error) {
 	out := make(chan ObservableEvent, 1000)
 	// Record the user's initial prompt in the persistent session
@@ -803,21 +826,24 @@ func (m *defaultSwarm) Execute(ctx context.Context, g *ExecutionGraph, o *Engine
 					}
 					replanCount++
 					out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm", State: AgentStateThinking, Thought: fmt.Sprintf("Replanning effort %d/%d…", replanCount, maxReplans)}
-					newG, err := m.Plan(ctx, "Pivot: "+done.Result)
-					if err == nil {
-						o.AddSpans(newG.Spans...)
-						// Broadcast replanned topology so UI can build the tree immediately
-						for _, s := range newG.Spans {
-							out <- ObservableEvent{
-								Timestamp: time.Now(),
-								AgentName: s.Agent,
-								SpanID:    s.ID,
-								TaskName:  s.Name,
-								ParentID:  s.ParentID,
-								State:     AgentStatePending,
+					
+					go func(failureResult string) {
+						newG, err := m.Plan(ctx, "Pivot: "+failureResult)
+						if err == nil {
+							o.AddSpans(newG.Spans...)
+							// Broadcast replanned topology so UI can build the tree immediately
+							for _, s := range newG.Spans {
+								out <- ObservableEvent{
+									Timestamp: time.Now(),
+									AgentName: s.Agent,
+									SpanID:    s.ID,
+									TaskName:  s.Name,
+									ParentID:  s.ParentID,
+									State:     AgentStatePending,
+								}
 							}
 						}
-					}
+					}(done.Result)
 				}
 			}
 		}

@@ -895,17 +895,42 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			if m.acActive && len(m.acMatches) > 0 {
-				if m.acMode == "history" {
-					m.textArea.SetValue(m.acMatches[m.acIndex])
+				val := m.textArea.Value()
+				lastSpace := strings.LastIndexAny(val, " \n")
+				var lastWord string
+				if lastSpace == -1 {
+					lastWord = val
 				} else {
-					val := m.textArea.Value()
-					lastSpace := strings.LastIndexAny(val, " \n")
-					m.textArea.SetValue(val[:lastSpace+1] + m.acPrefix + m.acMatches[m.acIndex] + " ")
+					lastWord = val[lastSpace+1:]
 				}
-				m.textArea.CursorEnd()
-				m.acActive = false
-				m.acMode = ""
-				return m, nil
+
+				if m.acMode == "history" {
+					if val == m.acMatches[m.acIndex] {
+						m.acActive = false
+						m.acMode = ""
+						// Fall through to submit
+					} else {
+						m.textArea.SetValue(m.acMatches[m.acIndex])
+						m.textArea.CursorEnd()
+						m.acActive = false
+						m.acMode = ""
+						return m, nil
+					}
+				} else {
+					if lastWord == m.acPrefix+m.acMatches[m.acIndex] {
+						// If the user fully typed the exact suggestion, let Enter submit it
+						// (Optionally ensure space is added if they want to keep typing, but for Enter, they want to submit)
+						m.acActive = false
+						m.acMode = ""
+						// Fall through to submit
+					} else {
+						m.textArea.SetValue(val[:lastSpace+1] + m.acPrefix + m.acMatches[m.acIndex] + " ")
+						m.textArea.CursorEnd()
+						m.acActive = false
+						m.acMode = ""
+						return m, nil
+					}
+				}
 			}
 
 			input := m.textArea.Value()
@@ -1423,7 +1448,7 @@ func (m *model) fetchGlobalSummary() tea.Cmd {
 			return globalSummaryMsg("Waiting for tasks to start...")
 		}
 
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 
 		summary, err := m.swarm.SummarizeState(ctx, strings.Join(lines, "\n"))

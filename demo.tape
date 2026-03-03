@@ -15,18 +15,14 @@ Show
 Type "Hello, what can you do?"
 Sleep 500ms
 Enter
-Sleep 4s
+Sleep 8s
 
 Type "How many Go files are in this repository?"
 Sleep 500ms
 Enter
-Sleep 2s
-Hide
 Sleep 15s
-Show
-Sleep 4s
 
-Type "! ls -F pkg/sdk/"
+Type "! ls -F"
 Sleep 500ms
 Enter
 Sleep 3s
@@ -37,8 +33,6 @@ Enter
 Sleep 2s
 
 Type "/skills"
-Sleep 500ms
-Enter
 Sleep 500ms
 Enter
 Sleep 4s

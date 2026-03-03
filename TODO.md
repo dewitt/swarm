@@ -64,4 +64,4 @@ debt that should be addressed as the project evolves.
   currently overwrites the agent name in the UI.
 - [ ] **Escape Sequences in Prompt** (#3): Strange escape sequences appear in
   the input prompt when scrolling.
-- [ ] **Autocomplete Enter Key Override**: When typing a slash command like `/skills`, pressing Enter selects the autocomplete suggestion instead of instantly submitting the command, requiring the user to press Enter a second time to execute it. This UX needs to be smoothed out.
+- [x] **Autocomplete Enter Key Override**: When typing a slash command like `/skills`, pressing Enter selects the autocomplete suggestion instead of instantly submitting the command, requiring the user to press Enter a second time to execute it. This UX needs to be smoothed out.

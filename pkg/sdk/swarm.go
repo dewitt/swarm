@@ -2,6 +2,7 @@ package sdk
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"iter"
@@ -150,6 +151,8 @@ func NewSwarm(cfg ...SwarmConfig) (Swarm, error) {
 
 		// Configure a robust, fast-failing HTTP client to prevent network deadlocks
 		// (e.g., HTTP/2 silent connection drops or endless flow waiting).
+		// We disable HTTP/2 to prevent 'GOAWAY' and stream concurrency errors
+		// during massive parallel execution (fan-outs).
 		clientConfig.HTTPClient = &http.Client{
 			Transport: &http.Transport{
 				Proxy: http.ProxyFromEnvironment,
@@ -157,12 +160,14 @@ func NewSwarm(cfg ...SwarmConfig) (Swarm, error) {
 					Timeout:   10 * time.Second,
 					KeepAlive: 30 * time.Second,
 				}).DialContext,
-				ForceAttemptHTTP2:     true,
+				ForceAttemptHTTP2:     false,
+				TLSNextProto:          make(map[string]func(authority string, c *tls.Conn) http.RoundTripper),
 				MaxIdleConns:          100,
+				MaxIdleConnsPerHost:   100,
 				IdleConnTimeout:       90 * time.Second,
 				TLSHandshakeTimeout:   10 * time.Second,
 				ExpectContinueTimeout: 1 * time.Second,
-				ResponseHeaderTimeout: 15 * time.Second, // Max 15s wait for first byte (fail fast)
+				ResponseHeaderTimeout: 60 * time.Second, // Max 60s wait for first byte
 			},
 		}
 
@@ -939,7 +944,7 @@ func (m *defaultSwarm) executeSpan(ctx context.Context, out chan<- ObservableEve
 					obsWg.Add(1)
 					go func(hist []string) {
 						defer obsWg.Done()
-						obsCtx, obsCancel := context.WithTimeout(spanCtx, 10*time.Second) // Fix: Tie observer timeout directly to spanCtx
+						obsCtx, obsCancel := context.WithTimeout(spanCtx, 15*time.Second) // Fix: Tie observer timeout directly to spanCtx
 						defer obsCancel()
 
 						obsPrompt := fmt.Sprintf("Monitor: %s. Recent Telemetry:\n%s\n\nTask: Output a concise 3-8 word phrase summarizing the current activity (e.g., 'Searching for authentication logic...' or 'Running unit tests...'). If you detect an infinite loop or severe error, output 'INTERVENE: [reason]'.", targetAgent.Name(), strings.Join(hist, "\n"))

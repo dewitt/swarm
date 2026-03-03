@@ -148,7 +148,7 @@ func init() {
 	rootCmd.Flags().StringVarP(&promptFlag, "prompt", "p", "", "Run a single-shot prompt and exit")
 	rootCmd.Flags().BoolVar(&planFlag, "plan", false, "Start the agent in read-only plan mode")
 	rootCmd.Flags().BoolVar(&resumeFlag, "resume", false, "Resume the last interactive session")
-	rootCmd.Flags().BoolVar(&trajectoryFlag, "trajectory", false, "Output the full swarm trajectory JSON to stdout instead of the response")
+	rootCmd.PersistentFlags().BoolVar(&trajectoryFlag, "trajectory", false, "Output the full swarm trajectory JSON to stdout instead of the response")
 	rootCmd.Flags().BoolVar(&explainFlag, "explain", false, "Provide a human-readable explanation of the swarm trajectory")
 	rootCmd.AddCommand(configCmd)
 }

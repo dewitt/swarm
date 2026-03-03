@@ -62,16 +62,18 @@ If no scenario_id is provided, all scenarios will be run.`,
 				continue
 			}
 
-			fmt.Printf("    Trajectory:\n")
-			lines := strings.Split(res.Trajectory, "\n")
-			for _, line := range lines {
-				if line == "" {
-					continue
+			if trajectoryFlag {
+				fmt.Printf("    Trajectory:\n")
+				lines := strings.Split(res.Trajectory, "\n")
+				for _, line := range lines {
+					if line == "" {
+						continue
+					}
+					if len(line) > 120 {
+						line = line[:117] + "..."
+					}
+					fmt.Printf("      %s\n", line)
 				}
-				if len(line) > 120 {
-					line = line[:117] + "..."
-				}
-				fmt.Printf("      %s\n", line)
 			}
 
 			if res.Passed {

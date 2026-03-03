@@ -62,6 +62,6 @@ debt that should be addressed as the project evolves.
 - [x] **Dead-end Tool Calls** (#17): Subagent tool calls can reach a dead end.
 - [x] **Status Overwrites Name** (#15): Tool and subagent invocation status
   currently overwrites the agent name in the UI.
-- [ ] **Escape Sequences in Prompt** (#3): Strange escape sequences appear in
+- [x] **Escape Sequences in Prompt** (#3): Strange escape sequences appear in
   the input prompt when scrolling.
 - [x] **Autocomplete Enter Key Override**: When typing a slash command like `/skills`, pressing Enter selects the autocomplete suggestion instead of instantly submitting the command, requiring the user to press Enter a second time to execute it. This UX needs to be smoothed out.

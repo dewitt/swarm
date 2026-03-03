@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
+	"regexp"
 	"runtime/debug"
 	"sort"
 	"strings"
@@ -1356,12 +1357,24 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	m.textArea, tiCmd = m.textArea.Update(msg)
 	cmds = append(cmds, tiCmd)
 
+	// Filter out leaked SGR mouse sequences due to dropped escape bytes (Issue #3)
+	val := m.textArea.Value()
+	if strings.Contains(val, "[<") {
+		// e.g., [<65;74; 31M or [<65;44; 34m
+		re := regexp.MustCompile(`\[<\d+;\s*\d+;\s*\d+[Mm]`)
+		newVal := re.ReplaceAllString(val, "")
+		if newVal != val {
+			m.textArea.SetValue(newVal)
+			m.textArea.CursorEnd()
+		}
+	}
+
 	if m.state == stateChat {
 		updateAutocomplete(&m)
 	}
 
 	// Check for automatic shell mode toggling
-	val := m.textArea.Value()
+	val = m.textArea.Value()
 	if m.state == stateChat && strings.HasPrefix(val, "!") {
 		m.state = stateShell
 		m.textArea.SetValue(strings.TrimPrefix(val, "!"))

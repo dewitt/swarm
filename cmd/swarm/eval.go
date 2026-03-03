@@ -61,6 +61,7 @@ If no scenario_id is provided, all scenarios will be run.`,
 				continue
 			}
 
+			fmt.Printf("    Trajectory Summary: %s\n", res.TrajectorySummary)
 			if res.Passed {
 				fmt.Println("    PASS")
 				passed++

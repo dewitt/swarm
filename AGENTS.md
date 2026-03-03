@@ -110,6 +110,10 @@ opinions.
    stability. See `tests/ui/README.md` for instructions.
 5. **Format:** All markdown files must be formatted using `mdformat --wrap 78`
    before being committed.
+6. **File GitHub Issues:** As a proactive contributor, always feel free to
+   use the GitHub CLI (`gh issue create`) to file new issues for any bugs,
+   technical debt, or feature enhancements you discover during your work.
+   This is a crucial part of being a good collaborator.
 
 ### Step 4: Asynchronous Handoffs
 

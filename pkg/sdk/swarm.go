@@ -118,7 +118,6 @@ type defaultSwarm struct {
 	proModel            model.LLM
 	fastModel           model.LLM
 	toolRegistry        map[string]tool.Tool
-	inputAgent          agent.Agent
 	subAgentNames       []string
 	agents              map[string]agent.Agent
 	lastAgent           string  // Tracks the last agent to respond
@@ -300,7 +299,7 @@ func (m *defaultSwarm) writeState(ctx tool.Context, req struct {
 	}
 	ev.Actions = session.EventActions{StateDelta: map[string]any{req.Key: req.Value}}
 
-	err = m.sessionSvc.AppendEvent(context.Background(), resp.Session, ev)
+	_ = m.sessionSvc.AppendEvent(context.Background(), resp.Session, ev)
 	return "State updated successfully.", nil
 }
 
@@ -669,7 +668,7 @@ func (m *defaultSwarm) Chat(ctx context.Context, prompt string) (<-chan Observab
 		var inputResult string
 		for resp, err := range inputIter {
 			if err != nil {
-				out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Input Agent", SpanID: "input", TaskName: "Classification", State: AgentStateError, Error: fmt.Errorf("Input classification failed: %w", err)}
+				out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Input Agent", SpanID: "input", TaskName: "Classification", State: AgentStateError, Error: fmt.Errorf("input classification failed: %w", err)}
 				return
 			}
 			if resp.Content != nil && len(resp.Content.Parts) > 0 {
@@ -707,7 +706,7 @@ func (m *defaultSwarm) Chat(ctx context.Context, prompt string) (<-chan Observab
 			planStart := time.Now()
 			graph, err = m.Plan(ctx, prompt)
 			if err != nil {
-				out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm Agent", SpanID: "coordination", TaskName: "Swarm Planning", State: AgentStateError, Error: fmt.Errorf("Coordination failed: %w", err)}
+				out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm Agent", SpanID: "coordination", TaskName: "Swarm Planning", State: AgentStateError, Error: fmt.Errorf("coordination failed: %w", err)}
 				return
 			}
 
@@ -731,7 +730,7 @@ func (m *defaultSwarm) Chat(ctx context.Context, prompt string) (<-chan Observab
 		if len(graph.Spans) > 0 {
 			events, _, err := m.Execute(ctx, graph, o)
 			if err != nil {
-				out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm", SpanID: "execution", TaskName: "Graph Execution", State: AgentStateError, Error: fmt.Errorf("Execution failed: %w", err)}
+				out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm", SpanID: "execution", TaskName: "Graph Execution", State: AgentStateError, Error: fmt.Errorf("execution failed: %w", err)}
 				return
 			}
 			for event := range events {
@@ -813,7 +812,7 @@ func (m *defaultSwarm) Execute(ctx context.Context, g *ExecutionGraph, o *Engine
 				if o.IsComplete() {
 					break Loop
 				} else {
-					out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm", State: AgentStateError, Error: fmt.Errorf("Deadlock detected in execution graph")}
+					out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm", State: AgentStateError, Error: fmt.Errorf("deadlock detected in execution graph")}
 					break Loop
 				}
 			}
@@ -831,7 +830,7 @@ func (m *defaultSwarm) Execute(ctx context.Context, g *ExecutionGraph, o *Engine
 				// Handle dynamic replanning or subgraph expansion
 				if done.Replan {
 					if replanCount >= maxReplans {
-						out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm", State: AgentStateError, Error: fmt.Errorf("Maximum replan attempts reached. Halting loop")}
+						out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm", State: AgentStateError, Error: fmt.Errorf("maximum replan attempts reached, halting loop")}
 						continue
 					}
 					replanCount++
@@ -868,7 +867,7 @@ func (m *defaultSwarm) Execute(ctx context.Context, g *ExecutionGraph, o *Engine
 func (m *defaultSwarm) executeSpan(ctx context.Context, out chan<- ObservableEvent, o *Engine, span Span) (string, SpanStatus, bool) {
 	targetAgent, ok := m.agents[span.Agent]
 	if !ok {
-		out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm", SpanID: span.ID, TaskName: span.Name, ParentID: span.ParentID, State: AgentStateError, Error: fmt.Errorf("Agent not found: %s", span.Agent)}
+		out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm", SpanID: span.ID, TaskName: span.Name, ParentID: span.ParentID, State: AgentStateError, Error: fmt.Errorf("agent not found: %s", span.Agent)}
 		return "Agent not found", SpanStatusFailed, false
 	}
 
@@ -887,7 +886,7 @@ func (m *defaultSwarm) executeSpan(ctx context.Context, out chan<- ObservableEve
 		SessionID: spanSessionID,
 	})
 	if err != nil {
-		out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm", SpanID: span.ID, TaskName: span.Name, ParentID: span.ParentID, State: AgentStateError, Error: fmt.Errorf("Failed to initialize session for span: %w", err)}
+		out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm", SpanID: span.ID, TaskName: span.Name, ParentID: span.ParentID, State: AgentStateError, Error: fmt.Errorf("failed to initialize session for span: %w", err)}
 		return "Session initialization failed", SpanStatusFailed, false
 	}
 
@@ -1045,7 +1044,7 @@ func (m *defaultSwarm) executeSpan(ctx context.Context, out chan<- ObservableEve
 
 	for event, err := range events {
 		if err != nil {
-			out <- ObservableEvent{Timestamp: time.Now(), AgentName: targetAgent.Name(), SpanID: span.ID, TaskName: span.Name, ParentID: span.ParentID, State: AgentStateError, Error: fmt.Errorf("Error encountered: %w", err)}
+			out <- ObservableEvent{Timestamp: time.Now(), AgentName: targetAgent.Name(), SpanID: span.ID, TaskName: span.Name, ParentID: span.ParentID, State: AgentStateError, Error: fmt.Errorf("error encountered: %w", err)}
 			full.WriteString("\n\nERROR: " + err.Error())
 			needsReplan = true
 			break

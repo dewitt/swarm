@@ -35,15 +35,13 @@ var (
 	googleYellow = lipgloss.Color("#FBBC05")
 	googleGreen  = lipgloss.Color("#34A853")
 
-	primaryColor   = googleBlue
-	secondaryColor = lipgloss.Color("#4169E1") // Royal Blue
-	tipColor       = lipgloss.Color("#666666")
-	agentColor     = googleGreen
-	errorColor     = googleRed
-	borderColor    = lipgloss.AdaptiveColor{Light: "#D9D9D9", Dark: "#333333"}
-	statusBg       = lipgloss.AdaptiveColor{Light: "#EBEBEB", Dark: "#1A1A1A"}
-	statusFg       = lipgloss.AdaptiveColor{Light: "#555555", Dark: "#888888"}
-	placeholderFg  = lipgloss.AdaptiveColor{Light: "#E0E0E0", Dark: "#262626"}
+	primaryColor  = googleBlue
+	tipColor      = lipgloss.Color("#666666")
+	errorColor    = googleRed
+	borderColor   = lipgloss.AdaptiveColor{Light: "#D9D9D9", Dark: "#333333"}
+	statusBg      = lipgloss.AdaptiveColor{Light: "#EBEBEB", Dark: "#1A1A1A"}
+	statusFg      = lipgloss.AdaptiveColor{Light: "#555555", Dark: "#888888"}
+	placeholderFg = lipgloss.AdaptiveColor{Light: "#E0E0E0", Dark: "#262626"}
 
 	// Agent Panel Colors
 	colorIdle    = lipgloss.Color("#888888") // Lighter Gray
@@ -51,10 +49,6 @@ var (
 	colorSuccess = lipgloss.Color("#34A853") // Green
 	colorWaiting = lipgloss.Color("#FBBC05") // Yellow
 	colorError   = lipgloss.Color("#EA4335") // Red
-
-	// Styles
-	logoStyle = lipgloss.NewStyle().
-			Bold(true)
 
 	welcomeBoxStyle = lipgloss.NewStyle().
 			Padding(1, 2)
@@ -70,20 +64,9 @@ var (
 			Foreground(googleGreen).
 			Bold(true)
 
-	toolMsgStyle = lipgloss.NewStyle().
-			Foreground(googleYellow).
-			Italic(true)
-
-	thoughtMsgStyle = lipgloss.NewStyle().
-			Foreground(tipColor).
-			Italic(true)
-
 	errorMsgStyle = lipgloss.NewStyle().
 			Foreground(errorColor).
 			Bold(true)
-
-	statusMsgStyle = lipgloss.NewStyle().
-			Foreground(googleBlue)
 
 	statusBarStyle = lipgloss.NewStyle().
 			Foreground(statusFg).
@@ -248,7 +231,6 @@ type swarmAgent struct {
 	spin       spinner.Model
 	lastActive time.Time
 	resident   bool
-	telemetry  []string
 }
 
 func (a *swarmAgent) update(state, status string) {
@@ -296,7 +278,6 @@ type model struct {
 	historyIdx   int
 	currentInput string
 	swarm        sdk.Swarm
-	err          error
 	width        int
 	height       int
 	loading      bool
@@ -322,7 +303,6 @@ type model struct {
 	// Agent Panel state
 	agents         []*swarmAgent
 	spans          map[string]*uiSpan
-	ticks          int
 	showAgentPanel bool
 	globalSummary  string
 
@@ -472,26 +452,6 @@ func getUserName() string {
 		}
 	}
 	return "Developer"
-}
-
-func getAgentBadge(author string) string {
-	author = strings.ToLower(author)
-	if author == "swarm_agent" || author == "swarm" || author == "agent" || author == "router_agent" {
-		return lipgloss.NewStyle().Foreground(googleBlue).Render("❖ Swarm")
-	} else if author == "input_agent" || author == "input" {
-		return lipgloss.NewStyle().Foreground(googleYellow).Render("⚙ Input")
-	} else if author == "output_agent" || author == "output" {
-		return lipgloss.NewStyle().Foreground(googleRed).Render("🛡 Output")
-	} else if author == "planning_agent" || author == "planning" {
-		return lipgloss.NewStyle().Foreground(googleGreen).Render("📋 Planning")
-	} else if author == "builder_agent" {
-		return lipgloss.NewStyle().Foreground(googleYellow).Render("⚒ Builder")
-	} else if author == "gitops_agent" {
-		return lipgloss.NewStyle().Foreground(googleRed).Render("🚀 GitOps")
-	} else if author == "codebase-investigator" || author == "codebase_investigator" {
-		return lipgloss.NewStyle().Foreground(googleGreen).Render("🔍 Investigator")
-	}
-	return lipgloss.NewStyle().Foreground(agentColor).Render("✦ " + author)
 }
 
 func getHistoryFile() string {
@@ -1803,8 +1763,8 @@ func (m *model) updateViewport() {
 				m.lastActivityRefresh = time.Now()
 			}
 
-			left := welcomeBoxStyle.Copy().Width(leftW - 4).Render(m.welcomeScreen[0])
-			right := infoBoxStyle.Copy().Width(rightW - 4).Render(m.cachedActivity)
+			left := welcomeBoxStyle.Width(leftW - 4).Render(m.welcomeScreen[0])
+			right := infoBoxStyle.Width(rightW - 4).Render(m.cachedActivity)
 
 			renderedMessages = append(renderedMessages, lipgloss.JoinHorizontal(lipgloss.Top, left, right))
 		} else {
@@ -2251,9 +2211,9 @@ func (m model) View() string {
 		}
 		cwdText += fmt.Sprintf(" (%s%s)", m.gitBranch, mod)
 	}
-	p1 := statusBarStyle.Copy().Width(w1).Align(lipgloss.Left).Render(cwdText)
-	p2 := statusBarStyle.Copy().Width(w2).Align(lipgloss.Center).Render("swarm mode")
-	p3 := statusBarStyle.Copy().Width(w3).Align(lipgloss.Right).Render(m.activeModel + " ")
+	p1 := statusBarStyle.Width(w1).Align(lipgloss.Left).Render(cwdText)
+	p2 := statusBarStyle.Width(w2).Align(lipgloss.Center).Render("swarm mode")
+	p3 := statusBarStyle.Width(w3).Align(lipgloss.Right).Render(m.activeModel + " ")
 	statusView := lipgloss.JoinHorizontal(lipgloss.Top, p1, p2, p3)
 
 	return lipgloss.JoinVertical(lipgloss.Left, mainBody, statusView)

@@ -120,7 +120,7 @@ type defaultSwarm struct {
 	inputAgent          agent.Agent
 	subAgentNames       []string
 	agents              map[string]agent.Agent
-	lastAgent           string // Tracks the last agent to respond
+	lastAgent           string  // Tracks the last agent to respond
 	activeEngine        *Engine // The currently executing Engine, used for dynamic task mutability
 	outChan             chan<- ObservableEvent
 }
@@ -212,7 +212,7 @@ func NewSwarm(cfg ...SwarmConfig) (Swarm, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Prevent SQLite 'database is locked' errors by restricting concurrent writes in the Go pool
 	sqlDB, err := db.DB()
 	if err == nil {
@@ -312,7 +312,7 @@ func (m *defaultSwarm) spawnSubtask(ctx tool.Context, req struct {
 	if m.activeEngine == nil {
 		return "", fmt.Errorf("no active execution engine")
 	}
-	
+
 	// Prefix the new ID with the ParentID to ensure uniqueness if needed,
 	// or let the agent handle it. Let's just use what they provide.
 	span := Span{
@@ -326,7 +326,7 @@ func (m *defaultSwarm) spawnSubtask(ctx tool.Context, req struct {
 		Status:       SpanStatusPending,
 	}
 	m.activeEngine.AddSpans(span)
-	
+
 	if m.outChan != nil {
 		m.outChan <- ObservableEvent{
 			Timestamp: time.Now(),
@@ -337,7 +337,7 @@ func (m *defaultSwarm) spawnSubtask(ctx tool.Context, req struct {
 			State:     AgentStatePending,
 		}
 	}
-	
+
 	return fmt.Sprintf("Subtask '%s' (%s) successfully spawned and added to the execution graph.", req.Name, req.ID), nil
 }
 
@@ -603,7 +603,7 @@ func (m *defaultSwarm) Plan(ctx context.Context, prompt string) (*ExecutionGraph
 
 func (m *defaultSwarm) SummarizeState(ctx context.Context, state string) (string, error) {
 	prompt := fmt.Sprintf("You are an observer monitoring a swarm of AI agents. Here is their current activity:\n%s\n\nWrite a single, concise sentence (max 8 words) summarizing their overall progress to the user. Start with an action verb (e.g., 'Investigating the codebase', 'Running tests and debugging').", state)
-	
+
 	respIter := m.fastModel.GenerateContent(ctx, &model.LLMRequest{
 		Contents: []*genai.Content{genai.NewContentFromText(prompt, genai.Role("user"))},
 	}, false)
@@ -734,7 +734,7 @@ func (m *defaultSwarm) Chat(ctx context.Context, prompt string) (<-chan Observab
 			for event := range events {
 				out <- event
 			}
-			
+
 			// If there was an immediate response bundled with the spans, we might want to still show it,
 			// or assume the final span handles the output. Let's rely on the execution graph to provide the final output.
 		} else if graph.ImmediateResponse != "" {
@@ -833,7 +833,7 @@ func (m *defaultSwarm) Execute(ctx context.Context, g *ExecutionGraph, o *Engine
 					}
 					replanCount++
 					out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm", State: AgentStateThinking, Thought: fmt.Sprintf("Replanning effort %d/%d…", replanCount, maxReplans)}
-					
+
 					go func(failureResult string) {
 						newG, err := m.Plan(ctx, "Pivot: "+failureResult)
 						if err == nil {
@@ -874,10 +874,10 @@ func (m *defaultSwarm) executeSpan(ctx context.Context, out chan<- ObservableEve
 
 	// To prevent SQLite "database is locked" errors under massive concurrency,
 	// we use a lightweight in-memory session service for the sub-span runner.
-	// The agent's interactions with the global blackboard (write_state tool) 
+	// The agent's interactions with the global blackboard (write_state tool)
 	// will still correctly route to the global m.sessionSvc.
 	spanSessionSvc := session.InMemoryService()
-	
+
 	_, err := spanSessionSvc.Create(ctx, &session.CreateRequest{
 		AppName:   "swarm-cli",
 		UserID:    m.userID,

@@ -9,7 +9,7 @@ Set BorderRadius 10
 Hide
 Type "./bin/swarm"
 Enter
-Sleep 1s
+Sleep 2s
 Show
 
 Type "Hello, what can you do?"
@@ -22,7 +22,7 @@ Sleep 500ms
 Enter
 Sleep 2s
 Hide
-Sleep 20s
+Sleep 15s
 Show
 Sleep 4s
 
@@ -37,6 +37,11 @@ Enter
 Sleep 2s
 
 Type "/skills"
+Sleep 500ms
+Enter
+Sleep 4s
+
+Type "Say goodnight, Gracie"
 Sleep 500ms
 Enter
 Sleep 4s

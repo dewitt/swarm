@@ -1183,7 +1183,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						out = rOut
 					}
 				}
-				
+
 				// Fix alignment: join the icon and the rendered text horizontally so they line up
 				icon := agentMsgStyle.Render("✦ ")
 				m.messages = append(m.messages, lipgloss.JoinHorizontal(lipgloss.Top, icon, strings.TrimSpace(out)))
@@ -1422,10 +1422,10 @@ func (m *model) fetchGlobalSummary() tea.Cmd {
 		if len(lines) == 0 {
 			return globalSummaryMsg("Waiting for tasks to start...")
 		}
-		
+
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		
+
 		summary, err := m.swarm.SummarizeState(ctx, strings.Join(lines, "\n"))
 		if err != nil {
 			return globalSummaryMsg("Waiting for tasks... (" + err.Error() + ")")
@@ -1797,7 +1797,7 @@ func (m *model) updateViewport() {
 	}
 
 	m.viewport.SetContent(strings.Join(renderedMessages, "\n\n"))
-	
+
 	if wasAtBottom {
 		m.viewport.GotoBottom()
 	}
@@ -1851,7 +1851,7 @@ func (m model) renderAgentPanel() string {
 	if len(m.spans) == 0 {
 		placeholderStyle := lipgloss.NewStyle().Foreground(placeholderFg)
 		// Set a minimum height of 4 lines to reserve space for a row of cards
-		return panelStyle.Height(4).Render(placeholderStyle.Render("Tasks"))
+		return panelStyle.Height(4).Render(placeholderStyle.Render("Task Panel"))
 	}
 
 	// Build tree

@@ -873,12 +873,28 @@ func (m *defaultSwarm) executeSpan(ctx context.Context, out chan<- ObservableEve
 	// in the shared session service, especially during parallel execution.
 	spanSessionID := fmt.Sprintf("%s/%s", m.sessionID, span.ID)
 
-	// Ensure the span session exists in the database
-	_, err := m.sessionSvc.Create(ctx, &session.CreateRequest{
-		AppName:   "swarm-cli",
-		UserID:    m.userID,
-		SessionID: spanSessionID,
-	})
+	// Ensure the span session exists in the database.
+	// Since ADK attempts to immediately create and update the session in the same transaction,
+	// and SQLite under load can still fail with 'database is locked' even with MaxOpenConns=1,
+	// we will manually retry the creation with backoff.
+	var err error
+	maxRetries := 5
+	for i := 0; i < maxRetries; i++ {
+		_, err = m.sessionSvc.Create(ctx, &session.CreateRequest{
+			AppName:   "swarm-cli",
+			UserID:    m.userID,
+			SessionID: spanSessionID,
+		})
+		if err == nil {
+			break
+		}
+		if strings.Contains(err.Error(), "database is locked") {
+			time.Sleep(time.Duration(100*(i+1)) * time.Millisecond)
+			continue
+		}
+		break
+	}
+
 	if err != nil {
 		out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm", SpanID: span.ID, TaskName: span.Name, ParentID: span.ParentID, State: AgentStateError, Error: fmt.Errorf("Failed to initialize session for span: %w", err)}
 		return "Session initialization failed", SpanStatusFailed, false

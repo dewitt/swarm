@@ -495,11 +495,11 @@ func getAgentBadge(author string) string {
 }
 
 func getHistoryFile() string {
-	home, err := os.UserHomeDir()
+	dir, err := sdk.GetConfigDir()
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(home, ".config", "swarm", "history.json")
+	return filepath.Join(dir, "history.json")
 }
 
 func loadHistory() []string {
@@ -2242,7 +2242,7 @@ func (m model) View() string {
 	// Bottom Status Line (no border, full width)
 	w1, w2 := m.width/3, m.width/3
 	w3 := m.width - w1 - w2
-	
+
 	cwdText := " " + m.cwd
 	if m.gitBranch != "" {
 		mod := ""

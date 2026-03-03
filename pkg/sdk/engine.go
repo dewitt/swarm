@@ -258,6 +258,7 @@ func (o *Engine) GetContext() map[string]string {
 	return ctx
 }
 
+// Trajectory represents the recorded timeline and spans of a Swarm execution.
 type Trajectory struct {
 	TraceID       string `json:"trace_id"`
 	Spans         []Span `json:"spans"`

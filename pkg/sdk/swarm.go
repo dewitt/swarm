@@ -207,9 +207,7 @@ func NewSwarm(cfg ...SwarmConfig) (Swarm, error) {
 	googleSearchTool, _ := functiontool.New(functiontool.Config{Name: "google_search"}, googleSearchFunc)
 	replanTool, _ := functiontool.New(functiontool.Config{Name: "request_replan"}, requestReplan)
 
-	home, _ := os.UserHomeDir()
-	dbDir := filepath.Join(home, ".config", "swarm")
-	_ = os.MkdirAll(dbDir, 0755)
+	dbDir, _ := GetConfigDir()
 	dbPath := filepath.Join(dbDir, "sessions.db")
 	dialector := sqlite.Open(dbPath + "?_journal_mode=WAL&_busy_timeout=5000")
 	gormCfg := &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)}
@@ -594,7 +592,7 @@ func (m *defaultSwarm) Plan(ctx context.Context, prompt string) (*ExecutionGraph
 		}
 		jsonStr = strings.TrimSpace(jsonStr)
 	}
-	re := regexp.MustCompile("(?s)\\{.*\\}")
+	re := regexp.MustCompile(`(?s)\{.*\}`)
 	match := re.FindString(jsonStr)
 	if match != "" {
 		jsonStr = match
@@ -1217,11 +1215,11 @@ func (m *defaultSwarm) Rewind(n int) error {
 }
 
 func (m *defaultSwarm) saveTrajectory(traj Trajectory) {
-	home, err := os.UserHomeDir()
+	baseDir, err := GetConfigDir()
 	if err != nil {
 		return
 	}
-	dir := filepath.Join(home, ".config", "swarm", "trajectories")
+	dir := filepath.Join(baseDir, "trajectories")
 	_ = os.MkdirAll(dir, 0755)
 
 	filename := fmt.Sprintf("%s.json", traj.TraceID)

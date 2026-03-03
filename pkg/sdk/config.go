@@ -8,15 +8,17 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// DefaultModel is the fallback model string if no config is present.
+const DefaultModel = "gemini-2.5-flash"
+
 // Config represents the global user configuration for the Swarm CLI.
 type Config struct {
 	Model string `yaml:"model"`
 	// Additional global preferences (e.g. editor, default skills dir) can go here.
 }
 
-// DefaultConfigPath returns the path to the global configuration file.
-// It creates the ~/.config/swarm directory if it does not exist.
-func DefaultConfigPath() (string, error) {
+// GetConfigDir returns the directory for Swarm configuration and state, creating it if necessary.
+func GetConfigDir() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
@@ -27,7 +29,16 @@ func DefaultConfigPath() (string, error) {
 		return "", fmt.Errorf("failed to create config directory: %w", err)
 	}
 
-	return filepath.Join(configDir, "config.yaml"), nil
+	return configDir, nil
+}
+
+// DefaultConfigPath returns the path to the global configuration file.
+func DefaultConfigPath() (string, error) {
+	dir, err := GetConfigDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "config.yaml"), nil
 }
 
 // LoadConfig reads the global configuration file.
@@ -41,7 +52,7 @@ func LoadConfig() (*Config, error) {
 	if err != nil {
 		if os.IsNotExist(err) {
 			// Return a default config if it doesn't exist
-			return &Config{Model: "gemini-3.1-pro-preview"}, nil
+			return &Config{Model: DefaultModel}, nil
 		}
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
@@ -53,7 +64,7 @@ func LoadConfig() (*Config, error) {
 
 	// Fallback to default if somehow blank
 	if cfg.Model == "" {
-		cfg.Model = "gemini-3.1-pro-preview"
+		cfg.Model = DefaultModel
 	}
 
 	return &cfg, nil
@@ -80,17 +91,11 @@ func SaveConfig(cfg *Config) error {
 
 // MemoryPath returns the path to the global memory file.
 func MemoryPath() (string, error) {
-	home, err := os.UserHomeDir()
+	dir, err := GetConfigDir()
 	if err != nil {
 		return "", err
 	}
-
-	configDir := filepath.Join(home, ".config", "swarm")
-	if err := os.MkdirAll(configDir, 0755); err != nil {
-		return "", fmt.Errorf("failed to create config directory: %w", err)
-	}
-
-	return filepath.Join(configDir, "memory.md"), nil
+	return filepath.Join(dir, "memory.md"), nil
 }
 
 // SaveMemory appends a fact or preference to the global memory file.

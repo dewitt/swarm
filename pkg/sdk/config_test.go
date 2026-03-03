@@ -10,15 +10,14 @@ import (
 )
 
 func TestConfigSaveAndLoad(t *testing.T) {
-	// Override the HOME environment variable so we don't mess up the actual user's config
+	// Use t.Setenv so we don't permanently mess up the actual user's config
 	tempHome := t.TempDir()
-	os.Setenv("HOME", tempHome)
-	defer os.Unsetenv("HOME")
+	t.Setenv("HOME", tempHome)
 
 	// Test default load
 	cfg, err := sdk.LoadConfig()
 	assert.NoError(t, err)
-	assert.Equal(t, "gemini-3.1-pro-preview", cfg.Model)
+	assert.Equal(t, sdk.DefaultModel, cfg.Model)
 
 	// Test save
 	cfg.Model = "gemini-2.5-pro"

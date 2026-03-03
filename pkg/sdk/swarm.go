@@ -1109,7 +1109,7 @@ func (m *defaultSwarm) executeSpan(ctx context.Context, out chan<- ObservableEve
 	m.lastAgent = targetAgent.Name()
 
 	// If there was a hard error, skip Output Agent and immediately return with failed status and replan flag
-	if strings.Contains(finalText, "\n\nERROR: ") && needsReplan {
+	if (strings.Contains(finalText, "\n\nERROR: ") || strings.Contains(finalText, "command not found")) && needsReplan {
 		m.appendEvent(ctx, "model", fmt.Sprintf("[%s]: %s", targetAgent.Name(), finalText))
 		out <- ObservableEvent{Timestamp: time.Now(), AgentName: targetAgent.Name(), SpanID: span.ID, TaskName: span.Name, ParentID: span.ParentID, State: AgentStateError, FinalContent: finalText}
 		return finalText, SpanStatusFailed, true

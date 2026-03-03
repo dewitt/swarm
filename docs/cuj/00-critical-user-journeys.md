@@ -18,6 +18,8 @@ ensuring the tool remains user-centric, frictionless, and powerful.
      validation, and GitOps branching strategies.
 1. **[Agentic Test Generation in CI](./05-agentic-test-generation.md)**
    - **Focus:** Headless execution, native GitHub Actions integration, and asynchronous distributed PR creation.
+1. **[Multi-Model Code Review and Consensus](./06-multi-model-code-review.md)**
+   - **Focus:** Diverse model architectures (Codex, Claude, Gemini) collaborating natively on GitHub PRs to debate implementations and reach actionable consensus.
 
 ---
 
@@ -72,13 +74,6 @@ Claude Code, or Codex, we should explore the following user journeys:
 - **Key Features:** Distributed task execution, supervisor-worker multi-agent
   patterns, complex state management.
 
-### 9. Natural Language "Review & Audit"
 
-- **Concept:** Before submitting a Pull Request, a developer asks the CLI to
-  perform a security and performance audit. An "Auditor Agent" reviews the
-  diff, flags potential vulnerabilities (e.g., SQL injection risks), and
-  generates inline code suggestions to fix them.
-- **Key Features:** Specialized knowledge domains, pre-commit hooks, diff
-  analysis.
 
 

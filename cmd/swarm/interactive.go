@@ -1579,8 +1579,15 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 
 		for _, s := range sessions {
 			id := lipgloss.NewStyle().Foreground(primaryColor).Render(s.ID)
+			summaryStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#888888")).Italic(true)
 			content := fmt.Sprintf("- %s (Last Updated: %s)", id, s.UpdatedAt)
+			if s.Summary != "" && s.Summary != s.ID {
+				// Clean up the summary text
+				cleanSummary := strings.ReplaceAll(s.Summary, "\n", " ")
+				content += fmt.Sprintf("\n  %s", summaryStyle.Render(cleanSummary))
+			}
 			lines = append(lines, content)
+			lines = append(lines, "") // Add a blank line between sessions for readability
 		}
 
 		icon := agentMsgStyle.Render("✦ ")

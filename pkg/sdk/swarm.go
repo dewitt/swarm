@@ -548,8 +548,8 @@ func (m *defaultSwarm) ListSessions(ctx context.Context) ([]SessionInfo, error) 
 		if err == nil && event.Content != "" {
 			summary = event.Content
 		}
-		if len(summary) > 40 {
-			summary = summary[:37] + "..."
+		if len(summary) > 80 {
+			summary = summary[:77] + "..."
 		}
 		infos = append(infos, SessionInfo{ID: s.ID(), UpdatedAt: s.LastUpdateTime().Format("2006-01-02 15:04:05"), Summary: summary})
 	}

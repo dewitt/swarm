@@ -12,11 +12,12 @@ ensuring the tool remains user-centric, frictionless, and powerful.
 1. **[Deploying an Agent to Google Agent Engine](./02-deploy-to-google-agent-engine.md)**
    - **Focus:** Dynamic Skills, GitOps workflows, and CI/CD generation.
 1. **[Swarm Collaboration on System Design](./03-swarm-design-collaboration.md)**
-   - **Focus:** Native multi-agent orchestration, specialized roles, and
-     transparent collaboration.
+   - **Focus:** Git-native decentralized multi-agent orchestration, specialized roles (`ROLES.md`), and asynchronous peer review.
 1. **[Autonomous Swarm-based Skill Refinement](./04-swarm-skill-refinement.md)**
    - **Focus:** Self-updating skills, deep web research, human-in-the-loop
      validation, and GitOps branching strategies.
+1. **[Agentic Test Generation in CI](./05-agentic-test-generation.md)**
+   - **Focus:** Headless execution, native GitHub Actions integration, and asynchronous distributed PR creation.
 
 ---
 
@@ -80,11 +81,4 @@ Claude Code, or Codex, we should explore the following user journeys:
 - **Key Features:** Specialized knowledge domains, pre-commit hooks, diff
   analysis.
 
-### 10. Agentic Test Generation in CI
 
-- **Concept:** While the primary UI is the terminal, the `swarm` binary also
-  runs in CI/CD. When a user pushes a feature without tests, a headless
-  instance of the CLI detects the omission, generates missing unit and
-  integration tests, and automatically commits them to the branch if they
-  pass.
-- **Key Features:** Headless execution, test synthesis, CI/CD integration.

@@ -1,72 +1,60 @@
-# CUJ: Swarm Collaboration on System Design
+# CUJ: Git-Native Swarm Collaboration on System Design
 
 ## User Persona
 
-Sam is a software architect starting a greenfield project: a new microservices
-backend for a retail application. Instead of brainstorming alone, Sam wants to
-use a swarm of specialized AI agents to debate and draft the initial system
-design document.
+Sam is an architect starting a greenfield project: designing a multiplayer, old-school ascii roguelike similar to Nethack. 
+
+Instead of brainstorming alone or relying on a single, monolithic LLM prompt that quickly loses context, Sam wants to orchestrate a long-running, asynchronous conversation across the most capable LLM models on the planet. Sam wants them to write, review, critique, improve, and polish a design document better than any single human or AI could alone.
 
 ## Journey
 
 ### 1. Initiating the Swarm Request
 
-Sam opens their terminal in an empty repository and launches the CLI.
+Sam opens their terminal in an empty repository. The repository contains a recently added `ROLES.md` file that defines two personas: `Architect` (optimized for Claude 3.5 Sonnet) and `Reviewer` (optimized for Gemini 2.5 Pro).
 
 ```bash
-agents
+swarm -p "Write a design doc for a old-school ascii roguelike like nethack, but design it to support multiplayer. Engage the Architect and Reviewer roles to iterate on this until the networking latency mitigations are flawless."
 ```
 
-> **Sam:** I need to design a new microservices architecture for a retail
-> backend. Please ask a swarm of agents to collaborate on this design. We need
-> to focus on database choices, API gateway patterns, and security.
+### 2. The Concierge and Task Breakdown
 
-### 2. Orchestrating the Swarm
+The Swarm CLI acts as the initial "Mayor" or Concierge. It realizes this is a macro-task requiring coordination. Rather than spinning up a fragile local state machine, it offloads coordination to the universally accepted message bus: GitHub.
 
-The internal Swarm Agent determines that this requires complex,
-multi-perspective generation. It uses the `Swarm Skill` to instantiate three
-distinct internal agents:
+> **Swarm CLI:** Understood. This requires a multi-turn peer review. 
+> I am creating a tracking issue on GitHub: `#1 Design Multiplayer Nethack Architecture`.
+> I am assigning the `Architect` role to draft the initial proposal.
 
-1. **The Architect:** Focuses on scalability and data flow.
-1. **The Security Expert:** Focuses on authentication, authorization, and
-   network isolation.
-1. **The Data Engineer:** Focuses on database schema, caching, and state
-   management.
+### 3. Asynchronous Drafting (The Architect)
 
-> **Swarm CLI:** Instantiating a design swarm (Architect, Security Expert,
-> Data Engineer)... I will now have them collaborate on a markdown document
-> called `system-design.md`.
+A headless, background Swarm agent adopting the `Architect` persona wakes up. It clones the repo, creates a branch `design/nethack-multiplayer`, and spends several minutes drafting `architecture.md`.
 
-### 3. Transparent Collaboration
+Once complete, it uses the standard `gh pr create` CLI tool to open a Pull Request.
 
-The CLI UI multiplexes the output of the agents, giving Sam a transparent view
-into the debate without overwhelming them.
+> **[Architect] via GitHub PR Body:**
+> "I have drafted the initial architecture. I've chosen a client-prediction UDP model for movement to maintain the fast-paced roguelike feel over a network. Tagging the `@Reviewer` for critique on the state-sync mechanisms."
 
-> **\[Architect\]:** Proposing an API Gateway pattern routing to three core
-> services: Inventory (Go), Users (Node), and Orders (Go). **\[Data
-> Engineer\]:** For Inventory, we should use a NoSQL database like DynamoDB
-> for high read throughput, but Orders needs ACID compliance, so PostgreSQL is
-> better. **\[Security Expert\]:** We must ensure the API Gateway terminates
-> TLS and handles JWT validation before passing traffic to the internal VPC.
+### 4. Adversarial Peer Review (The Reviewer)
 
-### 4. Synthesis and Review
+Another Swarm agent process, watching repository events and adopting the hyper-critical `Reviewer` role, receives the GitHub notification. It checks out the PR.
 
-After the swarm concludes its debate, the Swarm Agent synthesizes the
-agreed-upon points into the requested file.
+Because it explicitly adopted the `Reviewer` persona defined in `ROLES.md`, its underlying model approaches the document skeptically. It uses the `gh pr review` tool to leave inline comments directly on the Markdown patch.
 
-> **Swarm CLI:** The swarm has reached a consensus. I have written the
-> complete architecture proposal to `system-design.md`, which includes:
->
-> - Component diagram definitions (Mermaid JS)
-> - Database choices per service (PostgreSQL, DynamoDB)
-> - Authentication flow (JWT via API Gateway)
->
-> Would you like me to have the Architect agent draft the initial OpenAPI
-> specifications for these services based on the design?
+> **[Reviewer] via GitHub PR Comment (Line 45):**
+> "Client prediction for an ascii grid is dangerous. Nethack relies on explicit, deterministic turn-orders (e.g., speed systems). If a player with high ping moves, how do you rollback visual grid updates without intense rubber-banding? Consider a locked-step turn buffer instead."
 
-### 5. Iteration
+### 5. Iteration and Polish
 
-Sam is impressed and continues the workflow.
+The `Architect` wakes up upon receiving the review comment. 
 
-> **Sam:** Yes, generate the OpenAPI specs, and have the Security Expert
-> review them before saving.
+> **[Architect] via GitHub PR Comment:**
+> "Excellent point on deterministic speed systems. I will abandon pure client prediction and rewrite the networking section to utilize a dynamic lock-step buffer with 100ms ticks."
+
+The `Architect` pushes a new commit to the branch. The `Reviewer` approves the PR.
+
+### 6. The Handoff
+
+Sam comes back from a coffee break. They open their browser to GitHub and see a polished, peer-reviewed, merged design document that accounts for complex edge cases they hadn't even considered. 
+
+The task is marked complete in the CLI.
+
+> **Swarm CLI:** The Architect and Reviewer have reached consensus. PR #2 has been merged. Would you like me to spawn a `Builder` agent to start scaffolding the UDP server based on the approved architecture?

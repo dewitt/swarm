@@ -936,9 +936,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 				if m.state == stateShell {
 					m.loading = true
+					m.globalSummary = "Running shell command..."
 					ctx, cancel := context.WithCancel(context.Background())
 					m.cancelChat = cancel
-					cmds = append(cmds, m.runShellCommand(ctx, input))
+					cmds = append(cmds, m.runShellCommand(ctx, input), m.spinner.Tick)
 				} else if strings.HasPrefix(input, "/") {
 					parts := strings.Fields(input)
 					if len(parts) > 0 && (parts[0] == "/exit" || parts[0] == "/quit") {
@@ -950,14 +951,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 				} else if strings.HasPrefix(input, "!") {
 					m.loading = true
+					m.globalSummary = "Running shell command..."
 					ctx, cancel := context.WithCancel(context.Background())
 					m.cancelChat = cancel
-					cmds = append(cmds, m.runShellCommand(ctx, strings.TrimSpace(strings.TrimPrefix(input, "!"))))
+					cmds = append(cmds, m.runShellCommand(ctx, strings.TrimSpace(strings.TrimPrefix(input, "!"))), m.spinner.Tick)
 				} else {
-					m.loading = true
-					ctx, cancel := context.WithCancel(context.Background())
-					m.cancelChat = cancel
-					cmds = append(cmds, m.callSDK(ctx, input))
+					m.inputQueue = append(m.inputQueue, trimmedInput)
+					cmds = append(cmds, m.dequeueAndRun())
 				}
 				m.updateViewport()
 			}
@@ -1388,7 +1388,7 @@ func (m *model) dequeueAndRun() tea.Cmd {
 	m.cancelChat = cancel
 	return tea.Batch(
 		m.callSDK(ctx, nextInput),
-		tea.Tick(3*time.Second, func(t time.Time) tea.Msg { return triggerGlobalSummaryMsg{} }),
+		tea.Tick(100*time.Millisecond, func(t time.Time) tea.Msg { return triggerGlobalSummaryMsg{} }),
 		m.spinner.Tick,
 	)
 }
@@ -1427,7 +1427,7 @@ func (m *model) fetchGlobalSummary() tea.Cmd {
 		
 		summary, err := m.swarm.SummarizeState(ctx, strings.Join(lines, "\n"))
 		if err != nil {
-			return globalSummaryMsg("")
+			return globalSummaryMsg("Waiting for tasks... (" + err.Error() + ")")
 		}
 		return globalSummaryMsg(summary)
 	}

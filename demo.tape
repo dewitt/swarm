@@ -20,9 +20,9 @@ Sleep 8s
 Type "How many Go files are in this repository?"
 Sleep 500ms
 Enter
-Sleep 15s
+Sleep 20s
 
-Type "! ls -F"
+Type "! ls -l"
 Sleep 500ms
 Enter
 Sleep 3s
@@ -35,9 +35,9 @@ Sleep 2s
 Type "/skills"
 Sleep 500ms
 Enter
-Sleep 4s
+Sleep 10s
 
-Type "Say goodnight, Gracie"
+Type "What's your superpower?"
 Sleep 500ms
 Enter
-Sleep 4s
+Sleep 15s

@@ -1,0 +1,166 @@
+package eval
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"io/fs"
+	"os"
+	"path/filepath"
+
+	"github.com/dewitt/swarm/pkg/sdk"
+	"google.golang.org/genai"
+)
+
+// Scenario represents a single end-to-end evaluation
+type Scenario struct {
+	ID          string
+	Name        string
+	FixturePath string
+	Prompt      string
+	Rubric      string
+}
+
+// Result represents the outcome of an evaluation
+type Result struct {
+	ScenarioName string
+	Passed       bool
+	Reasoning    string
+	Trajectory   string
+}
+
+// Evaluator is the engine that runs test scenarios
+type Evaluator struct {
+	judgeModel *genai.Client
+}
+
+// NewEvaluator creates a new testing evaluator
+func NewEvaluator(apiKey string) (*Evaluator, error) {
+	ctx := context.Background()
+	client, err := genai.NewClient(ctx, &genai.ClientConfig{APIKey: apiKey})
+	if err != nil {
+		return nil, err
+	}
+	return &Evaluator{
+		judgeModel: client,
+	}, nil
+}
+
+// copyDir recursively copies a directory tree
+func copyDir(src string, dst string) error {
+	src = filepath.Clean(src)
+	dst = filepath.Clean(dst)
+	return filepath.Walk(src, func(path string, info fs.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		relPath, _ := filepath.Rel(src, path)
+		dstPath := filepath.Join(dst, relPath)
+		if info.IsDir() {
+			return os.MkdirAll(dstPath, info.Mode())
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(dstPath, data, info.Mode())
+	})
+}
+
+func (e *Evaluator) Run(ctx context.Context, s Scenario) (*Result, error) {
+	// 1. Create temporary sandbox
+	sandbox, err := os.MkdirTemp("", "swarm-eval-*")
+	if err != nil {
+		return nil, err
+	}
+	defer os.RemoveAll(sandbox)
+
+	// Copy standard fixture in sandbox
+	if err := copyDir(s.FixturePath, sandbox); err != nil {
+		return nil, fmt.Errorf("failed to copy fixture: %w", err)
+	}
+
+	// Make sure we have the skills directory copied over
+	originalWd, _ := os.Getwd()
+	skillsSrc := filepath.Join(originalWd, "..", "..", "skills")
+	if err := copyDir(skillsSrc, filepath.Join(sandbox, "skills")); err != nil {
+		return nil, fmt.Errorf("failed to copy skills: %w", err)
+	}
+
+	// Ensure execution uses the sandbox HOME and CWD
+	os.Setenv("HOME", sandbox)
+	os.Chdir(sandbox)
+	defer os.Chdir(originalWd)
+
+	// 3. Instantiate Swarm Engine in the sandbox
+	cfg := sdk.SwarmConfig{
+		Debug: true,
+	}
+	instance, err := sdk.NewSwarm(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	respChan, err := instance.Chat(ctx, s.Prompt)
+	if err != nil {
+		return nil, err
+	}
+
+	// Drain telemetry
+	var trajectory string
+	for event := range respChan {
+		if event.FinalContent != "" {
+			trajectory += fmt.Sprintf("[%s] %s: %s\n", event.AgentName, event.State, event.FinalContent)
+		} else if event.ToolName != "" {
+			trajectory += fmt.Sprintf("[%s] %s: Tool %s(%v)\n", event.AgentName, event.State, event.ToolName, event.ToolArgs)
+		} else if event.Thought != "" {
+			trajectory += fmt.Sprintf("[%s] %s: %s\n", event.AgentName, event.State, event.Thought)
+		}
+	}
+
+	// 4. Capture Sandbox Diff (For simplicity, we check if there are changes)
+	// Or we just feed the Trajectory to the LLM Judge
+
+	// 5. Judge with LLM
+	evalPrompt := fmt.Sprintf(`You are an expert autonomous agent evaluator. 
+Review the following execution trace of an agent completing a software task.
+
+SCENARIO: %s
+TASK: %s
+RUBRIC: %s
+
+TRAJECTORY:
+%s
+
+Analyze the trace against the rubric. Output a JSON object exactly matching this schema:
+{"passed": true|false, "reasoning": "your detailed explanation"}
+`, s.Name, s.Prompt, s.Rubric, trajectory)
+
+	judgeResp, err := e.judgeModel.Models.GenerateContent(ctx, "gemini-2.5-pro", genai.Text(evalPrompt), &genai.GenerateContentConfig{
+		ResponseMIMEType: "application/json",
+	})
+	if err != nil {
+		return nil, fmt.Errorf("judge failed: %w", err)
+	}
+
+	if len(judgeResp.Candidates) == 0 || len(judgeResp.Candidates[0].Content.Parts) == 0 {
+		return nil, fmt.Errorf("judge returned empty response")
+	}
+
+	var evalResult struct {
+		Passed    bool   `json:"passed"`
+		Reasoning string `json:"reasoning"`
+	}
+
+	responseText := judgeResp.Candidates[0].Content.Parts[0].Text
+	if err := json.Unmarshal([]byte(responseText), &evalResult); err != nil {
+		return nil, fmt.Errorf("judge returned malformed json: %s", responseText)
+	}
+
+	return &Result{
+		ScenarioName: s.Name,
+		Passed:       evalResult.Passed,
+		Reasoning:    evalResult.Reasoning,
+		Trajectory:   trajectory,
+	}, nil
+}

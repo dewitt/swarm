@@ -109,6 +109,29 @@ Interface (TUI):
 From here, you can start conversing with the internal Swarm Agent, scaffold
 new projects, or deploy existing agents.
 
+## E2E Evaluations (LLM-as-a-Judge)
+
+Swarm contains a native end-to-end evaluation harness that tests its autonomous capabilities against real-world scenarios. Instead of using brittle unit tests, these evaluations run Swarm in an isolated, sandboxed environment and grade the entire resulting "execution trajectory" using an LLM configured with a strict grading rubric.
+
+To run the full evaluation suite:
+
+```bash
+# Requires an active AI API key
+export GOOGLE_API_KEY="..."
+
+# Run all scenarios
+swarm eval
+```
+
+To run a single, specific scenario (useful for debugging):
+
+```bash
+# Run a specific scenario by ID
+swarm eval scenario_1
+```
+
+If you wish to add a new scenario, define its metadata (Name, Prompt, Rubric, and Fixture Path) in `pkg/eval/scenarios.go` and add the sandbox code fixture to the `eval/fixtures/` directory. Be sure to use the `--debug` flag natively if you need to debug the AST parsing logic behind the harness.
+
 ## Documentation & Philosophy
 
 - **[Project Philosophy](PHILOSOPHY.md)**: Read our core beliefs about thin

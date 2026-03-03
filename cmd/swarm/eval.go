@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/dewitt/swarm/pkg/eval"
 	"github.com/spf13/cobra"
@@ -61,7 +62,18 @@ If no scenario_id is provided, all scenarios will be run.`,
 				continue
 			}
 
-			fmt.Printf("    Trajectory Summary: %s\n", res.TrajectorySummary)
+			fmt.Printf("    Trajectory:\n")
+			lines := strings.Split(res.Trajectory, "\n")
+			for _, line := range lines {
+				if line == "" {
+					continue
+				}
+				if len(line) > 120 {
+					line = line[:117] + "..."
+				}
+				fmt.Printf("      %s\n", line)
+			}
+
 			if res.Passed {
 				fmt.Println("    PASS")
 				passed++

@@ -23,11 +23,10 @@ type Scenario struct {
 
 // Result represents the outcome of an evaluation
 type Result struct {
-	ScenarioName      string
-	Passed            bool
-	Reasoning         string
-	TrajectorySummary string
-	Trajectory        string
+	ScenarioName string
+	Passed       bool
+	Reasoning    string
+	Trajectory   string
 }
 
 // Evaluator is the engine that runs test scenarios
@@ -140,7 +139,7 @@ TRAJECTORY:
 %s
 
 Analyze the trace against the rubric. Output a JSON object exactly matching this schema:
-{"passed": true|false, "reasoning": "your detailed explanation why the agent passed/failed", "trajectory_summary": "a short summary of the steps the agent to took"}
+{"passed": true|false, "reasoning": "your detailed explanation why the agent passed/failed"}
 `, s.Name, s.Prompt, s.Rubric, trajectory)
 
 	judgeResp, err := e.judgeModel.Models.GenerateContent(ctx, "gemini-2.5-pro", genai.Text(evalPrompt), &genai.GenerateContentConfig{
@@ -155,9 +154,8 @@ Analyze the trace against the rubric. Output a JSON object exactly matching this
 	}
 
 	var evalResult struct {
-		Passed            bool   `json:"passed"`
-		Reasoning         string `json:"reasoning"`
-		TrajectorySummary string `json:"trajectory_summary"`
+		Passed    bool   `json:"passed"`
+		Reasoning string `json:"reasoning"`
 	}
 
 	responseText := judgeResp.Candidates[0].Content.Parts[0].Text
@@ -166,10 +164,9 @@ Analyze the trace against the rubric. Output a JSON object exactly matching this
 	}
 
 	return &Result{
-		ScenarioName:      s.Name,
-		Passed:            evalResult.Passed,
-		Reasoning:         evalResult.Reasoning,
-		TrajectorySummary: evalResult.TrajectorySummary,
-		Trajectory:        trajectory,
+		ScenarioName: s.Name,
+		Passed:       evalResult.Passed,
+		Reasoning:    evalResult.Reasoning,
+		Trajectory:   trajectory,
 	}, nil
 }

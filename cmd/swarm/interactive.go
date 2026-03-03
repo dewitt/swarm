@@ -1182,7 +1182,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						out = rOut
 					}
 				}
-				m.messages = append(m.messages, agentMsgStyle.Render("✦\n")+strings.TrimSpace(out))
+				
+				// Fix alignment: join the icon and the rendered text horizontally so they line up
+				icon := agentMsgStyle.Render("✦ ")
+				m.messages = append(m.messages, lipgloss.JoinHorizontal(lipgloss.Top, icon, strings.TrimSpace(out)))
 			} else {
 				a.update("idle", "Completed task")
 			}
@@ -1243,7 +1246,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					out = rOut
 				}
 			}
-			m.messages = append(m.messages, agentMsgStyle.Render("✦\n")+strings.TrimSpace(out))
+			icon := agentMsgStyle.Render("✦ ")
+			m.messages = append(m.messages, lipgloss.JoinHorizontal(lipgloss.Top, icon, strings.TrimSpace(out)))
 		}
 		m.updateViewport()
 		return m, m.dequeueAndRun()

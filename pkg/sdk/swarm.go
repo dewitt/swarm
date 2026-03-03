@@ -212,6 +212,13 @@ func NewSwarm(cfg ...SwarmConfig) (Swarm, error) {
 	if err != nil {
 		return nil, err
 	}
+	
+	// Prevent SQLite 'database is locked' errors by restricting concurrent writes in the Go pool
+	sqlDB, err := db.DB()
+	if err == nil {
+		sqlDB.SetMaxOpenConns(1)
+	}
+
 	sessionSvc, err := database.NewSessionService(dialector, gormCfg)
 	if err != nil {
 		return nil, err
@@ -867,11 +874,15 @@ func (m *defaultSwarm) executeSpan(ctx context.Context, out chan<- ObservableEve
 	spanSessionID := fmt.Sprintf("%s/%s", m.sessionID, span.ID)
 
 	// Ensure the span session exists in the database
-	_, _ = m.sessionSvc.Create(ctx, &session.CreateRequest{
+	_, err := m.sessionSvc.Create(ctx, &session.CreateRequest{
 		AppName:   "swarm-cli",
 		UserID:    m.userID,
 		SessionID: spanSessionID,
 	})
+	if err != nil {
+		out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm", SpanID: span.ID, TaskName: span.Name, ParentID: span.ParentID, State: AgentStateError, Error: fmt.Errorf("Failed to initialize session for span: %w", err)}
+		return "Session initialization failed", SpanStatusFailed, false
+	}
 
 	spanRunner, _ := runner.New(runner.Config{
 		AppName:        "swarm-cli",

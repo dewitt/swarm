@@ -1385,6 +1385,7 @@ func (m *model) dequeueAndRun() tea.Cmd {
 	return tea.Batch(
 		m.callSDK(ctx, nextInput),
 		tea.Tick(3*time.Second, func(t time.Time) tea.Msg { return triggerGlobalSummaryMsg{} }),
+		m.spinner.Tick,
 	)
 }
 
@@ -2144,9 +2145,27 @@ func (m model) View() string {
 	// Status line height
 	statusHeight := 1
 
+	// Autocomplete Box
+	acView := ""
+	if m.acActive && len(m.acMatches) > 0 {
+		var lines []string
+		for i, match := range m.acMatches {
+			if i == m.acIndex {
+				lines = append(lines, lipgloss.NewStyle().Foreground(lipgloss.Color("0")).Background(primaryColor).Render(" "+match+" "))
+			} else {
+				lines = append(lines, " "+match+" ")
+			}
+		}
+		if m.acHasMore {
+			lines = append(lines, " ... ")
+		}
+		acView = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(primaryColor).Padding(0, 1).Render(strings.Join(lines, "\n"))
+	}
+	acHeight := lipgloss.Height(acView)
+
 	// Recalculate viewport height to fill remaining space
 	// Subtract 2 for the viewportStyle's own top/bottom borders
-	m.viewport.Height = m.height - agentPanelHeight - inputHeight - statusHeight - 2
+	m.viewport.Height = m.height - agentPanelHeight - inputHeight - acHeight - statusHeight - 2
 	if m.viewport.Height < 1 {
 		m.viewport.Height = 1
 	}
@@ -2154,8 +2173,13 @@ func (m model) View() string {
 	// Output Box (Viewport) with border
 	vpView := viewportStyle.Width(m.width - 2).Height(m.viewport.Height).Render(m.viewport.View())
 
-	// Main body is just the vertical stack of the three bordered sections
-	mainBody := lipgloss.JoinVertical(lipgloss.Left, agentPanelView, vpView, inputView)
+	// Main body is just the vertical stack of the sections
+	var mainBody string
+	if acView != "" {
+		mainBody = lipgloss.JoinVertical(lipgloss.Left, agentPanelView, vpView, acView, inputView)
+	} else {
+		mainBody = lipgloss.JoinVertical(lipgloss.Left, agentPanelView, vpView, inputView)
+	}
 
 	// Bottom Status Line (no border, full width)
 	w1, w2 := m.width/3, m.width/3

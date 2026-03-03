@@ -15,7 +15,13 @@ We are excited to announce the **v0.02** release of Swarm. This release focuses 
 - **Autocomplete Enter-Key Bypass:** Fixed a UX friction point where `/<command>` inputs trapped users in autocomplete suggestions, requiring a double `Enter` press to execute.
 - **Terminal Escaped Byte Scrubbing:** Introduced buffer sanitizers to prevent stray SGR mouse sequence bytes (`[<65...`) from bleeding into the chat prompt during aggressive scrolling.
 - **Enriched Session History:** The `/sessions` command now extracts and previews up to 80 characters of the user's primary intent, rendering a much clearer ledger of past work.
-- **Error Line Wrapping:** Fatal application errors now natively respect the active terminal's layout width and cleanly wrap text instead of truncating into the void.
+	- **Error Line Wrapping:** Fatal application errors now natively respect the active terminal's layout width and cleanly wrap text instead of truncating into the void.
+
+### 4. Code Hygiene and Structural Cleanup
+- **SDK Path Resolution:** Deprecated manual un-guarded `~/.config/swarm` string concatenations in favor of a unified `sdk.GetConfigDir()` helper, standardizing SQLite and trajectory storage safely.
+- **Terminology Alignment:** Executed a global terminology pass to solidify the "Swarm Operator" paradigm over legacy "Engineering Manager" metaphors in all markdown and system prompts. Stripped unnecessary "scare quotes" from core concepts (Zero-HITL, Agent Cards).
+- **Static Analysis & Linters:** Performed a deep codebase audit using strict `staticcheck` and `golangci-lint` passes. Resolved leaking regex literals, dead styles, and unused local UI state variables.
+- **Test Sandbox Safety:** Replaced dirty `os.Setenv` test configurations with `t.Setenv(k, v)` to guarantee parallel execution safety across the core SDK layers.
 
 ---
 

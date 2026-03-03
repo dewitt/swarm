@@ -1840,14 +1840,17 @@ func (m *model) updateInputStyle() {
 }
 
 func (m model) renderAgentPanel() string {
+	panelStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(borderColor).
+		Padding(0, 1).
+		MarginBottom(1).
+		Width(m.width - 2)
+
 	if len(m.spans) == 0 {
-		return lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(borderColor).
-			Padding(0, 1).
-			MarginBottom(1).
-			Width(m.width - 2).
-			Render("⚪ Waiting for tasks...")
+		placeholderStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240")).Italic(true)
+		// Set a minimum height of 5 lines to reserve space for a row of high-fidelity cards
+		return panelStyle.Height(5).Render(placeholderStyle.Render("Active Tasks"))
 	}
 
 	// Build tree

@@ -2242,7 +2242,16 @@ func (m model) View() string {
 	// Bottom Status Line (no border, full width)
 	w1, w2 := m.width/3, m.width/3
 	w3 := m.width - w1 - w2
-	p1 := statusBarStyle.Copy().Width(w1).Align(lipgloss.Left).Render(" " + m.cwd)
+	
+	cwdText := " " + m.cwd
+	if m.gitBranch != "" {
+		mod := ""
+		if m.gitModified {
+			mod = "*"
+		}
+		cwdText += fmt.Sprintf(" (%s%s)", m.gitBranch, mod)
+	}
+	p1 := statusBarStyle.Copy().Width(w1).Align(lipgloss.Left).Render(cwdText)
 	p2 := statusBarStyle.Copy().Width(w2).Align(lipgloss.Center).Render("swarm mode")
 	p3 := statusBarStyle.Copy().Width(w3).Align(lipgloss.Right).Render(m.activeModel + " ")
 	statusView := lipgloss.JoinHorizontal(lipgloss.Top, p1, p2, p3)

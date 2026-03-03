@@ -39,6 +39,8 @@ Sleep 2s
 Type "/skills"
 Sleep 500ms
 Enter
+Sleep 500ms
+Enter
 Sleep 4s
 
 Type "Say goodnight, Gracie"

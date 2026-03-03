@@ -904,7 +904,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.textArea.CursorEnd()
 				m.acActive = false
 				m.acMode = ""
-				// Continue to submit
+				return m, nil
 			}
 
 			input := m.textArea.Value()
@@ -1741,6 +1741,8 @@ func (m *model) updateViewport() {
 		return
 	}
 
+	wasAtBottom := m.viewport.AtBottom() || m.viewport.YOffset == 0
+
 	// Prepare the dynamic message list
 	var renderedMessages []string
 	for _, msg := range m.messages {
@@ -1794,7 +1796,10 @@ func (m *model) updateViewport() {
 	}
 
 	m.viewport.SetContent(strings.Join(renderedMessages, "\n\n"))
-	m.viewport.GotoBottom()
+	
+	if wasAtBottom {
+		m.viewport.GotoBottom()
+	}
 }
 
 func (m *model) updateInputStyle() {

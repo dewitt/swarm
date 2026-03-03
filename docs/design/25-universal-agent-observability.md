@@ -57,6 +57,17 @@ If an agent (like ADK Python) uses its own local SQLite database for session his
 2. **The Output Normalizer:** Build an intermediate SDK interface (`TelemetrySink`) that accepts raw byte streams or JSON blobs from these adapters and maps them to Swarm's internal `Span` and `Trajectory` schemas.
 3. **Reference Implementations:** Create official Swarm Skills for `claude-code` and `gemini-cli` to prove the viability of scraping and adapting their native observability footprints.
 
+## Adversarial Review & Mitigations
+
+An adversarial review of this design (simulating Claude 3.5 Sonnet) highlighted critical systemic flaws with the "Pragmatic Adaptation" approach:
+
+1. **The Brittleness of Stdout Scraping:** UI text is not an API contract. If a tool changes its status string from "Reading file..." to "Analyzing context...", our Semantic Observer parsers break immediately.
+   * *Mitigation:* We accept this brittleness as a known cost of the adapter pattern. To mitigate, Skills must define `version_constraints`. A `claude-code-skill` that scrapes `stdout` will strictly pin to `claude-code v0.1.X`. When the upstream tool updates, the Skill must be explicitly re-tested and version-bumped within Swarm.
+2. **The Cost and Latency of the Semantic Observer:** Running a secondary LLM to watch a primary LLM doubles inference costs and introduces lag into the UI.
+   * *Mitigation:* The Semantic Observer (`fastModel`) will be heavily debounced and rate-limited. It will only sample the stream every 3-5 seconds, rather than processing every emitted token, drastically reducing token burn.
+3. **Violating SQLite Encapsulation:** Reading a third-party tool's internal database is a dangerous vector for schema drift, file locks, and data corruption.
+   * *Mitigation:* We will abandon direct SQLite file extraction for third-party CLIs. If a tool does not provide a native export command (e.g., `gemini export-session`), Swarm will not attempt to manually scrape its private database files. We will rely purely on the observable execution graph (standard I/O).
+
 ## Conclusion
 
-By treating third-party agents as highly capable, "black-box" primitives and using Skills to pry those boxes open via pragmatism (scraping, logging, db-reads), Swarm circumvents the need for global standards. It positions itself as the essential management layer for the multi-model future.
+By treating third-party agents as highly capable, "black-box" primitives and using version-pinned Skills to pry those boxes open via pragmatism (scraping and logging), Swarm circumvents the need for global standards. It positions itself as the essential management layer for the multi-model future.

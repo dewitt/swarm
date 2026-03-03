@@ -42,6 +42,7 @@ var (
 	borderColor    = lipgloss.AdaptiveColor{Light: "#D9D9D9", Dark: "#333333"}
 	statusBg       = lipgloss.AdaptiveColor{Light: "#EBEBEB", Dark: "#1A1A1A"}
 	statusFg       = lipgloss.AdaptiveColor{Light: "#555555", Dark: "#888888"}
+	placeholderFg  = lipgloss.AdaptiveColor{Light: "#E0E0E0", Dark: "#262626"}
 
 	// Agent Panel Colors
 	colorIdle    = lipgloss.Color("#888888") // Lighter Gray
@@ -1848,7 +1849,7 @@ func (m model) renderAgentPanel() string {
 		Width(m.width - 2)
 
 	if len(m.spans) == 0 {
-		placeholderStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+		placeholderStyle := lipgloss.NewStyle().Foreground(placeholderFg)
 		// Set a minimum height of 4 lines to reserve space for a row of cards
 		return panelStyle.Height(4).Render(placeholderStyle.Render("Tasks"))
 	}

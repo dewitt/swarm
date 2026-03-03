@@ -38,7 +38,7 @@ debt that should be addressed as the project evolves.
   allowing users to click cards to "drill down" into logs or micro-steer
   individual agents.
 
-- [ ] **Dynamic Relationship Mapping**: Visualize the execution graph by
+- [x] **Dynamic Relationship Mapping**: Visualize the execution graph by
   drawing dependency lines between parent and child Agent Cards in the panel.
 
 - [ ] **Cross-Language SDK Bindings**: Migrate the `pkg/sdk` interfaces to a

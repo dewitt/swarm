@@ -1848,9 +1848,9 @@ func (m model) renderAgentPanel() string {
 		Width(m.width - 2)
 
 	if len(m.spans) == 0 {
-		placeholderStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240")).Italic(true)
-		// Set a minimum height of 5 lines to reserve space for a row of high-fidelity cards
-		return panelStyle.Height(5).Render(placeholderStyle.Render("Active Tasks"))
+		placeholderStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+		// Set a minimum height of 4 lines to reserve space for a row of cards
+		return panelStyle.Height(4).Render(placeholderStyle.Render("Tasks"))
 	}
 
 	// Build tree

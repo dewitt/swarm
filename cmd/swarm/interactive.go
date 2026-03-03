@@ -1232,7 +1232,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if event.Error != nil {
 				errMsg = event.Error.Error()
 			}
-			m.messages = append(m.messages, errorMsgStyle.Render(fmt.Sprintf("Error: %s", errMsg)))
+			m.messages = append(m.messages, errorMsgStyle.Width(m.viewport.Width).Render(fmt.Sprintf("Error: %s", errMsg)))
 			m.loading = false
 			m.updateViewport()
 			return m, tea.Batch(m.dequeueAndRun(), agentCmd)

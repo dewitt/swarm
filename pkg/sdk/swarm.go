@@ -119,6 +119,7 @@ type defaultSwarm struct {
 	pinnedContext       map[string]string
 	inputInstruction    string
 	outputInstruction   string
+	routingInstruction  string
 	planningInstruction string
 	debugMode           bool
 	flashModel          model.LLM
@@ -486,6 +487,10 @@ func (m *defaultSwarm) Reload() error {
 		sk, _ := LoadSkill(filepath.Join(skillsPath, "output-agent"))
 		m.outputInstruction = sk.Instructions
 	}
+	if _, ok := m.agents["routing_agent"]; ok {
+		sk, _ := LoadSkill(filepath.Join(skillsPath, "routing-agent"))
+		m.routingInstruction = sk.Instructions
+	}
 	if _, ok := m.agents["planning_agent"]; ok {
 		sk, _ := LoadSkill(filepath.Join(skillsPath, "planning-agent"))
 		m.planningInstruction = sk.Instructions
@@ -575,10 +580,10 @@ func (m *defaultSwarm) Plan(ctx context.Context, prompt string, traj Trajectory)
 	}
 	specialistsList := strings.Join(descriptions, "\n")
 
-	systemPrompt := fmt.Sprintf(m.planningInstruction, specialistsList)
+	routingPrompt := fmt.Sprintf(m.routingInstruction, specialistsList)
 	respIter := m.fastModel.GenerateContent(ctx, &model.LLMRequest{
 		Contents: []*genai.Content{genai.NewContentFromText(prompt, genai.Role("user"))},
-		Config:   &genai.GenerateContentConfig{SystemInstruction: genai.NewContentFromText(systemPrompt, genai.Role("system"))},
+		Config:   &genai.GenerateContentConfig{SystemInstruction: genai.NewContentFromText(routingPrompt, genai.Role("system"))},
 	}, false)
 	var jsonStr string
 	for resp, err := range respIter {
@@ -591,11 +596,11 @@ func (m *defaultSwarm) Plan(ctx context.Context, prompt string, traj Trajectory)
 	}
 	jsonStr = strings.TrimSpace(jsonStr)
 	if strings.Contains(jsonStr, "DEEP_PLAN_REQUIRED") {
-		overridePrompt := systemPrompt + "\n\nCRITICAL OVERRIDE: You are acting as the Deep Planner. You MUST output a full JSON execution graph matching the requested schema. DO NOT output 'DEEP_PLAN_REQUIRED' under any circumstance."
+		planningPrompt := fmt.Sprintf(m.planningInstruction, specialistsList)
 		respIter = m.proModel.GenerateContent(ctx, &model.LLMRequest{
 			Contents: []*genai.Content{genai.NewContentFromText(prompt, genai.Role("user"))},
 			Config: &genai.GenerateContentConfig{
-				SystemInstruction: genai.NewContentFromText(overridePrompt, genai.Role("system")),
+				SystemInstruction: genai.NewContentFromText(planningPrompt, genai.Role("system")),
 				ResponseMIMEType:  "application/json",
 			},
 		}, false)

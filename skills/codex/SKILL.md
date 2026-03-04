@@ -14,8 +14,7 @@ When the user requests a span that is best handled by `codex`, you must
 construct the appropriate command. You have access to the `bash_execute` tool
 to run commands.
 
-Usage: Use `bash_execute` to run `codex --apply-patch "<user request>"` (or
-the appropriate codex command flags).
+Usage: Use `bash_execute` to run `codex "<user request>"` (or the appropriate codex command flags).
 
 **CRITICAL ERROR HANDLING:** If `bash_execute` returns an error indicating
 that the `codex` command is not found, authentication failed, or you lack

@@ -5,6 +5,7 @@ model: flash
 tools:
   - list_local_files
   - read_local_file
+  - write_local_file
   - grep_search
   - read_state
   - write_state
@@ -37,6 +38,10 @@ or be shared between specialized agents (e.g., "target_language",
   prompt for immediate visibility.
 
 AVAILABLE SPECIALISTS: %s
+
+### FILE MODIFICATION:
+
+If a task requires fixing a bug or applying changes to a file, YOU MUST use the `write_local_file` tool to rewrite the file with the fix applied. DO NOT simply diagnose the issue and tell the user to fix it manually. You have full structural rewrite capabilities. Apply your changes locally.
 
 ### DECISION TAXONOMY:
 

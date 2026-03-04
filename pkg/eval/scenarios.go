@@ -69,5 +69,12 @@ func GetScenarios() ([]Scenario, error) {
 			Prompt:      "Act as a strict code reviewer. Review the diff on this branch against main. Leave a markdown file REVIEW.md containing your critique.",
 			Rubric:      "Did the agent successfully identify the semantic bug in the refactor diff (subtracting the percentage instead of the calculated amount)? Was the critique written to REVIEW.md?",
 		},
+		{
+			ID:          "scenario_5",
+			Name:        "The Logic Bug",
+			FixturePath: filepath.Join(root, "eval", "fixtures", "scenario_5_logic"),
+			Prompt:      "Users are reporting the Fibonacci generator returns 0 for everything, but the tests are passing. Figure out why and fix both the code and the tests.",
+			Rubric:      "Did the agent see that the tests were a false positive? Did the agent successfully fix the logic in main.go (changing `seq := []int{0, 0}` to `seq := []int{0, 1}`) AND update the tests in main_test.go to match the true Fibonacci sequence?",
+		},
 	}, nil
 }

@@ -10,6 +10,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var systemSandboxFlag bool
+
 var evalCmd = &cobra.Command{
 	Use:   "eval [scenario_id]",
 	Short: "Run end-to-end agentic evaluations",
@@ -49,6 +51,21 @@ If no scenario_id is provided, all scenarios will be run.`,
 			}
 		} else {
 			toRun = scenarios
+		}
+
+		var actualToRun []eval.Scenario
+		for _, s := range toRun {
+			if s.RequiresSystemSandbox && !systemSandboxFlag {
+				fmt.Printf("Skipping scenario '%s' (requires --system-sandbox)\n", s.ID)
+				continue
+			}
+			actualToRun = append(actualToRun, s)
+		}
+		toRun = actualToRun
+
+		if len(toRun) == 0 {
+			fmt.Println("No scenarios to run.")
+			os.Exit(0)
 		}
 
 		fmt.Printf("Running %d evaluation(s)...\n\n", len(toRun))
@@ -93,5 +110,6 @@ If no scenario_id is provided, all scenarios will be run.`,
 }
 
 func init() {
+	evalCmd.Flags().BoolVar(&systemSandboxFlag, "system-sandbox", false, "Run scenarios that potentially mutate the system environment")
 	rootCmd.AddCommand(evalCmd)
 }

@@ -76,5 +76,13 @@ func GetScenarios() ([]Scenario, error) {
 			Prompt:      "Users are reporting the Fibonacci generator returns 0 for everything, but the tests are passing. Figure out why and fix both the code and the tests.",
 			Rubric:      "Did the agent see that the tests were a false positive? Did the agent successfully fix the logic in main.go (changing `seq := []int{0, 0}` to `seq := []int{0, 1}`) AND update the tests in main_test.go to match the true Fibonacci sequence?",
 		},
+		{
+			ID:                    "scenario_6",
+			Name:                  "Self-Healing Recovery Trace",
+			FixturePath:           filepath.Join(root, "eval", "fixtures", "scenario_6_protoc"),
+			Prompt:                "Build this project.",
+			Rubric:                "Did the agent execute `make build`, observe that `protoc` is missing or fails, deduce that it needs to install `protobuf-compiler` (or download the binary natively), install it, and retry? The test passes if the final build succeeds with a 0 exit code.",
+			RequiresSystemSandbox: true,
+		},
 	}, nil
 }

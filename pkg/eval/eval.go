@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 
 	"github.com/dewitt/swarm/pkg/sdk"
@@ -14,11 +15,12 @@ import (
 
 // Scenario represents a single end-to-end evaluation
 type Scenario struct {
-	ID          string
-	Name        string
-	FixturePath string
-	Prompt      string
-	Rubric      string
+	ID                    string
+	Name                  string
+	FixturePath           string
+	Prompt                string
+	Rubric                string
+	RequiresSystemSandbox bool
 }
 
 // Result represents the outcome of an evaluation
@@ -97,6 +99,15 @@ func (e *Evaluator) Run(ctx context.Context, s Scenario) (*Result, error) {
 	os.Setenv("HOME", sandbox)
 	os.Chdir(sandbox)
 	defer os.Chdir(originalWd)
+
+	// Run fixture-specific setup script if it exists
+	if _, err := os.Stat("setup.sh"); err == nil {
+		cmd := exec.Command("bash", "setup.sh")
+		cmd.Dir = sandbox
+		if out, err := cmd.CombinedOutput(); err != nil {
+			return nil, fmt.Errorf("fixture setup failed:\n%s\n%w", string(out), err)
+		}
+	}
 
 	// 3. Instantiate Swarm Engine in the sandbox
 	cfg := sdk.SwarmConfig{

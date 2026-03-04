@@ -27,6 +27,7 @@ import (
 
 	"github.com/dewitt/swarm/pkg/eval"
 	"github.com/dewitt/swarm/pkg/sdk"
+	"github.com/dewitt/swarm/pkg/web"
 )
 
 var (
@@ -290,6 +291,7 @@ type model struct {
 	gitModified  bool
 	activeModel  string
 	renderer     *glamour.TermRenderer
+	webServer    *web.Server
 
 	statusMsg    string
 	lastResponse string
@@ -646,6 +648,13 @@ func initialModel(planMode bool, resume bool) (model, error) {
 		{name: "Swarm Agent", icon: "◈", status: "Idle", state: "idle", spin: agentSpinner, resident: true, lastActive: time.Now()},
 	}
 
+	webServer := web.NewServer(":5050")
+	go func() {
+		if err := webServer.Start(); err != nil {
+			// server closed
+		}
+	}()
+
 	swarm, err := sdk.NewSwarm(sdk.SwarmConfig{ResumeLastSession: resume})
 	if err != nil {
 		return model{}, err
@@ -674,6 +683,7 @@ func initialModel(planMode bool, resume bool) (model, error) {
 		gitModified:    modified,
 		activeModel:    activeModel,
 		renderer:       renderer,
+		webServer:      webServer,
 		agents:         agents,
 		spans:          make(map[string]*uiSpan),
 		showAgentPanel: true,
@@ -1036,6 +1046,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case streamMsg:
 		event := msg.event
 		var agentCmd tea.Cmd
+
+		if m.webServer != nil {
+			m.webServer.Broadcast(event)
+		}
 
 		if event.SpanID != "" {
 			span, ok := m.spans[event.SpanID]
@@ -1514,6 +1528,7 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 			"  /copy        Copies the last agent response to the system clipboard.",
 			"  /observe     Toggles observe mode to see real-time agent activity.",
 			"  /debug       Toggles debug mode to see full swarm trajectories.",
+			"  /web         Launch the Web Agent Panel in your browser.",
 			"  /rewind [n]  Rewinds the conversation history by n turns (default 1).",
 			"  /plan        Enter read-only plan mode to brainstorm safely.",
 			"  /act         Exit plan mode and allow the agent to execute actions.",
@@ -1553,6 +1568,13 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 
 		icon := agentMsgStyle.Render("✦ ")
 		m.messages = append(m.messages, lipgloss.JoinHorizontal(lipgloss.Top, icon, lipgloss.JoinVertical(lipgloss.Left, lines...)))
+	case "/web":
+		err := exec.Command("open", "http://localhost:5050").Start()
+		if err != nil {
+			m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Render("Failed to open browser: "+err.Error()))
+		} else {
+			m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"Opened Web Agent Panel at http://localhost:5050")
+		}
 	case "/eval":
 		scenarios, err := eval.GetScenarios()
 		if err != nil {

@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Swarm Agent Panel</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --text-color: #f8fafc;
+            --card-bg: rgba(30, 41, 59, 0.7);
+            --card-border: rgba(255, 255, 255, 0.1);
+            --accent-primary: #3b82f6;
+            --accent-executing: #f59e0b;
+            --accent-complete: #10b981;
+            --accent-error: #ef4444;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            background-image:
+                radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.15) 0px, transparent 50%),
+                radial-gradient(at 100% 0%, rgba(16, 185, 129, 0.15) 0px, transparent 50%);
+            color: var(--text-color);
+            margin: 0;
+            padding: 40px;
+            min-height: 100vh;
+            box-sizing: border-box;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 50px;
+            animation: fadeIn 1s ease-out;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            letter-spacing: -0.05em;
+            margin: 0;
+            background: linear-gradient(135deg, #fff 0%, #94a3b8 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .subtitle {
+            font-size: 1rem;
+            color: #94a3b8;
+            margin-top: 10px;
+        }
+
+        .agent-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+            gap: 24px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .agent-card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 16px;
+            padding: 24px;
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            animation: slideUp 0.5s ease-out forwards;
+        }
+
+        .agent-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .agent-icon {
+            font-size: 24px;
+            background: rgba(255, 255, 255, 0.1);
+            width: 48px;
+            height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 12px;
+            box-shadow: inset 0 2px 4px 0 rgba(255, 255, 255, 0.06);
+        }
+
+        .agent-info {
+            flex-grow: 1;
+        }
+
+        .agent-name {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin: 0;
+            line-height: 1.2;
+        }
+
+        .agent-status-badge {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 9999px;
+            display: inline-block;
+            margin-top: 4px;
+        }
+
+        .badge-idle {
+            background: rgba(148, 163, 184, 0.2);
+            color: #94a3b8;
+        }
+
+        .badge-thinking {
+            background: rgba(59, 130, 246, 0.2);
+            color: var(--accent-primary);
+        }
+
+        .badge-executing {
+            background: rgba(245, 158, 11, 0.2);
+            color: var(--accent-executing);
+        }
+
+        .badge-complete {
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--accent-complete);
+        }
+
+        .badge-error {
+            background: rgba(239, 68, 68, 0.2);
+            color: var(--accent-error);
+        }
+
+        .card-body {
+            background: rgba(15, 23, 42, 0.5);
+            border-radius: 8px;
+            padding: 12px;
+            font-size: 0.9rem;
+            color: #cbd5e1;
+            flex-grow: 1;
+            min-height: 60px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .log-line {
+            line-height: 1.5;
+            word-wrap: break-word;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-left-color: var(--accent-primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            display: none;
+        }
+
+        .state-thinking .spinner,
+        .state-executing .spinner,
+        .state-spawning .spinner {
+            display: block;
+        }
+
+        .state-thinking .agent-icon {
+            box-shadow: 0 0 15px var(--accent-primary);
+        }
+
+        .state-executing .agent-icon {
+            box-shadow: 0 0 15px var(--accent-executing);
+        }
+
+        /* Animation Keyframes */
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Ambient glowing background per card */
+        .card-glow {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 100%;
+            background: radial-gradient(800px circle at top center, rgba(255, 255, 255, 0.06), transparent 40%);
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        .connection-status {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 8px 16px;
+            border-radius: 20px;
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--accent-complete);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            font-size: 0.8rem;
+            font-weight: 600;
+            backdrop-filter: blur(8px);
+            transition: all 0.3s;
+        }
+
+        .connection-status.disconnected {
+            background: rgba(239, 68, 68, 0.2);
+            color: var(--accent-error);
+            border-color: rgba(239, 68, 68, 0.3);
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="header">
+        <h1>Agent Panel</h1>
+        <div class="subtitle">Live Swarm Execution Telemetry</div>
+    </div>
+
+    <div class="agent-grid" id="agent-grid">
+        <!-- Agent cards will be injected here -->
+    </div>
+
+    <div class="connection-status disconnected" id="connection-status">Connecting...</div>
+
+    <script>
+        const AgentStateSpawning = 0;
+        const AgentStateThinking = 1;
+        const AgentStateExecuting = 2;
+        const AgentStateComplete = 3;
+        const AgentStateError = 4;
+        const AgentStateWaiting = 5;
+
+        // Predefined icons based on agent names/roles
+        function getIconForAgent(name) {
+            name = name.toLowerCase();
+            if (name.includes('swarm')) return '🧠';
+            if (name.includes('web') || name.includes('research')) return '🌐';
+            if (name.includes('code') || name.includes('codex')) return '💻';
+            if (name.includes('input') || name.includes('routing')) return '🎯';
+            if (name.includes('output')) return '✉️';
+            if (name.includes('python')) return '🐍';
+            if (name.includes('evaluator')) return '⚖️';
+            return '🤖';
+        }
+
+        function getStateClass(stateCode) {
+            switch (stateCode) {
+                case AgentStateSpawning: return 'state-spawning badge-thinking';
+                case AgentStateThinking: return 'state-thinking badge-thinking';
+                case AgentStateExecuting: return 'state-executing badge-executing';
+                case AgentStateComplete: return 'state-complete badge-complete';
+                case AgentStateError: return 'state-error badge-error';
+                case AgentStateWaiting: return 'state-waiting badge-idle';
+                default: return 'badge-idle';
+            }
+        }
+
+        function getStateLabel(stateCode) {
+            switch (stateCode) {
+                case AgentStateSpawning: return 'Spawning';
+                case AgentStateThinking: return 'Thinking';
+                case AgentStateExecuting: return 'Executing';
+                case AgentStateComplete: return 'Complete';
+                case AgentStateError: return 'Error';
+                case AgentStateWaiting: return 'Waiting';
+                default: return 'Idle';
+            }
+        }
+
+        const agentGrid = document.getElementById('agent-grid');
+        const cards = new Map();
+
+        function getOrCreateCard(agentName) {
+            if (cards.has(agentName)) {
+                return cards.get(agentName);
+            }
+
+            const card = document.createElement('div');
+            card.className = 'agent-card';
+
+            card.innerHTML = `
+                <div class="card-glow"></div>
+                <div class="card-header">
+                    <div class="agent-icon">${getIconForAgent(agentName)}</div>
+                    <div class="agent-info">
+                        <div class="agent-name">${agentName}</div>
+                        <div class="agent-status-badge badge-idle">Idle</div>
+                    </div>
+                    <div class="spinner"></div>
+                </div>
+                <div class="card-body">
+                    <div class="log-line">Waiting for task...</div>
+                </div>
+            `;
+
+            agentGrid.appendChild(card);
+            cards.set(agentName, card);
+            return card;
+        }
+
+        function updateCard(event) {
+            const card = getOrCreateCard(event.AgentName);
+            const badge = card.querySelector('.agent-status-badge');
+            const logLine = card.querySelector('.log-line');
+
+            // Update state visualizer
+            card.className = `agent-card ${getStateClass(event.State).split(' ')[0]}`;
+            badge.className = `agent-status-badge ${getStateClass(event.State).split(' ')[1]}`;
+            badge.textContent = getStateLabel(event.State);
+
+            // Determine what log line to show
+            let text = "Processing...";
+            if (event.Error) {
+                text = `❌ Error: ${event.Error}`;
+            } else if (event.ObserverSummary) {
+                text = `💡 ${event.ObserverSummary}`;
+            } else if (event.ToolName) {
+                text = `🛠️ ${event.ToolName}(...)`;
+            } else if (event.FinalContent) {
+                text = `✅ ${event.FinalContent}`;
+            } else if (event.Thought) {
+                text = `🤔 ${event.Thought}`;
+            }
+
+            logLine.textContent = text;
+        }
+
+        // Setup Server-Sent Events Connection
+        function connectSSE() {
+            const evtSource = new EventSource("/events");
+            const statusIndicator = document.getElementById('connection-status');
+
+            evtSource.onopen = function () {
+                statusIndicator.textContent = "Live";
+                statusIndicator.className = "connection-status";
+            };
+
+            evtSource.onmessage = function (event) {
+                try {
+                    const data = JSON.parse(event.data);
+                    updateCard(data);
+                } catch (e) {
+                    console.error("Error parsing SSE data", e);
+                }
+            };
+
+            evtSource.onerror = function (err) {
+                statusIndicator.textContent = "Disconnected - Retrying...";
+                statusIndicator.className = "connection-status disconnected";
+                evtSource.close();
+                // Reconnect after 3 seconds
+                setTimeout(connectSSE, 3000);
+            };
+        }
+
+        // Initialize connection
+        connectSSE();
+
+    </script>
+</body>
+
+</html>

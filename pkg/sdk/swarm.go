@@ -80,11 +80,18 @@ type ObservableEvent struct {
 	ObserverSummary string
 }
 
+type Reflection struct {
+	IsResolved bool   `json:"is_resolved"`
+	Reasoning  string `json:"reasoning"`
+	NextSteps  string `json:"next_steps"`
+}
+
 type Swarm interface {
 	AddContext(path string) error
 	DropContext(path string)
 	ListContext() []string
-	Plan(ctx context.Context, prompt string) (*ExecutionGraph, error)
+	Plan(ctx context.Context, prompt string, traj Trajectory) (*ExecutionGraph, error)
+	Reflect(ctx context.Context, prompt string, traj Trajectory) (*Reflection, error)
 	Execute(ctx context.Context, g *ExecutionGraph, o *Engine) (<-chan ObservableEvent, *Engine, error)
 	Chat(ctx context.Context, prompt string) (<-chan ObservableEvent, error)
 	SummarizeState(ctx context.Context, state string) (string, error)
@@ -553,7 +560,12 @@ func (m *defaultSwarm) ListSessions(ctx context.Context) ([]SessionInfo, error) 
 	return infos, nil
 }
 
-func (m *defaultSwarm) Plan(ctx context.Context, prompt string) (*ExecutionGraph, error) {
+func (m *defaultSwarm) Plan(ctx context.Context, prompt string, traj Trajectory) (*ExecutionGraph, error) {
+	if len(traj.Spans) > 0 {
+		b, _ := json.MarshalIndent(traj.Spans, "", "  ")
+		prompt = prompt + "\n\n### PREVIOUS EXECUTION TRAJECTORY:\n" + string(b)
+	}
+
 	// Recompile the descriptions since they aren't stored on the struct
 	var descriptions []string
 	for _, name := range m.subAgentNames {
@@ -601,6 +613,46 @@ func (m *defaultSwarm) Plan(ctx context.Context, prompt string) (*ExecutionGraph
 		return nil, err
 	}
 	return &graph, nil
+}
+
+func (m *defaultSwarm) Reflect(ctx context.Context, prompt string, traj Trajectory) (*Reflection, error) {
+	b, _ := json.MarshalIndent(traj.Spans, "", "  ")
+
+	systemPrompt := `You are the Swarm Reflection Agent. Your job is to evaluate whether the user's original goal has been FULLY completed based on the execution trajectory.
+If it is completed, set is_resolved to true.
+If the agent only diagnosed a problem but did not physically apply the fix (e.g., using write_local_file), then the task is NOT resolved. You must set is_resolved to false and provide explicit next_steps to implement the fix.
+Output your response as strictly valid JSON matching this schema:
+{
+  "is_resolved": boolean,
+  "reasoning": "string",
+  "next_steps": "string"
+}`
+
+	userPrompt := fmt.Sprintf("Original Goal: %s\n\nExecution Trajectory:\n%s", prompt, string(b))
+
+	respIter := m.proModel.GenerateContent(ctx, &model.LLMRequest{
+		Contents: []*genai.Content{genai.NewContentFromText(userPrompt, genai.Role("user"))},
+		Config: &genai.GenerateContentConfig{
+			SystemInstruction: genai.NewContentFromText(systemPrompt, genai.Role("system")),
+			ResponseMIMEType:  "application/json",
+		},
+	}, false)
+
+	var jsonStr string
+	for resp, err := range respIter {
+		if err != nil {
+			return nil, err
+		}
+		if resp.Content != nil && len(resp.Content.Parts) > 0 {
+			jsonStr += resp.Content.Parts[0].Text
+		}
+	}
+
+	var reflection Reflection
+	if err := json.Unmarshal([]byte(jsonStr), &reflection); err != nil {
+		return nil, err
+	}
+	return &reflection, nil
 }
 
 func (m *defaultSwarm) SummarizeState(ctx context.Context, state string) (string, error) {
@@ -696,58 +748,86 @@ func (m *defaultSwarm) Chat(ctx context.Context, prompt string) (<-chan Observab
 		}
 		out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Input Agent", SpanID: "input", TaskName: "Classification", State: AgentStateComplete}
 
-		var graph *ExecutionGraph
-		var err error
+		originalPrompt := prompt
+		cyclePrompt := prompt
 
-		// 2. Swarm Coordination / Planning
-		// If we are starting fresh or rerouting to Swarm Agent, we let it plan.
-		if target == "swarm_agent" {
-			out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm Agent", SpanID: "coordination", TaskName: "Swarm Planning", State: AgentStateThinking, Thought: "Analyzing request…"}
-			planStart := time.Now()
-			graph, err = m.Plan(ctx, prompt)
-			if err != nil {
-				out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm Agent", SpanID: "coordination", TaskName: "Swarm Planning", State: AgentStateError, Error: fmt.Errorf("coordination failed: %w", err)}
-				return
+		maxCycles := 5
+		for cycle := 0; cycle < maxCycles; cycle++ {
+			var graph *ExecutionGraph
+			var err error
+
+			// 2. Swarm Coordination / Planning
+			// If we are starting fresh or rerouting to Swarm Agent, we let it plan.
+			if target == "swarm_agent" {
+				out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm Agent", SpanID: "coordination", TaskName: "Swarm Planning", State: AgentStateThinking, Thought: "Analyzing request…"}
+				planStart := time.Now()
+				graph, err = m.Plan(ctx, cyclePrompt, o.GetTrajectory())
+				if err != nil {
+					out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm Agent", SpanID: "coordination", TaskName: "Swarm Planning", State: AgentStateError, Error: fmt.Errorf("coordination failed: %w", err)}
+					return
+				}
+
+				if graph != nil && graph.ImmediateResponse == "" {
+					out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm Agent", SpanID: "coordination", TaskName: "Swarm Planning", State: AgentStateComplete}
+				}
+
+				planJSON, _ := json.Marshal(graph)
+				o.AddSpans(Span{
+					ID: "coordination", Name: "Swarm Planning", Agent: "swarm_agent", Status: SpanStatusComplete,
+					Kind:      SpanKindPlanner,
+					StartTime: planStart.Format(time.RFC3339Nano), EndTime: time.Now().Format(time.RFC3339Nano),
+					Duration: time.Since(planStart).String(), Attributes: map[string]any{"gen_ai.prompt": cyclePrompt, "gen_ai.completion": string(planJSON)},
+				})
+			} else {
+				// Direct execution with specialized agent (Node Autonomy)
+				graph = &ExecutionGraph{Spans: []Span{{ID: "t1", Name: "Fulfill", Agent: target, Prompt: cyclePrompt}}}
 			}
 
-			if graph != nil && graph.ImmediateResponse == "" {
-				out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm Agent", SpanID: "coordination", TaskName: "Swarm Planning", State: AgentStateComplete}
-			}
+			// 3. Execution
+			if len(graph.Spans) > 0 {
+				events, updatedEngine, err := m.Execute(ctx, graph, o)
+				if err != nil {
+					out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm", SpanID: "execution", TaskName: "Graph Execution", State: AgentStateError, Error: fmt.Errorf("execution failed: %w", err)}
+					return
+				}
+				for event := range events {
+					out <- event
+				}
+				o = updatedEngine
 
-			planJSON, _ := json.Marshal(graph)
-			o.AddSpans(Span{
-				ID: "coordination", Name: "Swarm Planning", Agent: "swarm_agent", Status: SpanStatusComplete,
-				Kind:      SpanKindPlanner,
-				StartTime: planStart.Format(time.RFC3339Nano), EndTime: time.Now().Format(time.RFC3339Nano),
-				Duration: time.Since(planStart).String(), Attributes: map[string]any{"gen_ai.prompt": prompt, "gen_ai.completion": string(planJSON)},
-			})
-		} else {
-			// Direct execution with specialized agent (Node Autonomy)
-			graph = &ExecutionGraph{Spans: []Span{{ID: "t1", Name: "Fulfill", Agent: target, Prompt: prompt}}}
+				// 4. Reflect
+				if target == "swarm_agent" {
+					out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm Agent", SpanID: "reflection", TaskName: "Reflection", State: AgentStateThinking, Thought: "Evaluating if original goal is complete..."}
+
+					reflection, err := m.Reflect(ctx, originalPrompt, o.GetTrajectory())
+					if err != nil {
+						out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm Agent", SpanID: "reflection", TaskName: "Reflection", State: AgentStateError, Error: fmt.Errorf("reflection failed: %w", err)}
+						return
+					}
+
+					if reflection.IsResolved {
+						out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm Agent", SpanID: "reflection", TaskName: "Reflection", State: AgentStateComplete, Thought: "Goal satisfied."}
+						break
+					} else {
+						out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm Agent", SpanID: "reflection", TaskName: "Reflection", State: AgentStateComplete, Thought: "Goal not satisfied yet. Replanning."}
+						cyclePrompt = fmt.Sprintf("Original Goal: %s\n\nReflection from last cycle: %s\nNext Steps: %s", originalPrompt, reflection.Reasoning, reflection.NextSteps)
+					}
+				} else {
+					break // Direct routes exit immediately
+				}
+			} else if graph.ImmediateResponse != "" {
+				if m.runOutputAgent(ctx, out, o, "Swarm Agent", graph.ImmediateResponse) {
+					// Record the immediate response in the persistent session
+					m.appendEvent(ctx, "model", graph.ImmediateResponse)
+					out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm Agent", SpanID: "coordination", TaskName: "Swarm Planning", State: AgentStateComplete, FinalContent: graph.ImmediateResponse}
+				}
+				break
+			} else {
+				break
+			}
 		}
 
-		// 3. Execution
-		if len(graph.Spans) > 0 {
-			events, _, err := m.Execute(ctx, graph, o)
-			if err != nil {
-				out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm", SpanID: "execution", TaskName: "Graph Execution", State: AgentStateError, Error: fmt.Errorf("execution failed: %w", err)}
-				return
-			}
-			for event := range events {
-				out <- event
-			}
-
-			// If there was an immediate response bundled with the spans, we might want to still show it,
-			// or assume the final span handles the output. Let's rely on the execution graph to provide the final output.
-		} else if graph.ImmediateResponse != "" {
-			if m.runOutputAgent(ctx, out, o, "Swarm Agent", graph.ImmediateResponse) {
-				// Record the immediate response in the persistent session
-				m.appendEvent(ctx, "model", graph.ImmediateResponse)
-				out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm Agent", SpanID: "coordination", TaskName: "Swarm Planning", State: AgentStateComplete, FinalContent: graph.ImmediateResponse}
-			}
-		}
-
-		// 4. End of Chat
+		// 5. End of Chat
 	}()
 	return out, nil
 }
@@ -836,8 +916,10 @@ func (m *defaultSwarm) Execute(ctx context.Context, g *ExecutionGraph, o *Engine
 					replanCount++
 					out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm", State: AgentStateThinking, Thought: fmt.Sprintf("Replanning effort %d/%d…", replanCount, maxReplans)}
 
+					wg.Add(1)
 					go func(failureResult string) {
-						newG, err := m.Plan(ctx, "Pivot: "+failureResult)
+						defer wg.Done()
+						newG, err := m.Plan(ctx, "Pivot: "+failureResult, o.GetTrajectory())
 						if err == nil {
 							o.AddSpans(newG.Spans...)
 							// Broadcast replanned topology so UI can build the tree immediately

@@ -25,6 +25,7 @@ import (
 	"github.com/mattn/go-runewidth"
 	"github.com/sahilm/fuzzy"
 
+	"github.com/dewitt/swarm/pkg/eval"
 	"github.com/dewitt/swarm/pkg/sdk"
 )
 
@@ -1552,6 +1553,103 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 
 		icon := agentMsgStyle.Render("✦ ")
 		m.messages = append(m.messages, lipgloss.JoinHorizontal(lipgloss.Top, icon, lipgloss.JoinVertical(lipgloss.Left, lines...)))
+	case "/eval":
+		scenarios, err := eval.GetScenarios()
+		if err != nil {
+			m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Render("Failed to load scenarios: "+err.Error()))
+			return nil
+		}
+
+		if len(parts) == 1 || parts[1] == "list" {
+			var lines []string
+			lines = append(lines, lipgloss.NewStyle().Bold(true).Render(fmt.Sprintf("Evaluation Scenarios (%d)", len(scenarios))))
+			lines = append(lines, "")
+			wrapWidth := m.viewport.Width - 4
+			if wrapWidth < 20 {
+				wrapWidth = 20
+			}
+			for _, s := range scenarios {
+				content := fmt.Sprintf("- %s: %s", lipgloss.NewStyle().Foreground(primaryColor).Render(s.ID), s.Name)
+				lines = append(lines, lipgloss.NewStyle().Width(wrapWidth).Render(content))
+			}
+			icon := agentMsgStyle.Render("✦ ")
+			m.messages = append(m.messages, lipgloss.JoinHorizontal(lipgloss.Top, icon, lipgloss.JoinVertical(lipgloss.Left, lines...)))
+			return nil
+		}
+
+		target := parts[1]
+		var found *eval.Scenario
+		for _, s := range scenarios {
+			if s.ID == target {
+				found = &s
+				break
+			}
+		}
+
+		if found == nil {
+			m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Render(fmt.Sprintf("Scenario '%s' not found.", target)))
+			return nil
+		}
+
+		// Print context to chat
+		var ctxLines []string
+		ctxLines = append(ctxLines, lipgloss.NewStyle().Bold(true).Render(fmt.Sprintf("Running Evaluation: %s", found.Name)))
+		ctxLines = append(ctxLines, "")
+		ctxLines = append(ctxLines, lipgloss.NewStyle().Italic(true).Render("Prompt: "+found.Prompt))
+		ctxLines = append(ctxLines, "")
+		ctxLines = append(ctxLines, lipgloss.NewStyle().Italic(true).Render("Rubric: "+found.Rubric))
+
+		icon := agentMsgStyle.Render("✦ ")
+		m.messages = append(m.messages, lipgloss.JoinHorizontal(lipgloss.Top, icon, lipgloss.JoinVertical(lipgloss.Left, ctxLines...)))
+
+		// Set up the evaluation runner
+		evalChan := make(chan sdk.ObservableEvent, 100)
+		apiKey := os.Getenv("GOOGLE_API_KEY")
+		if apiKey == "" {
+			m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Render("Error: GOOGLE_API_KEY environment variable is required."))
+			return nil
+		}
+
+		m.loading = true
+		m.globalSummary = fmt.Sprintf("Evaluating %s...", found.ID)
+
+		// Reset AgentPanel
+		m.spans = make(map[string]*uiSpan)
+		for _, a := range m.agents {
+			a.update("idle", "Idle")
+		}
+
+		go func(scenario eval.Scenario) {
+			evaluator, err := eval.NewEvaluator(apiKey)
+			if err != nil {
+				evalChan <- sdk.ObservableEvent{AgentName: "Swarm", State: sdk.AgentStateError, Error: err}
+				close(evalChan)
+				return
+			}
+
+			res, err := evaluator.Run(context.Background(), scenario, eval.WithProgress(func(e sdk.ObservableEvent) {
+				evalChan <- e
+			}))
+
+			if err != nil {
+				evalChan <- sdk.ObservableEvent{AgentName: "Swarm", State: sdk.AgentStateError, Error: err}
+			} else {
+				status := "FAIL"
+				if res.Passed {
+					status = "PASS"
+				}
+				msg := fmt.Sprintf("Evaluation Complete: %s\n\nReasoning: %s", status, res.Reasoning)
+				evalChan <- sdk.ObservableEvent{AgentName: "Evaluator", State: sdk.AgentStateComplete, FinalContent: msg}
+			}
+			close(evalChan)
+		}(*found)
+
+		return tea.Batch(
+			listenForStream(evalChan),
+			tea.Tick(100*time.Millisecond, func(t time.Time) tea.Msg { return triggerGlobalSummaryMsg{} }),
+			m.spinner.Tick,
+		)
+
 	case "/skills":
 		if len(parts) > 1 && parts[1] == "reload" {
 			if err := m.swarm.Reload(); err != nil {

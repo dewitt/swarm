@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/dewitt/swarm/pkg/eval"
+	"github.com/dewitt/swarm/pkg/sdk"
 	"github.com/spf13/cobra"
 )
 
@@ -73,7 +74,24 @@ If no scenario_id is provided, all scenarios will be run.`,
 		for _, s := range toRun {
 			fmt.Printf("==> Scenario: %s (%s)\n", s.Name, s.ID)
 
-			res, err := evaluator.Run(context.Background(), s)
+			res, err := evaluator.Run(context.Background(), s, eval.WithProgress(func(event sdk.ObservableEvent) {
+				if !trajectoryFlag {
+					if event.State == sdk.AgentStateExecuting && event.ToolName != "" {
+						fmt.Printf("      -> [%s] Executing %s...\n", event.AgentName, event.ToolName)
+					} else if event.State == sdk.AgentStateComplete && event.FinalContent != "" {
+						// truncate long content for CLI progress
+						content := event.FinalContent
+						if len(content) > 100 {
+							content = content[:97] + "..."
+						}
+						fmt.Printf("      -> [%s] %s\n", event.AgentName, content)
+					} else if event.State == sdk.AgentStateThinking && event.Thought != "" {
+						fmt.Printf("      -> [%s] %s\n", event.AgentName, event.Thought)
+					} else if event.State == sdk.AgentStateError && event.Error != nil {
+						fmt.Printf("      -> [%s] ERROR: %v\n", event.AgentName, event.Error)
+					}
+				}
+			}))
 			if err != nil {
 				fmt.Printf("    ERROR: %v\n\n", err)
 				continue

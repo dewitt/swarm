@@ -69,7 +69,26 @@ func copyDir(src string, dst string) error {
 	})
 }
 
-func (e *Evaluator) Run(ctx context.Context, s Scenario) (*Result, error) {
+// RunOption configures a scenario run
+type RunOption func(*runOptions)
+
+type runOptions struct {
+	progressCallback func(sdk.ObservableEvent)
+}
+
+// WithProgress defines a callback that will receive telemetry events as the scenario runs
+func WithProgress(cb func(sdk.ObservableEvent)) RunOption {
+	return func(opts *runOptions) {
+		opts.progressCallback = cb
+	}
+}
+
+func (e *Evaluator) Run(ctx context.Context, s Scenario, opts ...RunOption) (*Result, error) {
+	options := runOptions{}
+	for _, opt := range opts {
+		opt(&options)
+	}
+
 	// 1. Create temporary sandbox
 	sandbox, err := os.MkdirTemp("", "swarm-eval-*")
 	if err != nil {
@@ -126,6 +145,9 @@ func (e *Evaluator) Run(ctx context.Context, s Scenario) (*Result, error) {
 	// Drain telemetry
 	var trajectory string
 	for event := range respChan {
+		if options.progressCallback != nil {
+			options.progressCallback(event)
+		}
 		if event.Error != nil {
 			trajectory += fmt.Sprintf("[%s] %s: ERROR: %v\n", event.AgentName, event.State, event.Error)
 		} else if event.FinalContent != "" {

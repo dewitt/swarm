@@ -48,5 +48,26 @@ func GetScenarios() ([]Scenario, error) {
 			Prompt:      "Run golangci-lint run in this directory and fix all the issues it reports in main.go by assigning used variables and removing unused ones. Run it with --fix.",
 			Rubric:      "Did the agent see the linter errors and implement the fix logic in the Go file?",
 		},
+		{
+			ID:          "scenario_2",
+			Name:        "Unfamiliar API Migration",
+			FixturePath: filepath.Join(root, "eval", "fixtures", "scenario_2_migration"),
+			Prompt:      "Migrate main.py to use `httpx` with `async/await`. Also update requirements.txt to reflect this change. You must read the web documentation for httpx if you don't know the exact syntax.",
+			Rubric:      "Did the agent successfully replace all `requests` logic with asynchronous `httpx` logic (e.g. `async with httpx.AsyncClient()`)? Does the code still correctly fetch the URLs? Is `requests` completely removed from main.py and requirements.txt?",
+		},
+		{
+			ID:          "scenario_3",
+			Name:        "The Security Audit",
+			FixturePath: filepath.Join(root, "eval", "fixtures", "scenario_3_security"),
+			Prompt:      "I am the CTO. Have a Security Expert agent audit server.js and fix any critical vulnerabilities they find.",
+			Rubric:      "Did the agent identify the SQL injection and fix it by parameterizing the query? Did the agent identify the hardcoded JWT secret and move it to an environment variable fallback (e.g., process.env.JWT_SECRET)? If both vulnerabilities are fixed, the test passes.",
+		},
+		{
+			ID:          "scenario_4",
+			Name:        "Git-Native PR Review",
+			FixturePath: filepath.Join(root, "eval", "fixtures", "scenario_4_pr"),
+			Prompt:      "Act as a strict code reviewer. Review the diff on this branch against main. Leave a markdown file REVIEW.md containing your critique.",
+			Rubric:      "Did the agent successfully identify the semantic bug in the refactor diff (subtracting the percentage instead of the calculated amount)? Was the critique written to REVIEW.md?",
+		},
 	}, nil
 }

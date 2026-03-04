@@ -21,24 +21,45 @@ If not resolved, the Swarm Agent generates a *new* execution graph (or calls the
 ### 3.1 Proposed Changes to `pkg/sdk/swarm.go`
 Inside the `Chat(ctx, prompt)` function, we will wrap the planning and execution phases in a `for` loop:
 ```go
-maxCycles := 3
+maxCycles := 5 // Bounded to prevent infinite loops
+o := NewEngine(nil) // Persistent engine across cycles to maintain context
+
 for cycle := 0; cycle < maxCycles; cycle++ {
     // 1. Plan
-    graph, err := m.Plan(ctx, prompt)
+    // Plan receives the structured context of prior cycles, not just a string concatenation.
+    graph, err := m.Plan(ctx, prompt, o.GetTrajectory())
+    if err != nil {
+        return handleErr(err)
+    }
     
     // 2. Execute
-    events, _, err := m.Execute(ctx, graph, o)
+    events, updatedEngine, err := m.Execute(ctx, graph, o)
+    if err != nil {
+        return handleErr(err)
+    }
+    
+    // Drain events sequentially to prevent goroutine deadlock before reflection
+    for ev := range events {
+        out <- ev 
+    }
+    o = updatedEngine // Carry-over engine state
     
     // 3. Reflect
-    // After execution finishes, we query the Swarm Agent (or a dedicated Reflection Agent)
-    // with the full session history and ask: "Is the user request '%s' fully satisfied? If not, what must be done next?"
-    reflection, isDone := m.Reflect(ctx, prompt)
-    if isDone {
+    // Reflect is a strict evaluation against the original request, using a dedicated LLM call
+    // that outputs structured JSON: { "is_resolved": boolean, "reasoning": string, "next_steps": string }
+    reflection, err := m.Reflect(ctx, prompt, o.GetTrajectory())
+    if err != nil {
+         return handleErr(err)
+    }
+    
+    out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm", State: AgentStateThinking, Thought: "Reflecting: " + reflection.Reasoning}
+    
+    if reflection.IsResolved {
         break // Return to user
     }
     
-    // Inject the reflection into the prompt for the next cycle
-    prompt = fmt.Sprintf("Previous step completed. Reflection: %s. Continue pursuing the original goal.", reflection)
+    // Inject structured reflection into the prompt for the next cycle
+    prompt = fmt.Sprintf("Original Goal: %s\n\nReflection from last cycle: %s\nNext Steps: %s", originalPrompt, reflection.Reasoning, reflection.NextSteps)
 }
 ```
 
@@ -49,3 +70,12 @@ Because the engine already emits `ObservableEvent` streams, this background logi
 1. Implement the `Reflect` loop in `pkg/sdk/swarm.go`.
 2. Re-run `swarm eval`. The `swarm_agent` should read the output of the investigators in Scenarios 1, 3, and 5, realize the bug hasn't actually been physically patched yet, and autonomously launch a follow-up span to `write_local_file`.
 3. Achieve 100% pass rate on the E2E suite.
+
+## 5. Peer Critique & Revisions
+This design was peer-reviewed by an independent model (`claude-code`) acting as a Principal Engineer. The critique identified several critical flaws in the naive `for` loop, namely deadlocking the `events` channel by not draining it before `Reflect`, losing engine state across cycles, and unbounded loops intersecting with inner `request_replan` mechanics.
+
+**Revisions Made:**
+- **Explicit Event Draining:** The outer loop now explicitly drains the `events` channel yielded by `Execute` to prevent blocking the execution goroutines.
+- **Engine Carry-over:** The `Engine` instance `o` is initialized *outside* the loop and passed continuously to `Execute` and `Plan` to ensure context, tool results, and trajectory history are strictly maintained across iterations.
+- **Structured Reflection Signature:** `Reflect` is explicitly defined as returning a strict `{"is_resolved": bool, "reasoning": string, "next_steps": string}` JSON struct, abandoning opaque string concatenation.
+- **Bounded Execution Safety:** `maxCycles` acts as a hard safety limit. If breached, the engine emits a visible user-facing final error rather than silently failing.

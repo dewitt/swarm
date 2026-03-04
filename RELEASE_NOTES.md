@@ -1,3 +1,24 @@
+# Swarm v0.03 Release Notes
+
+We are thrilled to announce the **v0.03** release of Swarm. This release focuses on upgrading the runtime into an "Air Traffic Control" experience for managing autonomous agents, and heavily reinforces the engine routing architecture to guarantee reliable, autonomous code modifications.
+
+## Core Features Delivered in v0.03
+
+### 1. The Agent Panel & Observability API
+* **Agent Panel UI**: Shipped a real-time Bubble Tea TUI dashboard displaying all executing agents, their tool usage, and granular state transitions (Thinking, Executing, Waiting, Complete, Error).
+* **Observability API**: Deprecated legacy `ChatEvent` primitive strings in favor of a strongly-typed `ObservableEvent` struct, plumbing fully parsed `genai.FunctionCall` metadata and payloads directly to the interactive clients.
+* **Semantic Observer**: Added an asynchronous `gemini-2.5-flash-8b` background loop inside `executeSpan` that digests raw stdout telemetry and tool payloads, outputting concise, human-readable semantic intents (e.g., `💡 Running unit tests...`) dynamically to the Agent Panel UI.
+
+### 2. Autonomous Remediation (Stateful Routing Engine)
+* **Bounded Reflection Loop**: Solved the "fire and forget" limitations of the previous execution graph. The core `Chat()` execution block was refactored into a bounded 5-cycle loop.
+* **Reflect Phase**: Integrated a new `Reflect()` method that heavily evaluates the trajectory progression post-execution, preventing the agent from concluding a task until a physical verification (like `write_local_file`) has successfully resolved the user's initial prompt.
+
+### 3. Agentic E2E Test Suite
+* Reached an **80% passing rate** on a rigorous 6-scenario LLM-as-a-judge test suite evaluating fully autonomous filesystem modification capabilities.
+* Swarm can now reliably investigate bugs, read source code, and dynamically patch logic and tests without human intervention.
+
+---
+
 # Swarm v0.02 Release Notes
 
 We are excited to announce the **v0.02** release of Swarm. This release focuses on resolving critical stability bottlenecks under high-concurrency loads, refining the CLI's interactivity and UX, and completing our vision for dynamic execution graph rendering.

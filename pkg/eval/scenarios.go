@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"gopkg.in/yaml.v3"
 )
 
 // getRepoRoot attempts to find the root of the sworn repository
@@ -40,49 +42,55 @@ func GetScenarios() ([]Scenario, error) {
 		return nil, err
 	}
 
-	return []Scenario{
-		{
-			ID:          "scenario_1",
-			Name:        "The Linter Fix",
-			FixturePath: filepath.Join(root, "eval", "fixtures", "scenario_1_linter"),
-			Prompt:      "Run golangci-lint run in this directory and fix all the issues it reports in main.go by assigning used variables and removing unused ones. Run it with --fix.",
-			Rubric:      "Did the agent see the linter errors and implement the fix logic in the Go file?",
-		},
-		{
-			ID:          "scenario_2",
-			Name:        "Unfamiliar API Migration",
-			FixturePath: filepath.Join(root, "eval", "fixtures", "scenario_2_migration"),
-			Prompt:      "Migrate main.py to use `httpx` with `async/await`. Also update requirements.txt to reflect this change. You must read the web documentation for httpx if you don't know the exact syntax.",
-			Rubric:      "Did the agent successfully replace all `requests` logic with asynchronous `httpx` logic (e.g. `async with httpx.AsyncClient()`)? Does the code still correctly fetch the URLs? Is `requests` completely removed from main.py and requirements.txt?",
-		},
-		{
-			ID:          "scenario_3",
-			Name:        "The Security Audit",
-			FixturePath: filepath.Join(root, "eval", "fixtures", "scenario_3_security"),
-			Prompt:      "I am the CTO. Have a Security Expert agent audit server.js and fix any critical vulnerabilities they find.",
-			Rubric:      "Did the agent identify the SQL injection and fix it by parameterizing the query? Did the agent identify the hardcoded JWT secret and move it to an environment variable fallback (e.g., process.env.JWT_SECRET)? If both vulnerabilities are fixed, the test passes.",
-		},
-		{
-			ID:          "scenario_4",
-			Name:        "Git-Native PR Review",
-			FixturePath: filepath.Join(root, "eval", "fixtures", "scenario_4_pr"),
-			Prompt:      "Act as a strict code reviewer. Review the diff on this branch against main. Leave a markdown file REVIEW.md containing your critique.",
-			Rubric:      "Did the agent successfully identify the semantic bug in the refactor diff (subtracting the percentage instead of the calculated amount)? Was the critique written to REVIEW.md?",
-		},
-		{
-			ID:          "scenario_5",
-			Name:        "The Logic Bug",
-			FixturePath: filepath.Join(root, "eval", "fixtures", "scenario_5_logic"),
-			Prompt:      "Users are reporting the Fibonacci generator returns 0 for everything, but the tests are passing. Figure out why and fix both the code and the tests.",
-			Rubric:      "Did the agent see that the tests were a false positive? Did the agent successfully fix the logic in main.go (changing `seq := []int{0, 0}` to `seq := []int{0, 1}`) AND update the tests in main_test.go to match the true Fibonacci sequence?",
-		},
-		{
-			ID:                    "scenario_6",
-			Name:                  "Self-Healing Recovery Trace",
-			FixturePath:           filepath.Join(root, "eval", "fixtures", "scenario_6_protoc"),
-			Prompt:                "Build this project.",
-			Rubric:                "Did the agent execute `make build`, observe that `protoc` is missing or fails, deduce that it needs to install `protobuf-compiler` (or download the binary natively), install it, and retry? The test passes if the final build succeeds with a 0 exit code.",
-			RequiresSystemSandbox: true,
-		},
-	}, nil
+	fixturesDir := filepath.Join(root, "eval", "fixtures")
+	entries, err := os.ReadDir(fixturesDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read fixtures directory: %w", err)
+	}
+
+	var scenarios []Scenario
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+
+		scenarioDir := filepath.Join(fixturesDir, entry.Name())
+		yamlPath := filepath.Join(scenarioDir, "scenario.yaml")
+
+		data, err := os.ReadFile(yamlPath)
+		if err != nil {
+			// Skip directories that don't have a scenario.yaml
+			if os.IsNotExist(err) {
+				continue
+			}
+			return nil, fmt.Errorf("failed to read %s: %w", yamlPath, err)
+		}
+
+		var s struct {
+			ID                    string `yaml:"id"`
+			Name                  string `yaml:"name"`
+			Prompt                string `yaml:"prompt"`
+			Rubric                string `yaml:"rubric"`
+			RequiresSystemSandbox bool   `yaml:"requires_system_sandbox"`
+		}
+
+		if err := yaml.Unmarshal(data, &s); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal %s: %w", yamlPath, err)
+		}
+
+		scenarios = append(scenarios, Scenario{
+			ID:                    s.ID,
+			Name:                  s.Name,
+			FixturePath:           scenarioDir,
+			Prompt:                strings.TrimSpace(s.Prompt),
+			Rubric:                strings.TrimSpace(s.Rubric),
+			RequiresSystemSandbox: s.RequiresSystemSandbox,
+		})
+	}
+
+	if len(scenarios) == 0 {
+		return nil, fmt.Errorf("no scenarios found in %s", fixturesDir)
+	}
+
+	return scenarios, nil
 }

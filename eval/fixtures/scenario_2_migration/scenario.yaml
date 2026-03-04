@@ -1,0 +1,6 @@
+id: scenario_2
+name: Unfamiliar API Migration
+prompt: >
+  Migrate main.py to use `httpx` with `async/await`. Also update requirements.txt to reflect this change. You must read the web documentation for httpx if you don't know the exact syntax.
+rubric: >
+  Did the agent successfully replace all `requests` logic with asynchronous `httpx` logic (e.g. `async with httpx.AsyncClient()`)? Does the code still correctly fetch the URLs? Is `requests` completely removed from main.py and requirements.txt?

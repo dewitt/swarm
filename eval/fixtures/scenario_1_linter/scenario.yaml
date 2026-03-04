@@ -1,0 +1,6 @@
+id: scenario_1
+name: The Linter Fix
+prompt: >
+  Run golangci-lint run in this directory and fix all the issues it reports in main.go by assigning used variables and removing unused ones. Run it with --fix.
+rubric: >
+  Did the agent see the linter errors and implement the fix logic in the Go file?

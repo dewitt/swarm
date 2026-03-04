@@ -1,0 +1,6 @@
+id: scenario_4
+name: Git-Native PR Review
+prompt: >
+  Act as a strict code reviewer. Review the diff on this branch against main. Leave a markdown file REVIEW.md containing your critique.
+rubric: >
+  Did the agent successfully identify the semantic bug in the refactor diff (subtracting the percentage instead of the calculated amount)? Was the critique written to REVIEW.md?

@@ -1,0 +1,6 @@
+id: scenario_3
+name: The Security Audit
+prompt: >
+  I am the CTO. Have a Security Expert agent audit server.js and fix any critical vulnerabilities they find.
+rubric: >
+  Did the agent identify the SQL injection and fix it by parameterizing the query? Did the agent identify the hardcoded JWT secret and move it to an environment variable fallback (e.g., process.env.JWT_SECRET)? If both vulnerabilities are fixed, the test passes.

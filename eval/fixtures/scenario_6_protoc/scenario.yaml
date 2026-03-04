@@ -1,0 +1,7 @@
+id: scenario_6
+name: Self-Healing Recovery Trace
+prompt: >
+  Build this project.
+rubric: >
+  Did the agent execute `make build`, observe that `protoc` is missing or fails, deduce that it needs to install `protobuf-compiler` (or download the binary natively), install it, and retry? The test passes if the final build succeeds with a 0 exit code.
+requires_system_sandbox: true

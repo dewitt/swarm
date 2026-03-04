@@ -126,7 +126,9 @@ func (e *Evaluator) Run(ctx context.Context, s Scenario) (*Result, error) {
 	// Drain telemetry
 	var trajectory string
 	for event := range respChan {
-		if event.FinalContent != "" {
+		if event.Error != nil {
+			trajectory += fmt.Sprintf("[%s] %s: ERROR: %v\n", event.AgentName, event.State, event.Error)
+		} else if event.FinalContent != "" {
 			trajectory += fmt.Sprintf("[%s] %s: %s\n", event.AgentName, event.State, event.FinalContent)
 		} else if event.ToolName != "" {
 			trajectory += fmt.Sprintf("[%s] %s: Tool %s(%v)\n", event.AgentName, event.State, event.ToolName, event.ToolArgs)

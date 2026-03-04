@@ -27,7 +27,8 @@ func (m *MockModel) GenerateContent(ctx context.Context, req *model.LLMRequest, 
 		// If system instruction mentions Planning Agent, return a plan
 		if req.Config != nil && req.Config.SystemInstruction != nil {
 			for _, p := range req.Config.SystemInstruction.Parts {
-				if p.Text != "" && (contains(p.Text, "Swarm Agent") || contains(p.Text, "Planning Agent") || contains(p.Text, "DAG")) {
+				// Match the new skills/planning-agent/SKILL.md content or legacy names
+				if p.Text != "" && (contains(p.Text, "planning_agent") || contains(p.Text, "Planning Agent") || contains(p.Text, "DAG") || contains(p.Text, "ExecutionGraph")) {
 					userPrompt := strings.ToLower(req.Contents[0].Parts[0].Text)
 					if contains(userPrompt, "hello") {
 						responseText = `{"immediate_response": "Hello from trivial plan!"}`
@@ -36,7 +37,8 @@ func (m *MockModel) GenerateContent(ctx context.Context, req *model.LLMRequest, 
 					}
 					break
 				}
-				if p.Text != "" && (contains(p.Text, "Input Agent")) {
+				// Match the new skills/routing-agent/SKILL.md content
+				if p.Text != "" && (contains(p.Text, "routing_agent") || contains(p.Text, "Input Agent") || contains(p.Text, "ROUTE TO")) {
 					responseText = "ROUTE TO: swarm_agent"
 					break
 				}

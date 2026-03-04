@@ -795,6 +795,20 @@ func (m *defaultSwarm) Chat(ctx context.Context, prompt string) (<-chan Observab
 				graph = &ExecutionGraph{Spans: []Span{{ID: "t1", Name: "Fulfill", Agent: target, Prompt: cyclePrompt}}}
 			}
 
+			// Namespace spans if this is a reflection cycle
+			if cycle > 0 && graph != nil {
+				prefix := fmt.Sprintf("c%d-", cycle)
+				for i := range graph.Spans {
+					graph.Spans[i].ID = prefix + graph.Spans[i].ID
+					if graph.Spans[i].ParentID != "" {
+						graph.Spans[i].ParentID = prefix + graph.Spans[i].ParentID
+					}
+					for j := range graph.Spans[i].Dependencies {
+						graph.Spans[i].Dependencies[j] = prefix + graph.Spans[i].Dependencies[j]
+					}
+				}
+			}
+
 			// 3. Execution
 			if len(graph.Spans) > 0 {
 				events, updatedEngine, err := m.Execute(ctx, graph, o)

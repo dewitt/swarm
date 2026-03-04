@@ -590,8 +590,15 @@ func (m *defaultSwarm) Plan(ctx context.Context, prompt string, traj Trajectory)
 		}
 	}
 	jsonStr = strings.TrimSpace(jsonStr)
-	if jsonStr == "DEEP_PLAN_REQUIRED" {
-		respIter = m.proModel.GenerateContent(ctx, &model.LLMRequest{Contents: []*genai.Content{genai.NewContentFromText(prompt, genai.Role("user"))}, Config: &genai.GenerateContentConfig{SystemInstruction: genai.NewContentFromText(systemPrompt, genai.Role("system"))}}, false)
+	jsonStr = strings.TrimSpace(jsonStr)
+	if strings.Contains(jsonStr, "DEEP_PLAN_REQUIRED") {
+		respIter = m.proModel.GenerateContent(ctx, &model.LLMRequest{
+			Contents: []*genai.Content{genai.NewContentFromText(prompt, genai.Role("user"))},
+			Config: &genai.GenerateContentConfig{
+				SystemInstruction: genai.NewContentFromText(systemPrompt, genai.Role("system")),
+				ResponseMIMEType:  "application/json",
+			},
+		}, false)
 		jsonStr = ""
 		for resp, err := range respIter {
 			if err != nil {

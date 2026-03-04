@@ -1,0 +1,11 @@
+{
+    "name": "scenario-3-security",
+    "version": "1.0.0",
+    "description": "A intentionally vulnerable express server for testing",
+    "main": "server.js",
+    "dependencies": {
+        "express": "^4.19.2",
+        "jsonwebtoken": "^9.0.2",
+        "sqlite3": "^5.1.7"
+    }
+}

@@ -590,12 +590,12 @@ func (m *defaultSwarm) Plan(ctx context.Context, prompt string, traj Trajectory)
 		}
 	}
 	jsonStr = strings.TrimSpace(jsonStr)
-	jsonStr = strings.TrimSpace(jsonStr)
 	if strings.Contains(jsonStr, "DEEP_PLAN_REQUIRED") {
+		overridePrompt := systemPrompt + "\n\nCRITICAL OVERRIDE: You are acting as the Deep Planner. You MUST output a full JSON execution graph matching the requested schema. DO NOT output 'DEEP_PLAN_REQUIRED' under any circumstance."
 		respIter = m.proModel.GenerateContent(ctx, &model.LLMRequest{
 			Contents: []*genai.Content{genai.NewContentFromText(prompt, genai.Role("user"))},
 			Config: &genai.GenerateContentConfig{
-				SystemInstruction: genai.NewContentFromText(systemPrompt, genai.Role("system")),
+				SystemInstruction: genai.NewContentFromText(overridePrompt, genai.Role("system")),
 				ResponseMIMEType:  "application/json",
 			},
 		}, false)

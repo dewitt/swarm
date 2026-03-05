@@ -33,6 +33,11 @@ All changes should be proposed via Pull Requests (PRs).
 - Once your PR is reviewed and merged into the main repository, the branch
   will be deleted to keep the repository clean.
 
+### 4. Markdown Formatting
+
+- All markdown files should be formatted using `mdformat --wrap 78` to ensure consistency.
+- **CRITICAL:** Do **NOT** run `mdformat` on `SKILL.md` files (located in the `skills/` directory). These files use YAML frontmatter for agent configuration that will be corrupted by standard markdown formatters.
+
 ## Code of Conduct
 
 We expect all contributors to adhere to a respectful and welcoming code of

@@ -722,7 +722,15 @@ func (m *defaultSwarm) Chat(ctx context.Context, prompt string) (<-chan Observab
 			lastAgentName = m.lastAgent
 		}
 
-		dynamicInstruction := m.inputInstruction + fmt.Sprintf("\n\nCURRENT CONTEXT: The last agent to respond was: %s.", lastAgentName)
+		var descriptions []string
+		for _, name := range m.subAgentNames {
+			if a, ok := m.agents[name]; ok {
+				descriptions = append(descriptions, fmt.Sprintf("- **%s**: %s", name, a.Description()))
+			}
+		}
+		specialistsList := strings.Join(descriptions, "\n")
+
+		dynamicInstruction := m.inputInstruction + fmt.Sprintf("\n\nAVAILABLE AGENTS:\n%s\n\nCURRENT CONTEXT: The last agent to respond was: %s.", specialistsList, lastAgentName)
 
 		inputIter := m.fastModel.GenerateContent(ctx, &model.LLMRequest{
 			Contents: []*genai.Content{genai.NewContentFromText(prompt, genai.Role("user"))},

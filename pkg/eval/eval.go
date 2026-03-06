@@ -130,7 +130,8 @@ func (e *Evaluator) Run(ctx context.Context, s Scenario, opts ...RunOption) (*Re
 
 	// 3. Instantiate Swarm Engine in the sandbox
 	cfg := sdk.SwarmConfig{
-		Debug: true,
+		Debug:       true,
+		DatabaseURI: "file::memory:?cache=shared",
 	}
 	instance, err := sdk.NewSwarm(cfg)
 	if err != nil {

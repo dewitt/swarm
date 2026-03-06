@@ -255,19 +255,25 @@ func (a *swarmAgent) update(state, status string) {
 	a.lastActive = time.Now()
 }
 
-func getWorkspaceFiles() []string {
-	var items []string
-	out, err := exec.Command("git", "ls-files").Output()
-	if err == nil {
-		lines := strings.Split(string(out), "\n")
-		for _, l := range lines {
-			l = strings.TrimSpace(l)
-			if l != "" {
-				items = append(items, l)
+type workspaceFilesMsg struct {
+	files []string
+}
+
+func fetchWorkspaceFiles() tea.Cmd {
+	return func() tea.Msg {
+		var items []string
+		out, err := exec.Command("git", "ls-files").Output()
+		if err == nil {
+			lines := strings.Split(string(out), "\n")
+			for _, l := range lines {
+				l = strings.TrimSpace(l)
+				if l != "" {
+					items = append(items, l)
+				}
 			}
 		}
+		return workspaceFilesMsg{files: items}
 	}
-	return items
 }
 
 type uiSpan struct {
@@ -332,7 +338,8 @@ type model struct {
 	acMode         string // "file", "command", "history"
 	acHasMore      bool
 
-	isDark bool
+	isDark               bool
+	isRefreshingActivity bool
 }
 
 func (m model) theme() struct {
@@ -356,9 +363,6 @@ func (m model) theme() struct {
 }
 
 func updateAutocomplete(m *model) {
-	if m.workspaceFiles == nil {
-		m.workspaceFiles = getWorkspaceFiles()
-	}
 	val := m.textArea.Value()
 	m.acHasMore = false
 
@@ -560,64 +564,70 @@ func doGitTick() tea.Cmd {
 	})
 }
 
-func getRecentActivity(swarm sdk.Swarm, width int) string {
-	sessions, _ := swarm.ListSessions(context.Background())
-	commits, _ := sdk.GetRecentCommits(".", 3)
+type recentActivityMsg struct {
+	html string
+}
 
-	var sb strings.Builder
-	sb.WriteString(lipgloss.NewStyle().Bold(true).Foreground(googleBlue).Render("Recent Activity") + "\n")
+func fetchRecentActivity(swarm sdk.Swarm, width int) tea.Cmd {
+	return func() tea.Msg {
+		sessions, _ := swarm.ListSessions(context.Background())
+		commits, _ := sdk.GetRecentCommits(".", 3)
 
-	// Calculate max content width (width minus borders(2), padding(8), and " git " prefix(5))
-	maxContentWidth := width - 10 - 5
-	if maxContentWidth < 5 {
-		maxContentWidth = 5
-	}
+		var sb strings.Builder
+		sb.WriteString(lipgloss.NewStyle().Bold(true).Foreground(googleBlue).Render("Recent Activity") + "\n")
 
-	hasActivity := false
-	if len(commits) > 0 {
-		for _, c := range commits {
-			// Remove any newlines to prevent wrapping
-			c = strings.ReplaceAll(c, "\n", " ")
-			if runewidth.StringWidth(c) > maxContentWidth {
-				c = runewidth.Truncate(c, maxContentWidth-1, "…")
+		// Calculate max content width (width minus borders(2), padding(8), and " git " prefix(5))
+		maxContentWidth := width - 10 - 5
+		if maxContentWidth < 5 {
+			maxContentWidth = 5
+		}
+
+		hasActivity := false
+		if len(commits) > 0 {
+			for _, c := range commits {
+				// Remove any newlines to prevent wrapping
+				c = strings.ReplaceAll(c, "\n", " ")
+				if runewidth.StringWidth(c) > maxContentWidth {
+					c = runewidth.Truncate(c, maxContentWidth-1, "…")
+				}
+				sb.WriteString(lipgloss.NewStyle().Foreground(googleGreen).Render(" git ") + c + "\n")
 			}
-			sb.WriteString(lipgloss.NewStyle().Foreground(googleGreen).Render(" git ") + c + "\n")
+			hasActivity = true
 		}
-		hasActivity = true
-	}
 
-	sessionCount := 0
-	for i := len(sessions) - 1; i >= 0 && sessionCount < 3; i-- {
-		s := sessions[i]
-		summary := strings.ReplaceAll(s.Summary, "\n", " ")
-		if runewidth.StringWidth(summary) > maxContentWidth {
-			summary = runewidth.Truncate(summary, maxContentWidth-1, "…")
+		sessionCount := 0
+		for i := len(sessions) - 1; i >= 0 && sessionCount < 3; i-- {
+			s := sessions[i]
+			summary := strings.ReplaceAll(s.Summary, "\n", " ")
+			if runewidth.StringWidth(summary) > maxContentWidth {
+				summary = runewidth.Truncate(summary, maxContentWidth-1, "…")
+			}
+			sb.WriteString(lipgloss.NewStyle().Foreground(googleYellow).Render(" chat ") + summary + "\n")
+			sessionCount++
+			hasActivity = true
 		}
-		sb.WriteString(lipgloss.NewStyle().Foreground(googleYellow).Render(" chat ") + summary + "\n")
-		sessionCount++
-		hasActivity = true
-	}
 
-	if !hasActivity {
-		sb.WriteString("(none yet)\n")
-	}
+		if !hasActivity {
+			sb.WriteString("(none yet)\n")
+		}
 
-	// Add spacing to reach a consistent height
-	currentLines := strings.Count(sb.String(), "\n")
-	for i := currentLines; i < 7; i++ {
-		sb.WriteString("\n")
-	}
+		// Add spacing to reach a consistent height
+		currentLines := strings.Count(sb.String(), "\n")
+		for i := currentLines; i < 7; i++ {
+			sb.WriteString("\n")
+		}
 
-	sb.WriteString("\n" + lipgloss.NewStyle().Bold(true).Foreground(googleBlue).Render("Quick Tips") + "\n")
-	if width > 50 {
-		sb.WriteString(lipgloss.NewStyle().Foreground(tipColor).Render("^O") + " toggle observe  " + lipgloss.NewStyle().Foreground(tipColor).Render("!") + " run shell\n")
-		sb.WriteString(lipgloss.NewStyle().Foreground(tipColor).Render("/plan") + " brainstorm   " + lipgloss.NewStyle().Foreground(tipColor).Render("/skills") + " skills")
-	} else {
-		sb.WriteString(lipgloss.NewStyle().Foreground(tipColor).Render("^O") + " observe  " + lipgloss.NewStyle().Foreground(tipColor).Render("!") + " shell\n")
-		sb.WriteString(lipgloss.NewStyle().Foreground(tipColor).Render("/plan") + " plan   " + lipgloss.NewStyle().Foreground(tipColor).Render("/skills") + " skills")
-	}
+		sb.WriteString("\n" + lipgloss.NewStyle().Bold(true).Foreground(googleBlue).Render("Quick Tips") + "\n")
+		if width > 50 {
+			sb.WriteString(lipgloss.NewStyle().Foreground(tipColor).Render("^O") + " toggle observe  " + lipgloss.NewStyle().Foreground(tipColor).Render("!") + " run shell\n")
+			sb.WriteString(lipgloss.NewStyle().Foreground(tipColor).Render("/plan") + " brainstorm   " + lipgloss.NewStyle().Foreground(tipColor).Render("/skills") + " skills")
+		} else {
+			sb.WriteString(lipgloss.NewStyle().Foreground(tipColor).Render("^O") + " observe  " + lipgloss.NewStyle().Foreground(tipColor).Render("!") + " shell\n")
+			sb.WriteString(lipgloss.NewStyle().Foreground(tipColor).Render("/plan") + "      " + lipgloss.NewStyle().Foreground(tipColor).Render("/skills") + "\n")
+		}
 
-	return sb.String()
+		return recentActivityMsg{html: sb.String()}
+	}
 }
 
 func initialModel(planMode bool, resume bool) (model, error) {
@@ -683,14 +693,22 @@ func initialModel(planMode bool, resume bool) (model, error) {
 		{name: "Swarm Agent", icon: "◈", status: "Idle", state: "idle", spin: agentSpinner, resident: true, lastActive: time.Now()},
 	}
 
-	webServer := web.NewServer(":5050")
-	go func() {
-		if err := webServer.Start(); err != nil {
-			// server closed
-		}
-	}()
+	var webServer *web.Server
+	if !strings.HasSuffix(os.Args[0], ".test") {
+		webServer = web.NewServer(":5050")
+		go func() {
+			if err := webServer.Start(); err != nil {
+				// server closed
+			}
+		}()
+	}
 
-	swarm, err := sdk.NewSwarm(sdk.SwarmConfig{ResumeLastSession: resume})
+	// Use in-memory DB for tests to prevent SQLite file locks
+	swarmConfig := sdk.SwarmConfig{ResumeLastSession: resume}
+	if strings.HasSuffix(os.Args[0], ".test") {
+		swarmConfig.DatabaseURI = "file::memory:?cache=shared"
+	}
+	swarm, err := sdk.NewSwarm(swarmConfig)
 	if err != nil {
 		return model{}, err
 	}
@@ -698,7 +716,7 @@ func initialModel(planMode bool, resume bool) (model, error) {
 	// Prepare splash screen components for dynamic rendering in View()
 	greeting := fmt.Sprintf("\n\n%s %s!", lipgloss.NewStyle().Foreground(tipColor).Render("Welcome back,"), lipgloss.NewStyle().Bold(true).Render(getUserName()))
 	logoAndGreeting := renderLogo(isDark) + greeting
-	recentActivity := getRecentActivity(swarm, 40) // Default width, will be updated in View()
+	recentActivity := "\nLoading recent activity..."
 
 	return model{
 		textArea:       ta,
@@ -724,6 +742,7 @@ func initialModel(planMode bool, resume bool) (model, error) {
 		showAgentPanel: true,
 		welcomeScreen:  []string{logoAndGreeting, recentActivity},
 		isDark:         isDark,
+		cachedActivity: recentActivity,
 	}, nil
 }
 
@@ -781,6 +800,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// If we are in the model list state, hijack the keys
 	if m.state == stateModelList {
+		if m.isRefreshingActivity {
+			// It's already refreshing or about to be triggered
+		} else if m.cachedActivity == "\nLoading recent activity..." || time.Since(m.lastActivityRefresh) > 30*time.Second {
+			m.isRefreshingActivity = true
+
+			// If we are looking at the splash screen, we need to know the width
+			rightW := (m.width - ((m.width * 2) / 3) - 2)
+			if rightW > 0 {
+				cmds = append(cmds, fetchRecentActivity(m.swarm, rightW))
+			}
+		}
+
 		switch msg := msg.(type) {
 		case tea.WindowSizeMsg:
 			// Let it pass through to the main handler below to update sizes
@@ -822,6 +853,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	if m.isRefreshingActivity {
+		// It's already refreshing or about to be triggered
+	} else if m.cachedActivity == "\nLoading recent activity..." || time.Since(m.lastActivityRefresh) > 30*time.Second {
+		m.isRefreshingActivity = true
+
+		// If we are looking at the splash screen, we need to know the width
+		rightW := (m.width - ((m.width * 2) / 3) - 2)
+		if rightW > 0 {
+			cmds = append(cmds, fetchRecentActivity(m.swarm, rightW))
+		}
+	}
+
 	switch msg := msg.(type) {
 	case tea.BackgroundColorMsg:
 		m.isDark = msg.IsDark()
@@ -837,6 +880,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				glamour.WithWordWrap(m.viewport.Width()),
 			)
 		}
+		return m, nil
+
+	case workspaceFilesMsg:
+		m.workspaceFiles = msg.files
+		updateAutocomplete(&m)
+		return m, nil
+
+	case recentActivityMsg:
+		m.cachedActivity = msg.html
+		m.lastActivityRefresh = time.Now()
+		m.isRefreshingActivity = false
+		m.updateViewport()
 		return m, nil
 
 	case gitStatusMsg:
@@ -1396,6 +1451,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	if m.state == stateChat {
+		if strings.Contains(val, "@") && m.workspaceFiles == nil {
+			cmds = append(cmds, fetchWorkspaceFiles())
+		}
 		updateAutocomplete(&m)
 	}
 
@@ -1927,12 +1985,6 @@ func (m *model) updateViewport() {
 			// SPLASH_SCREEN split: 2/3 Logo, 1/3 Recent Activity
 			leftW := (m.width * 2) / 3
 			rightW := m.width - leftW - 2
-
-			// Refresh activity cache if needed (every 30s or if empty)
-			if m.cachedActivity == "" || time.Since(m.lastActivityRefresh) > 30*time.Second {
-				m.cachedActivity = getRecentActivity(m.swarm, rightW)
-				m.lastActivityRefresh = time.Now()
-			}
 
 			left := welcomeBoxStyle.Width(leftW - 4).Render(m.welcomeScreen[0])
 			right := infoBoxStyle.Width(rightW - 4).Render(m.cachedActivity)

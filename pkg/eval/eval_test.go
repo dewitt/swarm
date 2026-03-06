@@ -10,6 +10,9 @@ import (
 )
 
 func TestScenarios(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping agentic evaluation in short mode")
+	}
 	apiKey := os.Getenv("GOOGLE_API_KEY")
 	if apiKey == "" {
 		t.Skip("skipping agentic evaluation; GOOGLE_API_KEY not set")

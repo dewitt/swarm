@@ -137,6 +137,7 @@ type SwarmConfig struct {
 	Model             model.LLM
 	ResumeLastSession bool
 	Debug             bool
+	DatabaseURI       string
 }
 
 func NewSwarm(cfg ...SwarmConfig) (Swarm, error) {
@@ -214,9 +215,15 @@ func NewSwarm(cfg ...SwarmConfig) (Swarm, error) {
 	googleSearchTool, _ := functiontool.New(functiontool.Config{Name: "google_search"}, googleSearchFunc)
 	replanTool, _ := functiontool.New(functiontool.Config{Name: "request_replan"}, requestReplan)
 
-	dbDir, _ := GetConfigDir()
-	dbPath := filepath.Join(dbDir, "sessions.db")
-	dialector := sqlite.Open(dbPath + "?_journal_mode=WAL&_busy_timeout=5000")
+	var dbURI string
+	if len(cfg) > 0 {
+		dbURI = cfg[0].DatabaseURI
+	}
+	if dbURI == "" {
+		dbDir, _ := GetConfigDir()
+		dbURI = filepath.Join(dbDir, "sessions.db") + "?_journal_mode=WAL&_busy_timeout=5000"
+	}
+	dialector := sqlite.Open(dbURI)
 	gormCfg := &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)}
 	db, err := gorm.Open(dialector, gormCfg)
 	if err != nil {

@@ -5,7 +5,7 @@ debt that should be addressed as the project evolves.
 
 ## Pending Migrations
 
-- [ ] **Upgrade to Bubble Tea 2.0**: Charm has released Bubble Tea 2.0, a
+- [x] **Upgrade to Bubble Tea 2.0**: Charm has released Bubble Tea 2.0, a
   complete rewrite focusing on performance and a more flexible architecture.
   We should migrate the TUI to v2 to leverage these improvements. See the
   [migration guide](https://charm.land/blog/v2/) for details.

@@ -2162,9 +2162,10 @@ func (m model) renderAgentPanel() string {
 			BorderForeground(color).
 			BorderBottom(false).
 			Padding(0, 1).
+			MarginRight(2).
 			Width(cardWidth - 2)
 
-		contentWidth := cardWidth - 4
+		contentWidth := cardWidth - 6
 		if contentWidth < 1 {
 			contentWidth = 1
 		}
@@ -2205,8 +2206,8 @@ func (m model) renderAgentPanel() string {
 		if fidelity == "high" || fidelity == "medium" {
 			label := " " + statusLabel + " "
 			labelLen := runewidth.StringWidth(label)
-			actualWidth := lipgloss.Width(renderedCard)
-			remaining := actualWidth - 2 - labelLen
+			visibleWidth := cardWidth - 2
+			remaining := visibleWidth - 2 - labelLen
 			rightDashCount := 2
 			leftDashCount := remaining - rightDashCount
 			if leftDashCount < 1 {
@@ -2217,7 +2218,7 @@ func (m model) renderAgentPanel() string {
 				}
 			}
 
-			bottomLine := lipgloss.NewStyle().Foreground(color).Render(
+			bottomLine := lipgloss.NewStyle().Foreground(color).MarginRight(2).Render(
 				border.BottomLeft +
 					strings.Repeat(border.Bottom, leftDashCount) +
 					label +

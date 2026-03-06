@@ -2514,7 +2514,13 @@ func launchInteractiveShell(planMode bool, resume bool) error {
 	}
 	p := tea.NewProgram(m)
 	if _, err := p.Run(); err != nil {
+		if m.webServer != nil {
+			m.webServer.Stop(context.Background())
+		}
 		return fmt.Errorf("error: %w", err)
+	}
+	if m.webServer != nil {
+		m.webServer.Stop(context.Background())
 	}
 	return nil
 }

@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"embed"
 	"encoding/json"
 	"fmt"
@@ -20,6 +21,7 @@ type Server struct {
 	clients     map[chan sdk.ObservableEvent]bool
 	clientsMu   sync.RWMutex
 	eventStream chan sdk.ObservableEvent
+	httpServer  *http.Server
 }
 
 // NewServer creates a new SSE Server on the given address.
@@ -65,12 +67,23 @@ func (s *Server) Start() error {
 	// SSE Endpoint
 	mux.HandleFunc("/events", s.handleSSE)
 
-	srv := &http.Server{
+	s.httpServer = &http.Server{
 		Addr:    s.addr,
 		Handler: mux,
 	}
 
-	return srv.ListenAndServe()
+	if err := s.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		return err
+	}
+	return nil
+}
+
+// Stop gracefully shuts down the web server.
+func (s *Server) Stop(ctx context.Context) error {
+	if s.httpServer != nil {
+		return s.httpServer.Shutdown(ctx)
+	}
+	return nil
 }
 
 // router handles fan-out to all connected browser tabs.

@@ -20,12 +20,12 @@ handle it _before_ the message is processed by the current agent.
 
 1. **Digression Detection**: Recognizing when the user's input is no longer
    related to the current agent's task.
-2. **Contextual Routing**: Determining if the input should go to:
+1. **Contextual Routing**: Determining if the input should go to:
    - The current active agent (e.g., continuing a Git operation).
    - The primary Swarm Agent (for a new general-purpose task).
    - A different specialized agent (e.g., switching from Git to System
      Design).
-3. **Implicit vs. Explicit Handoff**: Handling cases where the user doesn't
+1. **Implicit vs. Explicit Handoff**: Handling cases where the user doesn't
    explicitly ask for a handoff but their intent clearly shifts.
 
 ### Mechanism
@@ -54,10 +54,10 @@ This approach is superior to the "Quiet Observer" pattern in several ways:
 
 1. **Proactivity**: It catches digressions _before_ the wrong agent tries to
    answer, preventing confusing or incorrect responses.
-2. **Latency/Efficiency**: Because the Input Agent has a very narrow scope
+1. **Latency/Efficiency**: Because the Input Agent has a very narrow scope
    (just routing), it can use a much smaller, faster model (like
    `gemini-1.5-flash-8b`) than the primary Swarm Agent or sub-agents.
-3. **Simplicity**: It centralizes the "routing logic" into a single,
+1. **Simplicity**: It centralizes the "routing logic" into a single,
    specialized agent rather than spreading "oversight" logic across the SDK.
 
 ### Implementation Considerations
@@ -66,9 +66,9 @@ This approach is superior to the "Quiet Observer" pattern in several ways:
   and what the recent history looks like.
 - **Ambiguity**: If the input is ambiguous, it should default to the current
   agent to avoid unnecessary context switching.
-- **Latency Budget**: This pre-processing step must be extremely fast (<
+- **Latency Budget**: This pre-processing step must be extremely fast (\<
   500ms) to ensure the UI remains responsive.
 
----
+______________________________________________________________________
 
 **Status:** Implemented **Reference:** Issue #25 (Swarm Agent Oversight)

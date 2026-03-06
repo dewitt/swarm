@@ -12,16 +12,20 @@ ensuring the tool remains user-centric, frictionless, and powerful.
 1. **[Deploying an Agent to Google Agent Engine](./02-deploy-to-google-agent-engine.md)**
    - **Focus:** Dynamic Skills, GitOps workflows, and CI/CD generation.
 1. **[Swarm Collaboration on System Design](./03-swarm-design-collaboration.md)**
-   - **Focus:** Git-native decentralized multi-agent orchestration, specialized roles (`ROLES.md`), and asynchronous peer review.
+   - **Focus:** Git-native decentralized multi-agent orchestration,
+     specialized roles (`ROLES.md`), and asynchronous peer review.
 1. **[Autonomous Swarm-based Skill Refinement](./04-swarm-skill-refinement.md)**
    - **Focus:** Self-updating skills, deep web research, human-in-the-loop
      validation, and GitOps branching strategies.
 1. **[Agentic Test Generation in CI](./05-agentic-test-generation.md)**
-   - **Focus:** Headless execution, native GitHub Actions integration, and asynchronous distributed PR creation.
+   - **Focus:** Headless execution, native GitHub Actions integration, and
+     asynchronous distributed PR creation.
 1. **[Multi-Model Code Review and Consensus](./06-multi-model-code-review.md)**
-   - **Focus:** Diverse model architectures (Codex, Claude, Gemini) collaborating natively on GitHub PRs to debate implementations and reach actionable consensus.
+   - **Focus:** Diverse model architectures (Codex, Claude, Gemini)
+     collaborating natively on GitHub PRs to debate implementations and reach
+     actionable consensus.
 
----
+______________________________________________________________________
 
 ## Brainstorming: Future CUJs
 
@@ -73,7 +77,3 @@ Claude Code, or Codex, we should explore the following user journeys:
   final diff.
 - **Key Features:** Distributed task execution, supervisor-worker multi-agent
   patterns, complex state management.
-
-
-
-

@@ -5,8 +5,8 @@
 If you are reading this file, you have been assigned to work on the `swarm`
 project. This document serves as your primary context, architectural
 constraint guide, and communication protocol. Whether you are an instance of
-the Gemini CLI, Claude Code, Cursor, or the `swarm` CLI itself, you must
-treat this document as the highest-priority operational directive.
+the Gemini CLI, Claude Code, Cursor, or the `swarm` CLI itself, you must treat
+this document as the highest-priority operational directive.
 
 ______________________________________________________________________
 
@@ -60,8 +60,8 @@ ______________________________________________________________________
 ## 3. Repository Structure
 
 - `/cmd/swarm/`: The entry point for the CLI binary (Cobra, Bubble Tea TUI).
-- `/pkg/sdk/`: The embeddable Go SDK. Contains the Swarm, session
-  management (SQLite), and the ADK Swarm logic.
+- `/pkg/sdk/`: The embeddable Go SDK. Contains the Swarm, session management
+  (SQLite), and the ADK Swarm logic.
 - `/docs/design/`: High-level and detailed architectural documents. **You must
   read relevant documents here before making architectural changes.**
 - `/docs/cuj/`: Critical User Journeys. If you change a workflow, you must
@@ -102,18 +102,18 @@ opinions.
 
 1. **Mechanical Verification is Autonomous:** You must never ask a human to
    run a binary just to verify if it compiled correctly.
-3. **Execute Tests:** You must utilize headless testing, `go test ./...`, and
+1. **Execute Tests:** You must utilize headless testing, `go test ./...`, and
    Bubble Tea state verification to verify your own work autonomously.
-4. **UI Regression Testing:** Whenever you modify code that impacts the text
+1. **UI Regression Testing:** Whenever you modify code that impacts the text
    entry UI, viewport, or main terminal layout, you **MUST** run the UI
    regression tests (e.g., `vhs tests/ui/text_entry.tape`) to verify visual
    stability. See `tests/ui/README.md` for instructions.
-5. **Format:** All markdown files must be formatted using `mdformat --wrap 78`
+1. **Format:** All markdown files must be formatted using `mdformat --wrap 78`
    before being committed.
-6. **File GitHub Issues:** As a proactive contributor, always feel free to
-   use the GitHub CLI (`gh issue create`) to file new issues for any bugs,
-   technical debt, or feature enhancements you discover during your work.
-   This is a crucial part of being a good collaborator.
+1. **File GitHub Issues:** As a proactive contributor, always feel free to use
+   the GitHub CLI (`gh issue create`) to file new issues for any bugs,
+   technical debt, or feature enhancements you discover during your work. This
+   is a crucial part of being a good collaborator.
 
 ### Step 4: Asynchronous Handoffs
 

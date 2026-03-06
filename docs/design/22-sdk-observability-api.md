@@ -79,11 +79,11 @@ what populated the `Content` of the Agent Card.
 1. **Redefine `ChatEvent`:** We will deprecate the old primitive `ChatEvent`
    struct in `pkg/sdk/swarm.go` and replace it with a hyper-detailed
    `ObservableEvent` (or greatly expand the existing `ChatEvent` fields).
-2. **Plumb the `executeSpan` Loop:** Modify the event loop inside
+1. **Plumb the `executeSpan` Loop:** Modify the event loop inside
    `executeSpan` to populate these new fields. When `part.FunctionCall`
    triggers, it must attach `part.FunctionCall.Args` cleanly natively to the
    event so the UI can construct tool breakdowns.
-3. **The `AgentPanel` Bubble Tea Grid:** We will build a new Bubble Tea model
+1. **The `AgentPanel` Bubble Tea Grid:** We will build a new Bubble Tea model
    component in `cmd/swarm/interactive.go` that explicitly reads these
    structured events and updates its internal Go Map of active Agent Cards,
    re-rendering the terminal layout on every tick.

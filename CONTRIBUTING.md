@@ -35,8 +35,11 @@ All changes should be proposed via Pull Requests (PRs).
 
 ### 4. Markdown Formatting
 
-- All markdown files should be formatted using `mdformat --wrap 78` to ensure consistency.
-- **CRITICAL:** Do **NOT** run `mdformat` on `SKILL.md` files (located in the `skills/` directory). These files use YAML frontmatter for agent configuration that will be corrupted by standard markdown formatters.
+- All markdown files should be formatted using `mdformat --wrap 78` to ensure
+  consistency.
+- **CRITICAL:** Do **NOT** run `mdformat` on `SKILL.md` files (located in the
+  `skills/` directory). These files use YAML frontmatter for agent
+  configuration that will be corrupted by standard markdown formatters.
 
 ## Code of Conduct
 

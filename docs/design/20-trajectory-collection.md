@@ -66,14 +66,14 @@ through Go code—it's reading the agent's thoughts.
 By saving trajectories locally, a developer (or a coding assistant like
 Gemini/Claude) can:
 
-1.  **Review the Trace:** Ask the coding agent to read
-    `~/.swarm/trajectories/failed_run_123.json`.
-2.  **Identify the Flaw:** The coding agent can pinpoint exactly where a
-    sub-agent hallucinated a bash command or where the `planning_agent`
-    misunderstood the dependencies.
-3.  **Implement the Fix:** The coding agent can then directly propose edits to
-    `SKILL.md` files or the underlying SDK tools (like `tools.go`) to prevent
-    that specific failure mode from ever happening again.
+1. **Review the Trace:** Ask the coding agent to read
+   `~/.swarm/trajectories/failed_run_123.json`.
+1. **Identify the Flaw:** The coding agent can pinpoint exactly where a
+   sub-agent hallucinated a bash command or where the `planning_agent`
+   misunderstood the dependencies.
+1. **Implement the Fix:** The coding agent can then directly propose edits to
+   `SKILL.md` files or the underlying SDK tools (like `tools.go`) to prevent
+   that specific failure mode from ever happening again.
 
 In essence, the Swarm produces the exact diagnostic data needed for another AI
 to improve the Swarm. This creates a powerful, localized flywheel of

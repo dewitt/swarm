@@ -74,9 +74,9 @@ enable user configuration (like selecting the active LLM).
 - **Task 5.3:** Refactor Phase 3 and Phase 4 to use the new Skills
   architecture instead of hardcoded Go logic.
 - [x] **Task 5.4:** Implement configuration management. Introduce an
-      `agents config` command and a `/model` slash command to allow the user
-      to override the default `gemini-2.5-flash` model (including an "auto"
-      routing mode).
+  `agents config` command and a `/model` slash command to allow the user to
+  override the default `gemini-2.5-flash` model (including an "auto" routing
+  mode).
 
 ## Phase 6: Multi-Agent Orchestration & Swarms
 
@@ -84,12 +84,12 @@ enable user configuration (like selecting the active LLM).
 transparently on a single user request.
 
 - [x] **Task 6.1:** Implement the multiplexed UI in the terminal to display
-      multiple agent streams concurrently.
+  multiple agent streams concurrently.
 - [ ] **Task 6.2:** Create the "Swarm Skill" that teaches the Swarm Agent how
-      to instantiate and delegate to specialized sub-agents (Architect,
-      Security Expert, Data Engineer).
+  to instantiate and delegate to specialized sub-agents (Architect, Security
+  Expert, Data Engineer).
 - [ ] **Task 6.3:** Ensure this workflow satisfies
-      `docs/cuj/03-swarm-design-collaboration.md`.
+  `docs/cuj/03-swarm-design-collaboration.md`.
 
 ## Phase 7: Dynamic Swarm Provisioning & Agent Panel
 
@@ -98,14 +98,12 @@ decomposes complex tasks, provisions $N$ agents to execute them in parallel,
 and provides an Agent Panel to monitor them.
 
 - [x] **Task 7.1:** Implement the "Agent Panel" Bubble Tea layout component,
-      creating a visual grid of active Agent Cards above the main chat
-      viewport.
+  creating a visual grid of active Agent Cards above the main chat viewport.
 - [x] **Task 7.2:** Refactor the SDK Event Bus to stream live tool telemetry
-      (e.g., streaming `stdout` from `bash_execute`) directly to the Agent
-      Cards.
+  (e.g., streaming `stdout` from `bash_execute`) directly to the Agent Cards.
 - [x] **Task 7.3:** Implement the "Observer Agent" pattern: A lightweight,
-      parallel model execution loop that synthesizes raw telemetry into
-      semantic status updates (implemented as "Observe Mode" `^O`).
+  parallel model execution loop that synthesizes raw telemetry into semantic
+  status updates (implemented as "Observe Mode" `^O`).
 - **Task 7.4:** Implement Swarm "Control Panel" interactions: pausing,
   resuming, or killing specific agents from the Agent Panel.
 - **Task 7.5:** Implement dynamic auto-provisioning: Teach the Swarm Agent how

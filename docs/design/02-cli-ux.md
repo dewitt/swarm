@@ -18,15 +18,15 @@ understands the system state and who is talking.
    displays meta-information about the application state itself (e.g., active
    models, current context loaded, Git branch, token usage). It is purely
    informational and not mediated by any LLM.
-2. **The Input Area**: Where the Human-In-The-Loop (HITL) interacts. This area
+1. **The Input Area**: Where the Human-In-The-Loop (HITL) interacts. This area
    is implicitly mediated by the **Input Agent**, a high-speed failsafe that
    pre-processes keystrokes to detect topic shifts and ensures the user is
    routed to the correct agent context.
-3. **The Output Area (Viewport)**: The main chat log. This area is mediated by
+1. **The Output Area (Viewport)**: The main chat log. This area is mediated by
    the **Output Agent**, which performs a final sanity check on all text
    before it is rendered to the user, preventing raw hallucinations or broken
    markdown from polluting the display.
-4. **The Agent Panel**: A real-time dashboard visualizing the Swarm's internal
+1. **The Agent Panel**: A real-time dashboard visualizing the Swarm's internal
    state. It displays active agents, their current statuses (e.g., "Analyzing
    request...", "Running list_local_files"), and ephemeral telemetry. This
    provides transparency into the "black box" of agent orchestration without

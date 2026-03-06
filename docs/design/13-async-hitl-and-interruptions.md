@@ -23,7 +23,7 @@ able to:
 This document outlines the architectural and UX strategies for handling
 concurrent input, interruptions, and async HITL interactions.
 
----
+______________________________________________________________________
 
 ## 1. Input Queueing vs. Blocking
 
@@ -45,7 +45,7 @@ The CLI should adopt a non-blocking queue model.
   if an agent specifically requests input, it pops the oldest message from the
   queue.
 
----
+______________________________________________________________________
 
 ## 2. Visual Cues in the Input Box
 
@@ -70,7 +70,7 @@ gracefully without restricting their freedom to type.
     slightly to emphasize that the swarm is entirely blocked until the human
     responds.
 
----
+______________________________________________________________________
 
 ## 3. Interruption Mechanisms
 
@@ -105,7 +105,7 @@ bleed.
      their underlying subprocesses.
   1. The UI renders: `[System] Swarm execution forcefully halted by user.`
 
----
+______________________________________________________________________
 
 ## 4. Architectural Implementation (SDK Event Bus)
 

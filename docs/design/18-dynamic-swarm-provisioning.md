@@ -85,11 +85,11 @@ The Agent Panel must evolve to visualize these dependencies:
 
 1. **Naming Consolidation:** Rename all internal symbols to match
    Input/Output/Planning/Swarm agent conventions.
-2. **Invisible Mediation:** Refactor the UI to hide mediation agents from the
+1. **Invisible Mediation:** Refactor the UI to hide mediation agents from the
    chat history while keeping them in the panel.
-3. **Node Autonomy:** Trust worker nodes to handle their own next steps by
+1. **Node Autonomy:** Trust worker nodes to handle their own next steps by
    default.
-4. **Observer Sidecars:** Refactor background monitoring to be truly
+1. **Observer Sidecars:** Refactor background monitoring to be truly
    asynchronous.
-5. **UI Graph Fidelity:** Update the Agent Panel to visualize a **living,
+1. **UI Graph Fidelity:** Update the Agent Panel to visualize a **living,
    shifting graph**.

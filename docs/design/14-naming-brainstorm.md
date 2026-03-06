@@ -62,17 +62,13 @@ _These names focus on the "agentic" qualities of the system._
 
 ## Summary Table
 
-| Name       | Source/Idea  | Vibe                | Typeability |
-| :--------- | :----------- | :------------------ | :---------- |
-| **Murmur** | Starlings    | Fluid/Emergent      | Excellent   |
-| **Skein**  | Geese/Thread | Coordinated         | Great       |
-| **Muster** | Assembly     | Command-ready       | Good        |
-| **Glint**  | Light        | Sharp/Fast          | Excellent   |
-| **Covey**  | Quail        | Focused             | Good        |
-| **Skulk**  | Foxes        | Clever/Stealthy     | Good        |
-| **Wry**    | Intelligence | Smart/Adaptive      | Excellent   |
-| **Spry**   | Agility      | Lightweight         | Excellent   |
-| **Shoal**  | Fish         | Agile/Collaborative | Good        |
-| **Dray**   | Squirrels    | Organized           | Excellent   |
-| **Verve**  | Energy       | High-performance    | Good        |
-| **Husk**   | Hares        | Fast/Contained      | Good        |
+| Name | Source/Idea | Vibe | Typeability | | :--------- | :----------- |
+:------------------ | :---------- | | **Murmur** | Starlings | Fluid/Emergent
+| Excellent | | **Skein** | Geese/Thread | Coordinated | Great | | **Muster**
+| Assembly | Command-ready | Good | | **Glint** | Light | Sharp/Fast |
+Excellent | | **Covey** | Quail | Focused | Good | | **Skulk** | Foxes |
+Clever/Stealthy | Good | | **Wry** | Intelligence | Smart/Adaptive | Excellent
+| | **Spry** | Agility | Lightweight | Excellent | | **Shoal** | Fish |
+Agile/Collaborative | Good | | **Dray** | Squirrels | Organized | Excellent |
+| **Verve** | Energy | High-performance | Good | | **Husk** | Hares |
+Fast/Contained | Good |

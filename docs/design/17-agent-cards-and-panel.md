@@ -36,8 +36,8 @@ agents.
 ### 2. Stable Identity and Color Coding
 
 - **Stable Emoji:** Every agent must have a stable, recognizable emoji (e.g.,
-  🧠 for Swarm, 🌐 for Web Researcher, 🐙 for GitOps). This anchors the
-  agent's identity, especially at minimum fidelity.
+  🧠 for Swarm, 🌐 for Web Researcher, 🐙 for GitOps). This anchors the agent's
+  identity, especially at minimum fidelity.
 - **Border States:** The card's border acts as a quick-glance status
   indicator:
   - 🟢 **Green/Blue (Pulsing):** Active and thinking/executing.
@@ -98,7 +98,7 @@ cards.
 - This creates a real-time, living execution graph, making complex multi-agent
   delegation instantly understandable.
 
----
+______________________________________________________________________
 
 **Status:** Accepted Design **Next Steps:** Implementation of Ephemeral
 Lifecycles, Dynamic Resizing, and Mouse Click Support.

@@ -24,10 +24,10 @@ logic.
 
 1. **Passive Intent Detection**: The Swarm Agent analyzes every user message,
    even when a subagent is active.
-2. **Contextual Handoff**: If the Swarm Agent detects a domain shift, it
+1. **Contextual Handoff**: If the Swarm Agent detects a domain shift, it
    interrupts the subagent and provides a transition message (e.g., "I'll take
    it from here to handle your broader request...").
-3. **Seamless State Transfer**: The Swarm Agent should maintain the context of
+1. **Seamless State Transfer**: The Swarm Agent should maintain the context of
    what the subagent just accomplished so it can incorporate that into the
    next phase of the task.
 
@@ -69,6 +69,6 @@ I recommend implementing this as an "Oversight Skill" in the Go SDK. This
 skill would allow the Swarm Agent to register a `Post-User-Input` hook that
 runs in parallel with (or just before) the active agent's turn.
 
----
+______________________________________________________________________
 
 **Status:** Open for Discussion **Reference:** Task 6.2 (Swarm Skill)

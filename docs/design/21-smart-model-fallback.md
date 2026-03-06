@@ -20,9 +20,9 @@ self-healing routing mesh.
    to cleanly fail the span. While the system can _replan_, if the underlying
    endpoint is wholly unresponsive, replanning to the exact same model will
    result in an infinite failure loop.
-2. **Quota and Rate Limits:** Agents operating autonomously (like the
+1. **Quota and Rate Limits:** Agents operating autonomously (like the
    `codebase-investigator`) can burn through token quotas quickly.
-3. **Task-Specific Degradation:** Certain models excel at logic but fail at
+1. **Task-Specific Degradation:** Certain models excel at logic but fail at
    formatting or specific tool use.
 
 ## Core Mechanisms to Implement

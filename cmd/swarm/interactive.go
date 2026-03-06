@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"image/color"
 	"os"
 	"os/exec"
 	"os/user"
@@ -14,14 +15,14 @@ import (
 	"strings"
 	"time"
 
+	"charm.land/bubbles/v2/list"
+	"charm.land/bubbles/v2/spinner"
+	"charm.land/bubbles/v2/textarea"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/atotto/clipboard"
-	"github.com/charmbracelet/bubbles/list"
-	"github.com/charmbracelet/bubbles/spinner"
-	"github.com/charmbracelet/bubbles/textarea"
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/mattn/go-runewidth"
 	"github.com/sahilm/fuzzy"
 
@@ -37,14 +38,9 @@ var (
 	googleYellow = lipgloss.Color("#FBBC05")
 	googleGreen  = lipgloss.Color("#34A853")
 
-	primaryColor  = googleBlue
-	tipColor      = lipgloss.Color("#666666")
-	errorColor    = googleRed
-	borderColor   = lipgloss.AdaptiveColor{Light: "#D9D9D9", Dark: "#333333"}
-	statusBg      = lipgloss.AdaptiveColor{Light: "#EBEBEB", Dark: "#1A1A1A"}
-	statusFg      = lipgloss.AdaptiveColor{Light: "#555555", Dark: "#888888"}
-	placeholderFg = lipgloss.AdaptiveColor{Light: "#E0E0E0", Dark: "#262626"}
-
+	primaryColor = googleBlue
+	tipColor     = lipgloss.Color("#666666")
+	errorColor   = googleRed
 	// Agent Panel Colors
 	colorIdle    = lipgloss.Color("#888888") // Lighter Gray
 	colorActive  = lipgloss.Color("#4169E1") // Royal Blue
@@ -69,31 +65,17 @@ var (
 	errorMsgStyle = lipgloss.NewStyle().
 			Foreground(errorColor).
 			Bold(true)
-
-	statusBarStyle = lipgloss.NewStyle().
-			Foreground(statusFg).
-			Background(statusBg).
-			Height(1)
-
-	viewportStyle = lipgloss.NewStyle().
-			Border(lipgloss.NormalBorder()).
-			BorderForeground(borderColor).
-			Padding(0, 1)
-
-	inputBoxStyle = lipgloss.NewStyle().
-			Border(lipgloss.NormalBorder()).
-			BorderForeground(borderColor).
-			Padding(0, 1)
 )
 
-func renderLogo() string {
+func renderLogo(isDark bool) string {
 	sMainGt := lipgloss.NewStyle().Foreground(lipgloss.Color("#334155")).Bold(true)
 	sMainS := lipgloss.NewStyle().Foreground(lipgloss.Color("#1b4332")).Bold(true)
 	sMainW := lipgloss.NewStyle().Foreground(lipgloss.Color("#2d6a4f")).Bold(true)
 	sMainA := lipgloss.NewStyle().Foreground(lipgloss.Color("#40916c")).Bold(true)
 	sMainR := lipgloss.NewStyle().Foreground(lipgloss.Color("#52b788")).Bold(true)
 	sMainM := lipgloss.NewStyle().Foreground(lipgloss.Color("#74c69d")).Bold(true)
-	sShadow := lipgloss.NewStyle().Foreground(lipgloss.Color("#1a1a1a"))
+	ld := lipgloss.LightDark(isDark)
+	sShadow := lipgloss.NewStyle().Foreground(ld(lipgloss.Color("#cbd5e1"), lipgloss.Color("#1a1a1a")))
 
 	// Helper to colorize block characters vs line/shadow characters
 	colorize := func(lines []string, mainStyle, shadowStyle lipgloss.Style) []string {
@@ -321,6 +303,28 @@ type model struct {
 	acPrefix       string
 	acMode         string // "file", "command", "history"
 	acHasMore      bool
+
+	isDark bool
+}
+
+func (m model) theme() struct {
+	borderColor   color.Color
+	statusBg      color.Color
+	statusFg      color.Color
+	placeholderFg color.Color
+} {
+	ld := lipgloss.LightDark(m.isDark)
+	return struct {
+		borderColor   color.Color
+		statusBg      color.Color
+		statusFg      color.Color
+		placeholderFg color.Color
+	}{
+		borderColor:   ld(lipgloss.Color("#D9D9D9"), lipgloss.Color("#333333")),
+		statusBg:      ld(lipgloss.Color("#EBEBEB"), lipgloss.Color("#1A1A1A")),
+		statusFg:      ld(lipgloss.Color("#555555"), lipgloss.Color("#888888")),
+		placeholderFg: ld(lipgloss.Color("#E0E0E0"), lipgloss.Color("#262626")),
+	}
 }
 
 func updateAutocomplete(m *model) {
@@ -589,21 +593,24 @@ func getRecentActivity(swarm sdk.Swarm, width int) string {
 }
 
 func initialModel(planMode bool, resume bool) (model, error) {
+	isDark := lipgloss.HasDarkBackground(os.Stdin, os.Stdout)
+
 	ta := textarea.New()
+	ta.SetStyles(textarea.DefaultStyles(isDark))
 	ta.Placeholder = "Type your message or /help (Alt+Enter or ^J for newline)"
 	ta.Focus()
 	ta.CharLimit = 2000
 	ta.ShowLineNumbers = false
 	ta.SetWidth(0) // Will be properly set in WindowSizeMsg
 	ta.SetHeight(3)
-	ta.SetPromptFunc(2, func(lineIdx int) string {
-		if lineIdx == 0 {
+	ta.SetPromptFunc(2, func(info textarea.PromptInfo) string {
+		if info.LineNumber == 0 {
 			return "> "
 		}
 		return "  "
 	})
 
-	vp := viewport.New(0, 0)
+	vp := viewport.New(viewport.WithWidth(0), viewport.WithHeight(0))
 	vp.YPosition = 0
 
 	s := spinner.New()
@@ -627,7 +634,7 @@ func initialModel(planMode bool, resume bool) (model, error) {
 	}
 
 	style := "dark"
-	if !lipgloss.HasDarkBackground() {
+	if !isDark {
 		style = "light"
 	}
 	renderer, _ := glamour.NewTermRenderer(
@@ -662,7 +669,7 @@ func initialModel(planMode bool, resume bool) (model, error) {
 
 	// Prepare splash screen components for dynamic rendering in View()
 	greeting := fmt.Sprintf("\n\n%s %s!", lipgloss.NewStyle().Foreground(tipColor).Render("Welcome back,"), lipgloss.NewStyle().Bold(true).Render(getUserName()))
-	logoAndGreeting := renderLogo() + greeting
+	logoAndGreeting := renderLogo(isDark) + greeting
 	recentActivity := getRecentActivity(swarm, 40) // Default width, will be updated in View()
 
 	return model{
@@ -688,11 +695,12 @@ func initialModel(planMode bool, resume bool) (model, error) {
 		spans:          make(map[string]*uiSpan),
 		showAgentPanel: true,
 		welcomeScreen:  []string{logoAndGreeting, recentActivity},
+		isDark:         isDark,
 	}, nil
 }
 
 func (m model) Init() tea.Cmd {
-	cmds := []tea.Cmd{textarea.Blink, m.spinner.Tick, doGitTick()}
+	cmds := []tea.Cmd{textarea.Blink, m.spinner.Tick, doGitTick(), tea.RequestBackgroundColor}
 	for _, a := range m.agents {
 		cmds = append(cmds, a.spin.Tick)
 	}
@@ -708,8 +716,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	)
 
 	// Global intercept for double Ctrl+C to quit
-	if keyMsg, ok := msg.(tea.KeyMsg); ok {
-		if keyMsg.Type == tea.KeyCtrlC {
+	if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
+		if keyMsg.String() == "ctrl+c" {
 			if m.loading {
 				if m.cancelChat != nil {
 					m.cancelChat()
@@ -750,12 +758,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Let it pass through to the main handler below to update sizes
 		case modelsLoadedMsg:
 			// Let it pass through to the main handler below
-		case tea.KeyMsg:
-			if msg.Type == tea.KeyEsc {
+		case tea.KeyPressMsg:
+			if msg.String() == "esc" {
 				m.state = stateChat
 				return m, tea.ClearScreen
 			}
-			if msg.Type == tea.KeyEnter && m.listModel.FilterState() != list.Filtering {
+			if msg.String() == "enter" && m.listModel.FilterState() != list.Filtering {
 				if i, ok := m.listModel.SelectedItem().(item); ok {
 					newModelName := i.name
 					cfg, err := sdk.LoadConfig()
@@ -787,6 +795,22 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
+	case tea.BackgroundColorMsg:
+		m.isDark = msg.IsDark()
+		m.textArea.SetStyles(textarea.DefaultStyles(m.isDark))
+		// Update glamour style based on background
+		style := "dark"
+		if !m.isDark {
+			style = "light"
+		}
+		if m.renderer != nil {
+			m.renderer, _ = glamour.NewTermRenderer(
+				glamour.WithStandardStyle(style),
+				glamour.WithWordWrap(m.viewport.Width()-4),
+			)
+		}
+		return m, nil
+
 	case gitStatusMsg:
 		m.gitBranch = msg.branch
 		m.gitModified = msg.modified
@@ -795,9 +819,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case gitTickMsg:
 		return m, tea.Batch(checkGitStatus(), doGitTick())
 
-	case tea.KeyMsg:
-		switch msg.Type {
-		case tea.KeyEsc:
+	case tea.KeyPressMsg:
+		switch msg.String() {
+		case "esc":
 			if m.loading {
 				if m.cancelChat != nil {
 					m.cancelChat()
@@ -822,10 +846,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			return m, nil
-		case tea.KeyCtrlJ:
+		case "ctrl+j":
 			m.textArea.InsertString("\n")
 			return m, nil
-		case tea.KeyCtrlO:
+		case "ctrl+o":
 			m.observeMode = !m.observeMode
 			state := "disabled"
 			if m.observeMode {
@@ -834,11 +858,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+fmt.Sprintf("Observe mode %s.", state))
 			m.updateViewport()
 			return m, nil
-		case tea.KeyCtrlL:
+		case "ctrl+l":
 			m.messages = nil
 			m.updateViewport()
 			return m, tea.ClearScreen
-		case tea.KeyCtrlR:
+		case "ctrl+r":
 			if m.state == stateChat && !m.loading {
 				m.acActive = true
 				m.acMode = "history"
@@ -847,11 +871,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				updateAutocomplete(&m)
 				return m, tea.ClearScreen
 			}
-		case tea.KeyEnter:
-			if msg.Alt {
-				m.textArea.InsertString("\n")
-				return m, nil
-			}
+		case "alt+enter":
+			m.textArea.InsertString("\n")
+			return m, nil
+		case "enter":
 			if m.loading {
 				input := m.textArea.Value()
 				trimmedInput := strings.TrimSpace(input)
@@ -919,9 +942,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			if input != "" {
 				if m.state == stateShell {
-					m.messages = append(m.messages, lipgloss.NewStyle().Width(m.viewport.Width).Render(lipgloss.NewStyle().Foreground(googleYellow).Bold(true).Render("! ")+input))
+					m.messages = append(m.messages, lipgloss.NewStyle().Width(m.viewport.Width()).Render(lipgloss.NewStyle().Foreground(googleYellow).Bold(true).Render("! ")+input))
 				} else {
-					m.messages = append(m.messages, lipgloss.NewStyle().Width(m.viewport.Width).Render(promptStyle.Render("> ")+input))
+					m.messages = append(m.messages, lipgloss.NewStyle().Width(m.viewport.Width()).Render(promptStyle.Render("> ")+input))
 				}
 
 				if len(m.history) == 0 || m.history[len(m.history)-1] != input {
@@ -960,7 +983,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.updateViewport()
 			}
 			return m, tea.Batch(cmds...)
-		case tea.KeyTab:
+		case "tab":
 			if m.acActive && len(m.acMatches) > 0 {
 				if m.acMode == "history" {
 					m.textArea.SetValue(m.acMatches[m.acIndex])
@@ -974,7 +997,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.acMode = ""
 			}
 			return m, nil
-		case tea.KeyUp:
+		case "up":
 			if m.acActive {
 				if len(m.acMatches) > 0 {
 					m.acIndex--
@@ -995,7 +1018,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return m, nil
 			}
-		case tea.KeyDown:
+		case "down":
 			if m.acActive {
 				if len(m.acMatches) > 0 {
 					m.acIndex++
@@ -1018,7 +1041,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return m, nil
 			}
-		case tea.KeyPgUp, tea.KeyPgDown:
+		case "pgup", "pgdown":
 			m.viewport, vpCmd = m.viewport.Update(msg)
 			return m, vpCmd
 		}
@@ -1154,7 +1177,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Batch(listenForStream(msg.ch), agentCmd)
 
 		case sdk.AgentStateWaiting:
-			m.messages = append(m.messages, lipgloss.NewStyle().Foreground(googleBlue).Italic(true).Width(m.viewport.Width).Render("👀 "+event.ObserverSummary))
+			m.messages = append(m.messages, lipgloss.NewStyle().Foreground(googleBlue).Italic(true).Width(m.viewport.Width()).Render("👀 "+event.ObserverSummary))
 			m.updateViewport()
 			return m, listenForStream(msg.ch)
 
@@ -1208,7 +1231,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if event.Error != nil {
 				errMsg = event.Error.Error()
 			}
-			m.messages = append(m.messages, errorMsgStyle.Width(m.viewport.Width).Render(fmt.Sprintf("Error: %s", errMsg)))
+			m.messages = append(m.messages, errorMsgStyle.Width(m.viewport.Width()).Render(fmt.Sprintf("Error: %s", errMsg)))
 			m.loading = false
 			m.updateViewport()
 			return m, tea.Batch(m.dequeueAndRun(), agentCmd)
@@ -1229,17 +1252,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.loading = false
 		m.statusMsg = ""
 		m.observeLog = nil
-		m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Width(m.viewport.Width).Render("Error: "+msg.err.Error()))
+		m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Width(m.viewport.Width()).Render("Error: "+msg.err.Error()))
 		m.updateViewport()
 		return m, m.dequeueAndRun()
 
 	case responseMsg:
 		m.loading = false
 		if msg.err != nil {
-			m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Width(m.viewport.Width).Render("Error: "+msg.err.Error()))
+			m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Width(m.viewport.Width()).Render("Error: "+msg.err.Error()))
 		} else if msg.isShell {
 			// Style for shell output - slightly indented and perhaps a different color
-			shellStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#AAAAAA")).PaddingLeft(2).Width(m.viewport.Width)
+			shellStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#AAAAAA")).PaddingLeft(2).Width(m.viewport.Width())
 			m.messages = append(m.messages, shellStyle.Render(msg.text))
 		} else {
 			out := msg.text
@@ -1258,7 +1281,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.loading = false
 		if msg.err != nil {
 			m.state = stateChat
-			m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Width(m.viewport.Width).Render("Error fetching models: "+msg.err.Error()))
+			m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Width(m.viewport.Width()).Render("Error fetching models: "+msg.err.Error()))
 			m.updateViewport()
 			return m, tea.ClearScreen
 		}
@@ -1308,18 +1331,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Borders: 2 for Agent Panel, 2 for Viewport, 2 for Input = 6 lines
 		// Status Line: 1 line
 		// TextArea height: 3 lines
-		m.viewport.Width = m.width - 4
-		m.viewport.Height = m.height - m.textArea.Height() - agentPanelHeight - 7
+		m.viewport.SetWidth(m.width - 4)
+		m.viewport.SetHeight(m.height - m.textArea.Height() - agentPanelHeight - 7)
 
 		// Update glamour word wrap
 		if m.renderer != nil {
 			style := "dark"
-			if !lipgloss.HasDarkBackground() {
+			if !m.isDark {
 				style = "light"
 			}
 			m.renderer, _ = glamour.NewTermRenderer(
 				glamour.WithStandardStyle(style),
-				glamour.WithWordWrap(m.viewport.Width-4),
+				glamour.WithWordWrap(m.viewport.Width()-4),
 			)
 		}
 
@@ -1586,7 +1609,7 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 			var lines []string
 			lines = append(lines, lipgloss.NewStyle().Bold(true).Render(fmt.Sprintf("Evaluation Scenarios (%d)", len(scenarios))))
 			lines = append(lines, "")
-			wrapWidth := m.viewport.Width - 4
+			wrapWidth := m.viewport.Width() - 4
 			if wrapWidth < 20 {
 				wrapWidth = 20
 			}
@@ -1693,7 +1716,7 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 		lines = append(lines, "")
 
 		// Use the actual viewport width for text wrapping (minus icon and padding)
-		wrapWidth := m.viewport.Width - 4
+		wrapWidth := m.viewport.Width() - 4
 		if wrapWidth < 20 {
 			wrapWidth = 20
 		}
@@ -1867,7 +1890,7 @@ func (m *model) updateViewport() {
 		return
 	}
 
-	wasAtBottom := m.viewport.AtBottom() || m.viewport.YOffset == 0
+	wasAtBottom := m.viewport.AtBottom() || m.viewport.YOffset() == 0
 
 	// Prepare the dynamic message list
 	var renderedMessages []string
@@ -1940,24 +1963,24 @@ func (m *model) updateInputStyle() {
 
 	if m.loading {
 		m.textArea.Placeholder = "Agents are working. Type to queue a message or press Esc to interrupt..."
-		m.textArea.SetPromptFunc(2, func(lineIdx int) string {
-			if lineIdx == 0 {
+		m.textArea.SetPromptFunc(2, func(info textarea.PromptInfo) string {
+			if info.LineNumber == 0 {
 				return "⧖ "
 			}
 			return "  "
 		})
 	} else if m.state == stateShell {
 		m.textArea.Placeholder = "Type your shell command"
-		m.textArea.SetPromptFunc(2, func(lineIdx int) string {
-			if lineIdx == 0 {
+		m.textArea.SetPromptFunc(2, func(info textarea.PromptInfo) string {
+			if info.LineNumber == 0 {
 				return "! "
 			}
 			return "  "
 		})
 	} else {
 		m.textArea.Placeholder = "Type your message or /help (Alt+Enter or ^J for newline)"
-		m.textArea.SetPromptFunc(2, func(lineIdx int) string {
-			if lineIdx == 0 {
+		m.textArea.SetPromptFunc(2, func(info textarea.PromptInfo) string {
+			if info.LineNumber == 0 {
 				return "> "
 			}
 			return "  "
@@ -1966,17 +1989,19 @@ func (m *model) updateInputStyle() {
 }
 
 func (m model) renderAgentPanel() string {
+	t := m.theme()
 	panelStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(borderColor).
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(t.borderColor).
 		Padding(0, 1).
 		MarginBottom(1).
 		Width(m.width - 2)
 
 	if len(m.spans) == 0 {
-		placeholderStyle := lipgloss.NewStyle().Foreground(placeholderFg)
-		// Set a minimum height of 4 lines to reserve space for a row of cards
-		return panelStyle.Height(4).Render(placeholderStyle.Render("Task Panel"))
+		placeholderStyle := lipgloss.NewStyle().Foreground(t.placeholderFg)
+		// Set a minimum height of 6 lines to reserve space for a row of cards
+		// (Card height = 4, +1 for border = 5, total panel height with its own border/padding = 7)
+		return panelStyle.Height(6).Render(placeholderStyle.Render("Task Panel"))
 	}
 
 	// Build tree
@@ -2150,7 +2175,8 @@ func (m model) renderAgentPanel() string {
 		if fidelity == "high" || fidelity == "medium" {
 			label := " " + statusLabel + " "
 			labelLen := runewidth.StringWidth(label)
-			remaining := cardWidth - 2 - labelLen
+			actualWidth := lipgloss.Width(renderedCard)
+			remaining := actualWidth - 2 - labelLen
 			rightDashCount := 2
 			leftDashCount := remaining - rightDashCount
 			if leftDashCount < 1 {
@@ -2188,7 +2214,7 @@ func (m model) renderAgentPanel() string {
 
 	return lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(borderColor).
+		BorderForeground(t.borderColor).
 		Padding(0, 1).
 		MarginBottom(1).
 		Width(m.width - 2).
@@ -2265,10 +2291,32 @@ func (m *model) ensureAgent(name string) (*swarmAgent, tea.Cmd) {
 	return newA, s.Tick
 }
 
-func (m model) View() string {
+func (m model) View() tea.View {
+	v := tea.NewView("")
+	v.AltScreen = true
+	v.MouseMode = tea.MouseModeCellMotion
+
 	if m.width == 0 {
-		return "Loading…"
+		v.SetContent("Loading…")
+		return v
 	}
+
+	t := m.theme()
+
+	inputBoxStyle := lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(t.borderColor).
+		Padding(0, 1)
+
+	viewportStyle := lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(t.borderColor).
+		Padding(0, 1)
+
+	statusBarStyle := lipgloss.NewStyle().
+		Foreground(t.statusFg).
+		Background(t.statusBg).
+		Height(1)
 
 	agentPanelView := ""
 	if m.showAgentPanel {
@@ -2303,13 +2351,13 @@ func (m model) View() string {
 
 	// Recalculate viewport height to fill remaining space
 	// Subtract 2 for the viewportStyle's own top/bottom borders
-	m.viewport.Height = m.height - agentPanelHeight - inputHeight - acHeight - statusHeight - 2
-	if m.viewport.Height < 1 {
-		m.viewport.Height = 1
+	m.viewport.SetHeight(m.height - agentPanelHeight - inputHeight - acHeight - statusHeight - 2)
+	if m.viewport.Height() < 1 {
+		m.viewport.SetHeight(1)
 	}
 
 	// Output Box (Viewport) with border
-	vpView := viewportStyle.Width(m.width - 2).Height(m.viewport.Height).Render(m.viewport.View())
+	vpView := viewportStyle.Width(m.width - 2).Height(m.viewport.Height()).Render(m.viewport.View())
 
 	// Main body is just the vertical stack of the sections
 	var mainBody string
@@ -2336,7 +2384,8 @@ func (m model) View() string {
 	p3 := statusBarStyle.Width(w3).Align(lipgloss.Right).Render(m.activeModel + " ")
 	statusView := lipgloss.JoinHorizontal(lipgloss.Top, p1, p2, p3)
 
-	return lipgloss.JoinVertical(lipgloss.Left, mainBody, statusView)
+	v.SetContent(lipgloss.JoinVertical(lipgloss.Left, mainBody, statusView))
+	return v
 }
 
 func launchInteractiveShell(planMode bool, resume bool) error {
@@ -2344,7 +2393,7 @@ func launchInteractiveShell(planMode bool, resume bool) error {
 	if err != nil {
 		return err
 	}
-	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion())
+	p := tea.NewProgram(m)
 	if _, err := p.Run(); err != nil {
 		return fmt.Errorf("error: %w", err)
 	}

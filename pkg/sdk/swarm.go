@@ -70,6 +70,7 @@ type ObservableEvent struct {
 	// Execution Context
 	ToolName string
 	ToolArgs map[string]any
+	PGID     int
 
 	// Output
 	Thought      string
@@ -1194,7 +1195,15 @@ func (m *defaultSwarm) executeSpan(ctx context.Context, out chan<- ObservableEve
 					activeToolSpans[part.FunctionCall.Name] = append(activeToolSpans[part.FunctionCall.Name], toolTask)
 				}
 				if part.FunctionResponse != nil {
-					out <- ObservableEvent{Timestamp: time.Now(), AgentName: targetAgent.Name(), SpanID: span.ID, TaskName: span.Name, ParentID: span.ParentID, State: AgentStateThinking, ToolName: part.FunctionResponse.Name}
+					var pgid int
+					if val, ok := part.FunctionResponse.Response["pgid"]; ok {
+						if num, ok := val.(float64); ok {
+							pgid = int(num)
+						} else if num, ok := val.(int); ok {
+							pgid = num
+						}
+					}
+					out <- ObservableEvent{Timestamp: time.Now(), AgentName: targetAgent.Name(), SpanID: span.ID, TaskName: span.Name, ParentID: span.ParentID, State: AgentStateThinking, ToolName: part.FunctionResponse.Name, PGID: pgid}
 
 					// Record tool span completion (pop from queue)
 					if spans, ok := activeToolSpans[part.FunctionResponse.Name]; ok && len(spans) > 0 {

@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
+	"time"
 
 	"google.golang.org/adk/tool"
 	"google.golang.org/genai"
@@ -190,8 +192,9 @@ func googleSearchFunc(ctx tool.Context, args GoogleSearchArgs) (GoogleSearchResu
 // === Bash Tool ===
 
 type BashExecuteArgs struct {
-	Command string `json:"command"`
-	Dir     string `json:"dir,omitempty"`
+	Command      string `json:"command"`
+	Dir          string `json:"dir,omitempty"`
+	IsBackground bool   `json:"is_background,omitempty"`
 }
 
 type BashExecuteResult struct {
@@ -199,6 +202,7 @@ type BashExecuteResult struct {
 	Output   string `json:"output,omitempty"`
 	ExitCode int    `json:"exit_code"`
 	Error    string `json:"error,omitempty"`
+	PGID     int    `json:"pgid,omitempty"`
 }
 
 func bashExecuteTool(ctx tool.Context, args BashExecuteArgs) (BashExecuteResult, error) {
@@ -217,6 +221,10 @@ func bashExecuteTool(ctx tool.Context, args BashExecuteArgs) (BashExecuteResult,
 
 	cmd := exec.Command("bash", "-c", args.Command)
 	cmd.Dir = dir
+
+	if args.IsBackground {
+		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	}
 
 	// Setup telemetry if available in context
 	var telemetry chan<- string
@@ -254,8 +262,28 @@ func bashExecuteTool(ctx tool.Context, args BashExecuteArgs) (BashExecuteResult,
 	go stream(stdoutPipe, &stdoutBuf)
 	go stream(stderrPipe, &stderrBuf)
 
-	err := cmd.Wait()
-	wg.Wait()
+	var err error
+	if args.IsBackground {
+		// Small sleep to catch immediate errors (e.g. command not found, or immediate crash)
+		time.Sleep(500 * time.Millisecond)
+
+		// Check if it's still running
+		if cmd.ProcessState != nil && cmd.ProcessState.Exited() {
+			err = cmd.Wait() // Populate exit code
+			wg.Wait()
+		} else {
+			// It's still running! Return PGID.
+			pgid, _ := syscall.Getpgid(cmd.Process.Pid)
+			return BashExecuteResult{
+				Success: true,
+				Output:  fmt.Sprintf("Process started in background. PGID: %d\nOutput so far:\n%s", pgid, stdoutBuf.String()),
+				PGID:    pgid,
+			}, nil
+		}
+	} else {
+		err = cmd.Wait()
+		wg.Wait()
+	}
 
 	exitCode := 0
 	if err != nil {

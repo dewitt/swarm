@@ -13,6 +13,7 @@ import (
 	"runtime/debug"
 	"sort"
 	"strings"
+	"syscall"
 	"time"
 
 	"charm.land/bubbles/v2/list"
@@ -208,6 +209,7 @@ type responseMsg struct {
 	text    string
 	err     error
 	isShell bool
+	pgid    int
 }
 
 type globalSummaryMsg string
@@ -340,6 +342,9 @@ type model struct {
 
 	isDark               bool
 	isRefreshingActivity bool
+
+	// Background processes
+	bgPGIDs []int
 }
 
 func (m model) theme() struct {
@@ -1213,6 +1218,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				a.update("active", "Thinking...")
 			}
 
+			if event.PGID > 0 {
+				m.bgPGIDs = append(m.bgPGIDs, event.PGID)
+			}
+
 			if event.AgentName != "" && !isMediationAgent(event.AgentName) {
 				m.activeAgent = event.AgentName
 			}
@@ -1341,6 +1350,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case responseMsg:
 		m.loading = false
+		if msg.pgid > 0 {
+			m.bgPGIDs = append(m.bgPGIDs, msg.pgid)
+		}
 		if msg.err != nil {
 			m.appendMessage(lipgloss.NewStyle().Foreground(errorColor).Width(m.viewport.Width()).Render("Error: " + msg.err.Error()))
 		} else if msg.isShell {
@@ -1559,11 +1571,13 @@ func (m *model) fetchGlobalSummary() tea.Cmd {
 func (m model) runShellCommand(ctx context.Context, command string) tea.Cmd {
 	return func() tea.Msg {
 		cmd := exec.CommandContext(ctx, "bash", "-c", command)
+		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 		out, err := cmd.CombinedOutput()
+		pgid, _ := syscall.Getpgid(cmd.Process.Pid)
 		if err != nil {
-			return responseMsg{text: string(out), err: err, isShell: true}
+			return responseMsg{text: string(out), err: err, isShell: true, pgid: pgid}
 		}
-		return responseMsg{text: string(out), isShell: true}
+		return responseMsg{text: string(out), isShell: true, pgid: pgid}
 	}
 }
 
@@ -2507,6 +2521,15 @@ func (m model) View() tea.View {
 	return v
 }
 
+func (m *model) cleanup() {
+	if m.webServer != nil {
+		m.webServer.Stop(context.Background())
+	}
+	for _, pgid := range m.bgPGIDs {
+		syscall.Kill(-pgid, syscall.SIGKILL)
+	}
+}
+
 func launchInteractiveShell(planMode bool, resume bool) error {
 	m, err := initialModel(planMode, resume)
 	if err != nil {
@@ -2514,13 +2537,9 @@ func launchInteractiveShell(planMode bool, resume bool) error {
 	}
 	p := tea.NewProgram(m)
 	if _, err := p.Run(); err != nil {
-		if m.webServer != nil {
-			m.webServer.Stop(context.Background())
-		}
+		m.cleanup()
 		return fmt.Errorf("error: %w", err)
 	}
-	if m.webServer != nil {
-		m.webServer.Stop(context.Background())
-	}
+	m.cleanup()
 	return nil
 }

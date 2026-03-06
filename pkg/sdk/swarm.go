@@ -773,7 +773,7 @@ func (m *defaultSwarm) Chat(ctx context.Context, prompt string) (<-chan Observab
 				target = m.lastAgent
 			}
 		}
-		out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Input Agent", SpanID: "input", TaskName: "Classification", State: AgentStateComplete}
+		out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Input Agent", SpanID: "input", TaskName: "Classification", State: AgentStateComplete, FinalContent: "Routed to " + target}
 
 		originalPrompt := prompt
 		cyclePrompt := prompt
@@ -795,7 +795,7 @@ func (m *defaultSwarm) Chat(ctx context.Context, prompt string) (<-chan Observab
 				}
 
 				if graph != nil && graph.ImmediateResponse == "" {
-					out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm Agent", SpanID: "coordination", TaskName: "Swarm Planning", State: AgentStateComplete}
+					out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm Agent", SpanID: "coordination", TaskName: "Swarm Planning", State: AgentStateComplete, FinalContent: "Delegated tasks to sub-agents."}
 				}
 
 				planJSON, _ := json.Marshal(graph)

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -131,4 +132,75 @@ func LoadMemory() (string, error) {
 	}
 
 	return string(data), nil
+}
+
+// LoadContextFiles searches for and concatenates AGENTS.md files for context.
+func LoadContextFiles() string {
+	var contextParts []string
+	seen := make(map[string]bool)
+
+	addContext := func(path string, description string) {
+		path = filepath.Clean(path)
+		if seen[path] {
+			return
+		}
+		if b, err := os.ReadFile(path); err == nil {
+			contextParts = append(contextParts, "--- Context from: "+description+" ---\n"+string(b)+"\n--- End of Context from: "+description+" ---")
+			seen[path] = true
+		}
+	}
+
+	// 1. Global Context
+	if cfgDir, err := GetConfigDir(); err == nil {
+		addContext(filepath.Join(cfgDir, "AGENTS.md"), "~/.config/swarm/AGENTS.md")
+	}
+
+	// 2. Workspace/Project Context
+	cwd, err := os.Getwd()
+	if err == nil {
+		dir := cwd
+		var projectDirs []string
+		for {
+			projectDirs = append([]string{dir}, projectDirs...)
+			if _, err := os.Stat(filepath.Join(dir, ".git")); err == nil {
+				break
+			}
+			parent := filepath.Dir(dir)
+			if parent == dir {
+				break
+			}
+			dir = parent
+		}
+		for _, d := range projectDirs {
+			addContext(filepath.Join(d, "AGENTS.md"), filepath.Join(d, "AGENTS.md"))
+		}
+
+		// 3. Local/Sub-directory Context
+		count := 0
+		_ = filepath.WalkDir(cwd, func(path string, d os.DirEntry, err error) error {
+			if err != nil {
+				return nil
+			}
+			if d.IsDir() {
+				name := d.Name()
+				if name == ".git" || name == "node_modules" || name == "vendor" {
+					return filepath.SkipDir
+				}
+				count++
+				if count > 200 {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+			if d.Name() == "AGENTS.md" {
+				addContext(path, path)
+			}
+			return nil
+		})
+	}
+
+	if len(contextParts) == 0 {
+		return ""
+	}
+	return "\n<loaded_context>\n" + strings.Join(contextParts, "\n") + "\n</loaded_context>\n"
 }

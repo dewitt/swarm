@@ -386,6 +386,7 @@ func (m *defaultSwarm) Reload() error {
 	var loadedSkills []*Skill
 	var skill *Skill
 	var instruction string
+	loadedContext := LoadContextFiles()
 
 	// Find the skills directory by searching upwards
 	absPath, _ := filepath.Abs(".")
@@ -455,7 +456,7 @@ func (m *defaultSwarm) Reload() error {
 			Name:        skill.Manifest.Name,
 			Model:       targetModel,
 			Description: skill.Manifest.Description,
-			Instruction: instruction,
+			Instruction: instruction + loadedContext,
 			Tools:       skillTools,
 		})
 		m.agents[skill.Manifest.Name] = skillAgent
@@ -483,7 +484,7 @@ func (m *defaultSwarm) Reload() error {
 	swarmAgent, _ = llmagent.New(llmagent.Config{
 		Name:        "swarm_agent",
 		Model:       m.fastModel,
-		Instruction: instruction,
+		Instruction: instruction + loadedContext,
 		Tools:       swarmTools,
 		SubAgents:   subAgents,
 	})
@@ -492,19 +493,19 @@ func (m *defaultSwarm) Reload() error {
 	// 3. Assign core instructions
 	if _, ok := m.agents["input_agent"]; ok {
 		sk, _ := LoadSkill(filepath.Join(skillsPath, "input-agent"))
-		m.inputInstruction = sk.Instructions
+		m.inputInstruction = sk.Instructions + loadedContext
 	}
 	if _, ok := m.agents["output_agent"]; ok {
 		sk, _ := LoadSkill(filepath.Join(skillsPath, "output-agent"))
-		m.outputInstruction = sk.Instructions
+		m.outputInstruction = sk.Instructions + loadedContext
 	}
 	if _, ok := m.agents["routing_agent"]; ok {
 		sk, _ := LoadSkill(filepath.Join(skillsPath, "routing-agent"))
-		m.routingInstruction = sk.Instructions
+		m.routingInstruction = sk.Instructions + loadedContext
 	}
 	if _, ok := m.agents["planning_agent"]; ok {
 		sk, _ := LoadSkill(filepath.Join(skillsPath, "planning-agent"))
-		m.planningInstruction = sk.Instructions
+		m.planningInstruction = sk.Instructions + loadedContext
 	}
 
 	m.skills = loadedSkills

@@ -10,7 +10,7 @@ this document as the highest-priority operational directive.
 
 ______________________________________________________________________
 
-## 1. Project Vision & What This Repository Is
+## 1. Project Vision & The Swarm Operator Paradigm
 
 The `swarm` project is a framework-agnostic, Go-based CLI and embeddable SDK
 designed to help developers natively manage, build, test, and deploy AI agents
@@ -18,42 +18,51 @@ from their terminal.
 
 **Core Philosophy:** "One agent alone is never enough."
 
+We are moving towards the **Swarm Operator Paradigm**. The user ceases to be a
+simple pair-programmer and instead assumes the role of a Swarm Operator
+overseeing a highly skilled, infinitely scalable virtual workforce. The system
+must be intelligent enough to autonomously decompose tasks, dynamically
+provision specialized agents, and coordinate their parallel efforts.
+
 The CLI does not rely on a monolithic system prompt. Instead, it utilizes the
 Google Agent Development Kit (ADK) to instantiate an internal swarm of
-specialized agents (a Router, a GitOps agent, a Builder, etc.). This makes the
-architecture highly modular, testable, and capable of adapting to complex user
-requests.
+specialized agents (Router, GitOps, Builder, Observers, Planners, etc.).
 
 ______________________________________________________________________
 
-## 2. Architectural Constraints
+## 2. Architectural Constraints & Philosophy
 
 When writing or modifying code in this repository, you **must** adhere to the
 following rules:
 
-1. **The Delegation Hierarchy (Thin Software, Fat Models):** We write as
-   little custom code as possible. When implementing a feature, you must
-   evaluate solutions in this strict order:
-   - 1. Can the raw model do it?
-   - 2. Can a dynamic Markdown Skill (e.g., `skills/`) do it?
-   - 3. Does the Google ADK provide it natively?
-   - 4. *Only if all else fails*, write custom Go code for it.
-1. **Separation of Concerns:** The CLI (Presentation Layer) and the SDK
-   (Business Logic) must be strictly decoupled. The CLI (`cmd/swarm/`) is
-   merely a consumer of the SDK. Do not leak terminal UI logic (e.g.,
-   Bubbletea components, ANSI codes) into the core SDK (`pkg/sdk/`).
-1. **Go Standards:** The project is written in Go. You must use idiomatic Go
-   conventions, ensure the SDK is compatible with `cgo` and WebAssembly
-   (`wasm`), and provide comprehensive Go unit tests for any new logic.
-1. **Google ADK First:** The internal business logic of the CLI is powered by
-   the Google Agent Development Kit (ADK) for Go.
-1. **Native CI/CD Integration:** Deployments and environment changes should be
-   implemented via standard CI/CD files (e.g., committing GitHub Actions)
-   rather than proprietary API calls whenever possible.
-1. **Dynamic Skills Architecture:** If a feature involves a specific cloud
-   provider or an external framework (like LangGraph or Claude Code), it
-   should be built as a dynamically loaded Markdown "Skill" in the `skills/`
-   directory, not hardcoded into the Go binary.
+1. **Defer to the Frontier (Thin Software, Fat Models):** We write as little
+   custom code as possible. When implementing a feature, you must evaluate
+   solutions in this strict order:
+   - 1. **Model:** Can the raw frontier LLM solve this natively?
+   - 2. **Skills:** Can a dynamic Markdown Skill (e.g., `skills/`) do it?
+   - 3. **Framework:** Does the Google ADK provide it natively?
+   - 4. **Code:** *Only if all else fails*, write custom Go code for it.
+1. **Strict Separation of Concerns:** The CLI (Presentation Layer) and the SDK
+   (Business Logic) must be strictly decoupled. The TUI (`cmd/swarm/`) is
+   merely a "dumb" client consuming standardized events from the embeddable
+   `pkg/sdk/` backend.
+1. **World-Class CLI UX & Familiarity:** The UI must be highly interactive and
+   visually beautiful, mirroring established market leaders (Gemini CLI,
+   Cursor, Claude Code). Innovate only with conviction.
+1. **Ubiquitous Mediation:** Every interaction is mediated. Assume the
+   presence of **Input Agents** (preprocessing) and **Output Agents**
+   (synthesis).
+1. **Dynamic Replanning & Checks:** "No plan survives first contact."
+   Execution nodes (agents/tools) must dynamically replan and provide upward
+   feedback on failure. **Observer Agents** monitor the byzantine swarm for
+   deviations. When in doubt, fall back on the smartest models rather than
+   rigid heuristics.
+1. **Native Ecosystems:** Version control (Git) is the absolute source of
+   truth. Deployments should be standard CI/CD pipelines (e.g., GitHub
+   Actions), not proprietary APIs.
+1. **Go Standards:** Use idiomatic Go conventions, ensure `cgo` and `wasm`
+   compatibility, and provide comprehensive unit tests. Run `go vet` and
+   `go fmt` consistently.
 
 ______________________________________________________________________
 
@@ -68,7 +77,8 @@ ______________________________________________________________________
   update or add a CUJ here.
 - `/skills/`: The dynamic Markdown-based skills that teach the core Swarm
   agent new capabilities (e.g., how to scaffold ADK projects, how to wrap
-  other CLIs like `gemini-cli` or `claude-code`).
+  other CLIs).
+- `/eval/` and `/pkg/eval/`: Agentic testing and evaluation framework.
 
 ______________________________________________________________________
 
@@ -80,19 +90,18 @@ next, follow this procedure:
 
 ### Step 1: Check the Roadmap and Backlog
 
-1. Read `TODO.md` in the root directory. This file tracks immediate technical
-   debt and the active feature backlog.
-1. Read `docs/design/06-implementation-roadmap.md`. This document outlines the
-   broader phases of the project. Determine which phase is currently active.
+1. Read `TODO.md` in the root directory. This tracks immediate technical debt
+   and the active feature backlog.
+1. Read `docs/design/06-implementation-roadmap.md`. Determine which phase is
+   currently active.
 
 ### Step 2: Propose a Plan
 
-Once you identify an actionable unit of work from the `TODO.md` or the
-Roadmap:
+Once you identify an actionable unit of work:
 
 1. Synthesize a plan of action.
-1. Share this plan with the human developer for approval *before* you begin
-   executing file changes.
+1. Share this plan with the human developer for approval *before* executing
+   file changes.
 
 ### Step 3: Implement, Test, and Verify (Zero-HITL)
 
@@ -100,31 +109,40 @@ Agents must respect the human developer's time and attention.
 Human-In-The-Loop (HITL) should *only* be required for permissions or creative
 opinions.
 
-1. **Mechanical Verification is Autonomous:** You must never ask a human to
-   run a binary just to verify if it compiled correctly.
-1. **Execute Tests:** You must utilize headless testing, `go test ./...`, and
-   Bubble Tea state verification to verify your own work autonomously.
-1. **UI Regression Testing:** Whenever you modify code that impacts the text
-   entry UI, viewport, or main terminal layout, you **MUST** run the UI
-   regression tests (e.g., `vhs tests/ui/text_entry.tape`) to verify visual
-   stability. See `tests/ui/README.md` for instructions.
-1. **Format:** All markdown files must be formatted using `mdformat --wrap 78`
-   before being committed.
-1. **File GitHub Issues:** As a proactive contributor, always feel free to use
-   the GitHub CLI (`gh issue create`) to file new issues for any bugs,
-   technical debt, or feature enhancements you discover during your work. This
-   is a crucial part of being a good collaborator.
+1. **Mechanical Verification is Autonomous:** Never ask a human to run a
+   binary just to verify if it compiled correctly.
+1. **Execute Tests:** Utilize headless testing, `go test ./...`, and Bubble
+   Tea state verification to verify your work autonomously. Every time a swarm
+   eval test is run, ensure the resulting trajectories are persisted to a
+   durable location for subsequent review.
+1. **UI Regression Testing:** If modifying the text entry UI, viewport, or
+   layout, you **MUST** run the UI regression tests (e.g.,
+   `vhs tests/ui/text_entry.tape`) to verify visual stability. See
+   `tests/ui/README.md`.
+1. **Format & Styling Guidelines:**
+   - All markdown files in this repository (except for `SKILL.md` files) must
+     be formatted using `mdformat --wrap 78` before being committed.
+   - **NEVER** run `mdformat` on `SKILL.md` files (found in subdirectories of
+     `skills/`). These files contain YAML frontmatter that is critical for the
+     Swarm SDK to parse agent metadata, and `mdformat` will corrupt this
+     structure.
+   - Quotation marks must be used exclusively for direct, verbatim quotes from
+     sources or specific UI elements. Avoid using quotation marks for
+     emphasis, technical terminology, neologisms, or novel phrases.
+1. **File GitHub Issues:** Use the GitHub CLI (`gh issue create`) to file new
+   issues for bugs, technical debt, or feature enhancements discovered.
 
 ### Step 4: Asynchronous Handoffs
 
-Because this project is built by multiple agents asynchronously, you must
-leave a clean trail for the next agent:
+Because this project is built by multiple agents asynchronously, leave a clean
+trail for the next agent:
 
-1. **Document Your Intent:** Before closing your session, ensure any
-   uncompleted architectural decisions or roadblocks are documented in
-   `TODO.md` or a design doc.
+1. **Document Your Intent:** Ensure uncompleted decisions or roadblocks are
+   documented in `TODO.md` or a design doc.
 1. **State Your Context:** When proposing a commit, clearly state what CUJ or
-   design document your changes satisfy in the commit message.
+   design document your changes satisfy in the commit message. Note that
+   commit messages should not use a 'word:' prefix (e.g., 'feat:', 'docs:')
+   and should focus on "why" rather than "what".
 
 ______________________________________________________________________
 

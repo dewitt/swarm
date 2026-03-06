@@ -76,7 +76,12 @@ Examine the "power user" features:
 
 Synthesize your findings into a structured "User Advocate Report."
 
-1. Group the findings into categories:
+1. **Check for Duplicates**: Before finalizing your report, read the
+   `UX_ISSUES.md` file in the project root. Check if any of your findings have
+   already been logged.
+1. **Update the Backlog**: Append any *new* unique findings or significant new
+   context for existing issues to `UX_ISSUES.md`.
+1. **Group the findings** into categories:
    - 🚨 **High Friction** (Must fix: active user pain points, confusing
      errors).
    - 🎨 **Aesthetic Polish** (Visual inconsistencies, layout jumps).

@@ -6,7 +6,7 @@ import (
 
 	"github.com/dewitt/swarm/pkg/sdk"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 func TestSnapshotUI(t *testing.T) {
@@ -20,12 +20,12 @@ func TestSnapshotUI(t *testing.T) {
 
 	// Simulate typing /skills
 	for _, r := range "/skills" {
-		newModel, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		newModel, _ = m.Update(tea.KeyPressMsg{Code: r, Text: string(r)})
 		m = newModel.(model)
 	}
 
 	// Simulate pressing Enter
-	newModel, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	newModel, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	m = newModel.(model)
 
 	// 3. Render the view
@@ -67,7 +67,7 @@ func TestSnapshotFileAutocomplete(t *testing.T) {
 	newModel, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	m = newModel.(model)
 
-	newModel, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'@'}})
+	newModel, _ = m.Update(tea.KeyPressMsg{Code: '@', Text: "@"})
 	m = newModel.(model)
 
 	rawView := m.View()
@@ -84,7 +84,7 @@ func TestHistoryNavigation(t *testing.T) {
 	// 1. Type something unsubmitted
 	unsubmitted := "unsubmitted text"
 	for _, r := range unsubmitted {
-		newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		newModel, _ := m.Update(tea.KeyPressMsg{Code: r, Text: string(r)})
 		m = newModel.(model)
 	}
 	if m.textArea.Value() != unsubmitted {
@@ -92,7 +92,7 @@ func TestHistoryNavigation(t *testing.T) {
 	}
 
 	// 2. Press Up arrow
-	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyUp})
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyUp})
 	m = newModel.(model)
 	if m.textArea.Value() != "second command" {
 		t.Errorf("expected text area value %q, got %q", "second command", m.textArea.Value())
@@ -105,7 +105,7 @@ func TestHistoryNavigation(t *testing.T) {
 	}
 
 	// 3. Press Up arrow again
-	newModel, _ = m.Update(tea.KeyMsg{Type: tea.KeyUp})
+	newModel, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyUp})
 	m = newModel.(model)
 	if m.textArea.Value() != "first command" {
 		t.Errorf("expected text area value %q, got %q", "first command", m.textArea.Value())
@@ -115,7 +115,7 @@ func TestHistoryNavigation(t *testing.T) {
 	}
 
 	// 4. Press Down arrow
-	newModel, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	newModel, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
 	m = newModel.(model)
 	if m.textArea.Value() != "second command" {
 		t.Errorf("expected text area value %q, got %q", "second command", m.textArea.Value())
@@ -125,7 +125,7 @@ func TestHistoryNavigation(t *testing.T) {
 	}
 
 	// 5. Press Down arrow again to return to unsubmitted
-	newModel, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	newModel, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
 	m = newModel.(model)
 	if m.historyIdx != 2 {
 		t.Errorf("expected historyIdx 2, got %d", m.historyIdx)

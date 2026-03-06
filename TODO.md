@@ -5,6 +5,11 @@ debt that should be addressed as the project evolves.
 
 ## Pending Migrations
 
+- [ ] **Upgrade to Bubble Tea 2.0**: Charm has released Bubble Tea 2.0, a
+  complete rewrite focusing on performance and a more flexible architecture.
+  We should migrate the TUI to v2 to leverage these improvements. See the
+  [migration guide](https://charm.land/blog/v2/) for details.
+
 - [ ] **Migrate to Native ADK Skills**: Currently, the `swarm` CLI implements
   its own custom Skill loader (`pkg/sdk/skill.go`) because the Go ADK does not
   yet natively support Skills. Once the official ADK
@@ -26,12 +31,12 @@ debt that should be addressed as the project evolves.
   external AI CLIs (e.g., `gemini-cli`, `claude-code`) via `bash_execute` so
   the Swarm CLI can act as a master engine for other complex systems.
 
-- [x] **Input Agent Oversight** (#25): Implemented as a failsafe for the human-in-the-loop.
-  to detect intent shifts and handle transitions.
-  See `docs/design/16-chat-input-agent.md`.
+- [x] **Input Agent Oversight** (#25): Implemented as a failsafe for the
+  human-in-the-loop. to detect intent shifts and handle transitions. See
+  `docs/design/16-chat-input-agent.md`.
 
-- [x] **Agent Panel & Cards**: Implement a dynamic, event-driven visualization of
-  the agent swarm with ephemeral lifecycles and responsive fidelity levels.
+- [x] **Agent Panel & Cards**: Implement a dynamic, event-driven visualization
+  of the agent swarm with ephemeral lifecycles and responsive fidelity levels.
   See `docs/design/17-agent-cards-and-panel.md`.
 
 - [ ] **Agent Panel Interactivity**: Implement mouse support for Agent Cards,
@@ -64,4 +69,7 @@ debt that should be addressed as the project evolves.
   currently overwrites the agent name in the UI.
 - [x] **Escape Sequences in Prompt** (#3): Strange escape sequences appear in
   the input prompt when scrolling.
-- [x] **Autocomplete Enter Key Override**: When typing a slash command like `/skills`, pressing Enter selects the autocomplete suggestion instead of instantly submitting the command, requiring the user to press Enter a second time to execute it. This UX needs to be smoothed out.
+- [x] **Autocomplete Enter Key Override**: When typing a slash command like
+  `/skills`, pressing Enter selects the autocomplete suggestion instead of
+  instantly submitting the command, requiring the user to press Enter a second
+  time to execute it. This UX needs to be smoothed out.

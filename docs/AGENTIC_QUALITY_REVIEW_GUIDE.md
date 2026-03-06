@@ -68,10 +68,10 @@ Inspect the `eval/fixtures/` directories:
 Synthesize your findings into a structured "Agentic Quality Report."
 
 1. **Check for Duplicates**: Before finalizing your report, read the
-   `AGENT_ISSUES.md` file in the project root. Check if any of your findings
+   `AGENTIC_QUALITY_ISSUES.md` file in the project root. Check if any of your findings
    have already been logged.
 1. **Update the Backlog**: Append any *new* unique findings or significant new
-   context for existing issues to `AGENT_ISSUES.md`.
+   context for existing issues to `AGENTIC_QUALITY_ISSUES.md`.
 1. **Group the findings** into categories:
    - 🧠 **Cognitive & Reasoning Failures** (Logic errors, hallucination,
      planning failures).

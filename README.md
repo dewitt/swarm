@@ -117,7 +117,7 @@ Server-Sent Events (SSE). While running the CLI, you can open your browser to
 dashboard of all active agents in your swarm, complete with live status
 indicators and real-time execution logs.
 
-<video src="docs/assets/web-demo.webm" controls autoplay loop muted></video>
+![Swarm Web Agent Panel](docs/assets/web-demo.gif)
 
 ## E2E Evaluations (LLM-as-a-Judge)
 

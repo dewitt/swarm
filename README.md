@@ -111,7 +111,23 @@ new projects, or deploy existing agents.
 
 ## E2E Evaluations (LLM-as-a-Judge)
 
-Swarm contains a native end-to-end evaluation harness that tests its autonomous capabilities against real-world scenarios. Instead of using brittle unit tests, these evaluations run Swarm in an isolated, sandboxed environment and grade the entire resulting "execution trajectory" using an LLM configured with a strict grading rubric.
+![Swarm Eval Demo](docs/assets/eval_demo.gif)
+
+### Evaluation Philosophy
+
+We believe that autonomous agents cannot be effectively validated using
+traditional, brittle unit testing due to the non-deterministic nature of LLMs.
+Instead, Swarm embraces a **Zero-HITL, LLM-as-a-Judge** philosophy for
+continuous integration.
+
+Our native end-to-end evaluation harness spins up sandboxed, ephemeral
+workspaces, issues high-level natural language directives to the Swarm, and
+collects the entire execution trajectory (actions, tools, shell commands, and
+final code state). A designated "Judge LLM" then evaluates this trajectory
+against a strict, scenario-specific rubric to determine if the agent
+successfully achieved the intended outcome without breaking the workspace.
+This approach mirrors actual human workflows and ensures our agents remain
+robust and capable as underlying foundation models evolve.
 
 To run the full evaluation suite:
 
@@ -130,7 +146,10 @@ To run a single, specific scenario (useful for debugging):
 swarm eval scenario_1
 ```
 
-If you wish to add a new scenario, define its metadata (Name, Prompt, Rubric, and Fixture Path) in `pkg/eval/scenarios.go` and add the sandbox code fixture to the `eval/fixtures/` directory. Be sure to use the `--debug` flag natively if you need to debug the AST parsing logic behind the harness.
+If you wish to add a new scenario, define its metadata (Name, Prompt, Rubric,
+and Fixture Path) in `pkg/eval/scenarios.go` and add the sandbox code fixture
+to the `eval/fixtures/` directory. Be sure to use the `--debug` flag natively
+if you need to debug the AST parsing logic behind the harness.
 
 ## Documentation & Philosophy
 
@@ -141,7 +160,7 @@ If you wish to add a new scenario, define its metadata (Name, Prompt, Rubric, an
 - **[Critical User Journeys](docs/cuj/)**: Example workflows illustrating how
   the CLI is intended to be used.
 
----
+______________________________________________________________________
 
 _The `demo.gif` above is generated autonomously using Charmbracelet's `vhs`
 tool. Agents working on this project should re-run `vhs demo.tape` whenever

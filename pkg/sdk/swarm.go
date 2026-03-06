@@ -211,7 +211,10 @@ func NewSwarm(cfg ...SwarmConfig) (Swarm, error) {
 	writeTool, _ := functiontool.New(functiontool.Config{Name: "write_local_file"}, writeLocalFile)
 	gitCommit, _ := functiontool.New(functiontool.Config{Name: "git_commit"}, gitCommitTool)
 	gitPush, _ := functiontool.New(functiontool.Config{Name: "git_push"}, gitPushTool)
-	bashExecute, _ := functiontool.New(functiontool.Config{Name: "bash_execute"}, bashExecuteTool)
+	bashExecute, _ := functiontool.New(functiontool.Config{
+		Name:        "bash_execute",
+		Description: "Executes a shell command. Use this for running tests, git operations, or inspecting the system. If starting a server, watcher, or any process that does not exit immediately, you MUST set is_background: true to avoid hanging the system. The tool will return the Process Group ID (PGID) for background tasks, which you can later kill via `kill -- -PGID`.",
+	}, bashExecuteTool)
 	webFetchTool, _ := functiontool.New(functiontool.Config{Name: "web_fetch"}, webFetch)
 	googleSearchTool, _ := functiontool.New(functiontool.Config{Name: "google_search"}, googleSearchFunc)
 	replanTool, _ := functiontool.New(functiontool.Config{Name: "request_replan"}, requestReplan)

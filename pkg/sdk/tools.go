@@ -192,9 +192,9 @@ func googleSearchFunc(ctx tool.Context, args GoogleSearchArgs) (GoogleSearchResu
 // === Bash Tool ===
 
 type BashExecuteArgs struct {
-	Command      string `json:"command"`
-	Dir          string `json:"dir,omitempty"`
-	IsBackground bool   `json:"is_background,omitempty"`
+	Command      string `json:"command" description:"The exact bash command to run."`
+	Dir          string `json:"dir,omitempty" description:"The working directory to run the command in."`
+	IsBackground bool   `json:"is_background,omitempty" description:"Set to true for long-running servers or watchers. The tool will return the PGID and detach."`
 }
 
 type BashExecuteResult struct {

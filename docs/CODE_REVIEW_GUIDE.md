@@ -40,7 +40,8 @@ Before reading the logic deeply, ensure the fundamental health of the project:
 
 1. Run `go mod tidy` to check for unused or unaligned dependencies.
 1. Run `go vet ./...` to catch standard Go compilation and shadow errors.
-1. Run `go test ./...` to verify that existing tests pass.
+1. Run `go test ./... -short` to verify that existing tests pass quickly
+   without triggering long-running live LLM evaluation calls.
 1. Execute any project-specific linting if available.
 
 ### Phase 2: Systematic Codebase Audit
@@ -50,9 +51,15 @@ application layer by layer. Look specifically for:
 
 #### A. Core SDK & Architecture (`pkg/sdk/`)
 
-- **Concurrency**: Are goroutines spawned without a clear lifecycle? Are
-  channels closed properly? Are mutexes used correctly to prevent race
-  conditions on shared state (e.g., `sync.RWMutex` usage)?
+- **Concurrency & Lifecycles**: Are goroutines spawned without a clear
+  lifecycle? Are channels closed properly? Are background servers or listeners
+  provided with a graceful shutdown mechanism (e.g., `Server.Shutdown(ctx)`)?
+- **Resource Contention**: Are shared resources protected by mutexes? Are
+  tests isolated properly (e.g., using in-memory databases like
+  `file::memory:?cache=shared` instead of file-based SQLite locks)?
+- **Subprocesses**: Are external shell commands executed using
+  `exec.CommandContext` to ensure they don't hang indefinitely if the child
+  process stalls?
 - **Error Handling**: Are errors swallowed? Are they properly wrapped using
   `fmt.Errorf("...: %w", err)`?
 - **Interfaces**: Are interfaces small and focused? Is there overly coupled
@@ -61,13 +68,15 @@ application layer by layer. Look specifically for:
 #### B. Terminal User Interface (`cmd/swarm/`)
 
 - **Bubble Tea Antipatterns**: Ensure `Update()` methods never perform
-  blocking I/O (like HTTP requests or disk reads) directly; they must return a
-  `tea.Cmd`.
-- **Rendering Bounds**: Check `lipgloss` layouts and `View()` functions. Are
-  widths and heights properly calculated and passed down? Are styles
-  word-wrapping unexpectedly?
-- **State Leaks**: Are UI models holding onto massive amounts of history or
-  telemetry logs without caps or truncation?
+  blocking I/O (like HTTP requests, database queries, or `exec.Command`)
+  directly; they must always return an asynchronous `tea.Cmd`.
+- **Rendering Bounds & Jitter**: Check `lipgloss` layouts and `View()`
+  functions. Are widths and heights properly calculated? Be wary of
+  `lipgloss.Width()` implicitly wrapping text; prefer
+  `lipgloss.PlaceHorizontal` or explicit margins to prevent 1-line layout
+  jitter when components are grouped.
+- **State Leaks**: Are UI models holding onto massive amounts of history,
+  logs, or telemetry arrays without capacity caps or truncation?
 
 #### C. Evaluator & Tests (`pkg/eval/`, `tests/`)
 

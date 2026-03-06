@@ -100,8 +100,13 @@ application layer by layer. Look specifically for:
 
 Synthesize your findings into a structured report.
 
-1. Group the findings by priority (Critical Bugs, Idiomatic Refactors, Dead
-   Code, Doc Updates).
+1. **Check for Duplicates**: Before finalizing your report, read the
+   `CODE_ISSUES.md` file in the project root. Check if any of your findings
+   have already been logged.
+1. **Update the Backlog**: Append any *new* unique findings or significant new
+   context for existing issues to `CODE_ISSUES.md`.
+1. **Group the findings** by priority (Critical Bugs, Idiomatic Refactors,
+   Dead Code, Doc Updates).
 1. Do NOT immediately start rewriting massive chunks of code.
 1. Present the report to the user and ask: *"Which of these areas would you
    like me to tackle first?"*

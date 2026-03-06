@@ -109,6 +109,16 @@ Interface (TUI):
 From here, you can start conversing with the internal Swarm Agent, scaffold
 new projects, or deploy existing agents.
 
+## Web Agent Panel
+
+Swarm includes a built-in web server that broadcasts live agent telemetry via
+Server-Sent Events (SSE). While running the CLI, you can open your browser to
+**[http://localhost:5050](http://localhost:5050)** to view a rich, graphical
+dashboard of all active agents in your swarm, complete with live status
+indicators and real-time execution logs.
+
+<video src="docs/assets/web-demo.webm" controls autoplay loop muted></video>
+
 ## E2E Evaluations (LLM-as-a-Judge)
 
 ![Swarm Eval Demo](docs/assets/eval_demo.gif)

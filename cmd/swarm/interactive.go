@@ -165,6 +165,34 @@ func renderLogo(isDark bool) string {
 	return sb.String()
 }
 
+func renderScrollbar(height int, scrollPercent float64, color color.Color) []string {
+	if height <= 0 {
+		return nil
+	}
+
+	style := lipgloss.NewStyle().Foreground(color)
+	handle := "┃"
+	track := "│"
+
+	cursorPos := int(scrollPercent * float64(height-1))
+	if cursorPos < 0 {
+		cursorPos = 0
+	}
+	if cursorPos >= height {
+		cursorPos = height - 1
+	}
+
+	var lines []string
+	for i := 0; i < height; i++ {
+		if i == cursorPos {
+			lines = append(lines, style.Render(handle))
+		} else {
+			lines = append(lines, style.Faint(true).Render(track))
+		}
+	}
+	return lines
+}
+
 type streamMsg struct {
 	event sdk.ObservableEvent
 	ch    <-chan sdk.ObservableEvent
@@ -806,7 +834,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.renderer != nil {
 			m.renderer, _ = glamour.NewTermRenderer(
 				glamour.WithStandardStyle(style),
-				glamour.WithWordWrap(m.viewport.Width()-4),
+				glamour.WithWordWrap(m.viewport.Width()),
 			)
 		}
 		return m, nil
@@ -1331,7 +1359,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Borders: 2 for Agent Panel, 2 for Viewport, 2 for Input = 6 lines
 		// Status Line: 1 line
 		// TextArea height: 3 lines
-		m.viewport.SetWidth(m.width - 4)
+		m.viewport.SetWidth(m.width - 6)
 		m.viewport.SetHeight(m.height - m.textArea.Height() - agentPanelHeight - 7)
 
 		// Update glamour word wrap
@@ -1342,7 +1370,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.renderer, _ = glamour.NewTermRenderer(
 				glamour.WithStandardStyle(style),
-				glamour.WithWordWrap(m.viewport.Width()-4),
+				glamour.WithWordWrap(m.viewport.Width()),
 			)
 		}
 
@@ -2357,7 +2385,36 @@ func (m model) View() tea.View {
 	}
 
 	// Output Box (Viewport) with border
-	vpView := viewportStyle.Width(m.width - 2).Height(m.viewport.Height()).Render(m.viewport.View())
+	contentWidth := m.width - 6
+	vpWidth := contentWidth
+	scrollable := m.viewport.TotalLineCount() > m.viewport.Height()
+	if scrollable {
+		vpWidth = contentWidth - 2
+	}
+	m.viewport.SetWidth(vpWidth)
+
+	lines := strings.Split(m.viewport.View(), "\n")
+
+	if scrollable {
+		scrollbar := renderScrollbar(m.viewport.Height(), m.viewport.ScrollPercent(), t.borderColor)
+		var newLines []string
+		for i, line := range lines {
+			padded := lipgloss.PlaceHorizontal(vpWidth, lipgloss.Left, line)
+			if i < len(scrollbar) {
+				newLines = append(newLines, padded+" "+scrollbar[i])
+			} else {
+				newLines = append(newLines, padded)
+			}
+		}
+		lines = newLines
+	} else {
+		for i, line := range lines {
+			lines[i] = lipgloss.PlaceHorizontal(contentWidth, lipgloss.Left, line)
+		}
+	}
+
+	vpContent := strings.Join(lines, "\n")
+	vpView := viewportStyle.Render(vpContent)
 
 	// Main body is just the vertical stack of the sections
 	var mainBody string

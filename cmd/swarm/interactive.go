@@ -2109,6 +2109,8 @@ func (m model) renderAgentPanel() string {
 	}
 
 	renderLine := func(prefix string, text string, style lipgloss.Style, width int) string {
+		text = strings.ReplaceAll(text, "\n", " ")
+		text = strings.ReplaceAll(text, "\r", "")
 		prefixComp := lipgloss.NewStyle().Width(3).Render(prefix)
 		contentWidth := width - 3
 		if contentWidth < 1 {
@@ -2117,7 +2119,7 @@ func (m model) renderAgentPanel() string {
 		if runewidth.StringWidth(text) > contentWidth {
 			text = runewidth.Truncate(text, contentWidth-1, "…")
 		}
-		contentComp := style.Width(contentWidth).Render(text)
+		contentComp := style.Render(lipgloss.PlaceHorizontal(contentWidth, lipgloss.Left, text))
 		return lipgloss.JoinHorizontal(lipgloss.Left, prefixComp, contentComp)
 	}
 

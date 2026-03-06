@@ -773,7 +773,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.inputQueue = nil
 				m.loading = false
 				m.statusMsg = ""
-				m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Bold(true).Render("✦ [System] Swarm execution forcefully halted by user."))
+				m.appendMessage(lipgloss.NewStyle().Foreground(errorColor).Bold(true).Render("✦ [System] Swarm execution forcefully halted by user."))
 				m.updateViewport()
 				m.updateInputStyle()
 				return m, nil
@@ -830,7 +830,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						cfg.Model = newModelName
 						sdk.SaveConfig(cfg)
 						m.activeModel = newModelName
-						m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+fmt.Sprintf("Model preference saved as '%s'.", newModelName))
+						m.appendMessage(agentMsgStyle.Render("✦ ") + fmt.Sprintf("Model preference saved as '%s'.", newModelName))
 					}
 				}
 				m.state = stateChat
@@ -913,7 +913,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.inputQueue = nil
 				m.loading = false
 				m.statusMsg = ""
-				m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Bold(true).Render("✦ [System] Swarm execution forcefully halted by user."))
+				m.appendMessage(lipgloss.NewStyle().Foreground(errorColor).Bold(true).Render("✦ [System] Swarm execution forcefully halted by user."))
 				m.updateViewport()
 				m.updateInputStyle()
 				return m, nil
@@ -938,7 +938,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.observeMode {
 				state = "enabled"
 			}
-			m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+fmt.Sprintf("Observe mode %s.", state))
+			m.appendMessage(agentMsgStyle.Render("✦ ") + fmt.Sprintf("Observe mode %s.", state))
 			m.updateViewport()
 			return m, nil
 		case "ctrl+l":
@@ -966,7 +966,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.textArea.Reset()
 
 					queuedIcon := lipgloss.NewStyle().Foreground(googleYellow).Render("⧖ ")
-					m.messages = append(m.messages, queuedIcon+trimmedInput)
+					m.appendMessage(queuedIcon + trimmedInput)
 					m.updateViewport()
 				}
 				return m, nil
@@ -1016,7 +1016,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			if m.state == stateShell && (trimmedInput == "exit" || trimmedInput == "quit") {
 				m.state = stateChat
-				m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"Exited shell execution mode.")
+				m.appendMessage(agentMsgStyle.Render("✦ ") + "Exited shell execution mode.")
 				m.textArea.Reset()
 				m.updateViewport()
 				m.updateInputStyle()
@@ -1025,9 +1025,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			if input != "" {
 				if m.state == stateShell {
-					m.messages = append(m.messages, lipgloss.NewStyle().Width(m.viewport.Width()).Render(lipgloss.NewStyle().Foreground(googleYellow).Bold(true).Render("! ")+input))
+					m.appendMessage(lipgloss.NewStyle().Width(m.viewport.Width()).Render(lipgloss.NewStyle().Foreground(googleYellow).Bold(true).Render("! ") + input))
 				} else {
-					m.messages = append(m.messages, lipgloss.NewStyle().Width(m.viewport.Width()).Render(promptStyle.Render("> ")+input))
+					m.appendMessage(lipgloss.NewStyle().Width(m.viewport.Width()).Render(promptStyle.Render("> ") + input))
 				}
 
 				if len(m.history) == 0 || m.history[len(m.history)-1] != input {
@@ -1260,7 +1260,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Batch(listenForStream(msg.ch), agentCmd)
 
 		case sdk.AgentStateWaiting:
-			m.messages = append(m.messages, lipgloss.NewStyle().Foreground(googleBlue).Italic(true).Width(m.viewport.Width()).Render("👀 "+event.ObserverSummary))
+			m.appendMessage(lipgloss.NewStyle().Foreground(googleBlue).Italic(true).Width(m.viewport.Width()).Render("👀 " + event.ObserverSummary))
 			m.updateViewport()
 			return m, listenForStream(msg.ch)
 
@@ -1293,7 +1293,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 				// Fix alignment: join the icon and the rendered text horizontally so they line up
 				icon := agentMsgStyle.Render("✦ ")
-				m.messages = append(m.messages, lipgloss.JoinHorizontal(lipgloss.Top, icon, strings.TrimSpace(out)))
+				m.appendMessage(lipgloss.JoinHorizontal(lipgloss.Top, icon, strings.TrimSpace(out)))
 			} else {
 				a.update("idle", "Completed task")
 			}
@@ -1314,7 +1314,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if event.Error != nil {
 				errMsg = event.Error.Error()
 			}
-			m.messages = append(m.messages, errorMsgStyle.Width(m.viewport.Width()).Render(fmt.Sprintf("Error: %s", errMsg)))
+			m.appendMessage(errorMsgStyle.Width(m.viewport.Width()).Render(fmt.Sprintf("Error: %s", errMsg)))
 			m.loading = false
 			m.updateViewport()
 			return m, tea.Batch(m.dequeueAndRun(), agentCmd)
@@ -1335,18 +1335,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.loading = false
 		m.statusMsg = ""
 		m.observeLog = nil
-		m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Width(m.viewport.Width()).Render("Error: "+msg.err.Error()))
+		m.appendMessage(lipgloss.NewStyle().Foreground(errorColor).Width(m.viewport.Width()).Render("Error: " + msg.err.Error()))
 		m.updateViewport()
 		return m, m.dequeueAndRun()
 
 	case responseMsg:
 		m.loading = false
 		if msg.err != nil {
-			m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Width(m.viewport.Width()).Render("Error: "+msg.err.Error()))
+			m.appendMessage(lipgloss.NewStyle().Foreground(errorColor).Width(m.viewport.Width()).Render("Error: " + msg.err.Error()))
 		} else if msg.isShell {
 			// Style for shell output - slightly indented and perhaps a different color
 			shellStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#AAAAAA")).PaddingLeft(2).Width(m.viewport.Width())
-			m.messages = append(m.messages, shellStyle.Render(msg.text))
+			m.appendMessage(shellStyle.Render(msg.text))
 		} else {
 			out := msg.text
 			if m.renderer != nil {
@@ -1355,7 +1355,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 			icon := agentMsgStyle.Render("✦ ")
-			m.messages = append(m.messages, lipgloss.JoinHorizontal(lipgloss.Top, icon, strings.TrimSpace(out)))
+			m.appendMessage(lipgloss.JoinHorizontal(lipgloss.Top, icon, strings.TrimSpace(out)))
 		}
 		m.updateViewport()
 		return m, m.dequeueAndRun()
@@ -1364,7 +1364,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.loading = false
 		if msg.err != nil {
 			m.state = stateChat
-			m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Width(m.viewport.Width()).Render("Error fetching models: "+msg.err.Error()))
+			m.appendMessage(lipgloss.NewStyle().Foreground(errorColor).Width(m.viewport.Width()).Render("Error fetching models: " + msg.err.Error()))
 			m.updateViewport()
 			return m, tea.ClearScreen
 		}
@@ -1616,7 +1616,7 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 			buildInfoStr,
 		)
 		icon := agentMsgStyle.Render("✦ ")
-		m.messages = append(m.messages, lipgloss.JoinHorizontal(lipgloss.Top, icon, aboutText))
+		m.appendMessage(lipgloss.JoinHorizontal(lipgloss.Top, icon, aboutText))
 	case "/help":
 		helpText := lipgloss.JoinVertical(lipgloss.Left,
 			lipgloss.NewStyle().Bold(true).Render("Swarm CLI Help Menu"),
@@ -1646,15 +1646,15 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 		)
 
 		icon := agentMsgStyle.Render("✦ ")
-		m.messages = append(m.messages, lipgloss.JoinHorizontal(lipgloss.Top, icon, helpText))
+		m.appendMessage(lipgloss.JoinHorizontal(lipgloss.Top, icon, helpText))
 	case "/sessions":
 		sessions, err := m.swarm.ListSessions(context.Background())
 		if err != nil {
-			m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Render("Failed to list sessions: "+err.Error()))
+			m.appendMessage(lipgloss.NewStyle().Foreground(errorColor).Render("Failed to list sessions: " + err.Error()))
 			return nil
 		}
 		if len(sessions) == 0 {
-			m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"No sessions found in the database.")
+			m.appendMessage(agentMsgStyle.Render("✦ ") + "No sessions found in the database.")
 			return nil
 		}
 
@@ -1676,18 +1676,18 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 		}
 
 		icon := agentMsgStyle.Render("✦ ")
-		m.messages = append(m.messages, lipgloss.JoinHorizontal(lipgloss.Top, icon, lipgloss.JoinVertical(lipgloss.Left, lines...)))
+		m.appendMessage(lipgloss.JoinHorizontal(lipgloss.Top, icon, lipgloss.JoinVertical(lipgloss.Left, lines...)))
 	case "/web":
 		err := exec.Command("open", "http://localhost:5050").Start()
 		if err != nil {
-			m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Render("Failed to open browser: "+err.Error()))
+			m.appendMessage(lipgloss.NewStyle().Foreground(errorColor).Render("Failed to open browser: " + err.Error()))
 		} else {
-			m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"Opened Web Agent Panel at http://localhost:5050")
+			m.appendMessage(agentMsgStyle.Render("✦ ") + "Opened Web Agent Panel at http://localhost:5050")
 		}
 	case "/eval":
 		scenarios, err := eval.GetScenarios()
 		if err != nil {
-			m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Render("Failed to load scenarios: "+err.Error()))
+			m.appendMessage(lipgloss.NewStyle().Foreground(errorColor).Render("Failed to load scenarios: " + err.Error()))
 			return nil
 		}
 
@@ -1704,7 +1704,7 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 				lines = append(lines, lipgloss.NewStyle().Width(wrapWidth).Render(content))
 			}
 			icon := agentMsgStyle.Render("✦ ")
-			m.messages = append(m.messages, lipgloss.JoinHorizontal(lipgloss.Top, icon, lipgloss.JoinVertical(lipgloss.Left, lines...)))
+			m.appendMessage(lipgloss.JoinHorizontal(lipgloss.Top, icon, lipgloss.JoinVertical(lipgloss.Left, lines...)))
 			return nil
 		}
 
@@ -1718,7 +1718,7 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 		}
 
 		if found == nil {
-			m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Render(fmt.Sprintf("Scenario '%s' not found.", target)))
+			m.appendMessage(lipgloss.NewStyle().Foreground(errorColor).Render(fmt.Sprintf("Scenario '%s' not found.", target)))
 			return nil
 		}
 
@@ -1731,13 +1731,13 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 		ctxLines = append(ctxLines, lipgloss.NewStyle().Italic(true).Render("Rubric: "+found.Rubric))
 
 		icon := agentMsgStyle.Render("✦ ")
-		m.messages = append(m.messages, lipgloss.JoinHorizontal(lipgloss.Top, icon, lipgloss.JoinVertical(lipgloss.Left, ctxLines...)))
+		m.appendMessage(lipgloss.JoinHorizontal(lipgloss.Top, icon, lipgloss.JoinVertical(lipgloss.Left, ctxLines...)))
 
 		// Set up the evaluation runner
 		evalChan := make(chan sdk.ObservableEvent, 100)
 		apiKey := os.Getenv("GOOGLE_API_KEY")
 		if apiKey == "" {
-			m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Render("Error: GOOGLE_API_KEY environment variable is required."))
+			m.appendMessage(lipgloss.NewStyle().Foreground(errorColor).Render("Error: GOOGLE_API_KEY environment variable is required."))
 			return nil
 		}
 
@@ -1784,16 +1784,16 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 	case "/skills":
 		if len(parts) > 1 && parts[1] == "reload" {
 			if err := m.swarm.Reload(); err != nil {
-				m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Render("Failed to reload skills: "+err.Error()))
+				m.appendMessage(lipgloss.NewStyle().Foreground(errorColor).Render("Failed to reload skills: " + err.Error()))
 			} else {
-				m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"Skills and agents reloaded successfully.")
+				m.appendMessage(agentMsgStyle.Render("✦ ") + "Skills and agents reloaded successfully.")
 			}
 			return nil
 		}
 
 		skills := m.swarm.Skills()
 		if len(skills) == 0 {
-			m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"No dynamic skills are currently loaded.")
+			m.appendMessage(agentMsgStyle.Render("✦ ") + "No dynamic skills are currently loaded.")
 			return nil
 		}
 
@@ -1815,10 +1815,10 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 		}
 
 		icon := agentMsgStyle.Render("✦ ")
-		m.messages = append(m.messages, lipgloss.JoinHorizontal(lipgloss.Top, icon, lipgloss.JoinVertical(lipgloss.Left, lines...)))
+		m.appendMessage(lipgloss.JoinHorizontal(lipgloss.Top, icon, lipgloss.JoinVertical(lipgloss.Left, lines...)))
 	case "/model":
 		if len(parts) < 2 {
-			m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"Usage: /model <name> OR /model list\nCurrent mode is: auto")
+			m.appendMessage(agentMsgStyle.Render("✦ ") + "Usage: /model <name> OR /model list\nCurrent mode is: auto")
 			return nil
 		}
 
@@ -1836,13 +1836,13 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 		if err == nil {
 			cfg.Model = newModelName
 			if err := sdk.SaveConfig(cfg); err != nil {
-				m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Render("Failed to save config: "+err.Error()))
+				m.appendMessage(lipgloss.NewStyle().Foreground(errorColor).Render("Failed to save config: " + err.Error()))
 				return nil
 			}
 			m.activeModel = newModelName
-			m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+fmt.Sprintf("Model preference saved as '%s'.", newModelName))
+			m.appendMessage(agentMsgStyle.Render("✦ ") + fmt.Sprintf("Model preference saved as '%s'.", newModelName))
 		} else {
-			m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Render("Failed to load config: "+err.Error()))
+			m.appendMessage(lipgloss.NewStyle().Foreground(errorColor).Render("Failed to load config: " + err.Error()))
 		}
 	case "/debug":
 		enabled := !m.swarm.IsDebug()
@@ -1851,53 +1851,53 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 		if !enabled {
 			status = "disabled"
 		}
-		m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+fmt.Sprintf("Debug mode (trajectories) %s.", status))
+		m.appendMessage(agentMsgStyle.Render("✦ ") + fmt.Sprintf("Debug mode (trajectories) %s.", status))
 	case "/copy":
 		if m.lastResponse != "" {
 			if err := clipboard.WriteAll(m.lastResponse); err != nil {
-				m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Render("Failed to copy to clipboard: "+err.Error()))
+				m.appendMessage(lipgloss.NewStyle().Foreground(errorColor).Render("Failed to copy to clipboard: " + err.Error()))
 			} else {
-				m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"Copied last response to clipboard.")
+				m.appendMessage(agentMsgStyle.Render("✦ ") + "Copied last response to clipboard.")
 			}
 		} else {
-			m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"No response available to copy.")
+			m.appendMessage(agentMsgStyle.Render("✦ ") + "No response available to copy.")
 		}
 	case "/clear":
 		m.messages = nil
-		m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"Screen cleared.")
+		m.appendMessage(agentMsgStyle.Render("✦ ") + "Screen cleared.")
 	case "/rewind":
 		n := 1
 		if len(parts) > 1 {
 			fmt.Sscanf(parts[1], "%d", &n)
 		}
 		if err := m.swarm.Rewind(n); err != nil {
-			m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Render("Failed to rewind: "+err.Error()))
+			m.appendMessage(lipgloss.NewStyle().Foreground(errorColor).Render("Failed to rewind: " + err.Error()))
 		} else {
 			for _, a := range m.agents {
 				a.update("idle", "Idle")
 			}
 			// Wipe the local messages to reflect the rewound state (or just append a notice)
-			m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+fmt.Sprintf("Rewound the conversation history by %d turn(s).", n))
+			m.appendMessage(agentMsgStyle.Render("✦ ") + fmt.Sprintf("Rewound the conversation history by %d turn(s).", n))
 		}
 	case "/plan":
 		m.planMode = true
-		m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"Plan Mode enabled. I will only read files and brainstorm. I will not modify files or execute shell commands.")
+		m.appendMessage(agentMsgStyle.Render("✦ ") + "Plan Mode enabled. I will only read files and brainstorm. I will not modify files or execute shell commands.")
 	case "/act":
 		m.planMode = false
-		m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"Act Mode enabled. I am fully capable of writing files and executing commands.")
+		m.appendMessage(agentMsgStyle.Render("✦ ") + "Act Mode enabled. I am fully capable of writing files and executing commands.")
 	case "/observe":
 		m.observeMode = !m.observeMode
 		state := "disabled"
 		if m.observeMode {
 			state = "enabled"
 		}
-		m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+fmt.Sprintf("Observe mode %s.", state))
+		m.appendMessage(agentMsgStyle.Render("✦ ") + fmt.Sprintf("Observe mode %s.", state))
 		m.updateViewport()
 
 	case "/config":
 		cfg, err := sdk.LoadConfig()
 		if err != nil {
-			m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Render("Failed to load config: "+err.Error()))
+			m.appendMessage(lipgloss.NewStyle().Foreground(errorColor).Render("Failed to load config: " + err.Error()))
 		} else {
 			var lines []string
 			lines = append(lines, lipgloss.NewStyle().Bold(true).Render("Global Configuration"))
@@ -1909,14 +1909,14 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 			lines = append(lines, fmt.Sprintf("Configuration stored at: %s", lipgloss.NewStyle().Foreground(lipgloss.Color("#888888")).Render(configPath)))
 
 			icon := agentMsgStyle.Render("✦ ")
-			m.messages = append(m.messages, lipgloss.JoinHorizontal(lipgloss.Top, icon, lipgloss.JoinVertical(lipgloss.Left, lines...)))
+			m.appendMessage(lipgloss.JoinHorizontal(lipgloss.Top, icon, lipgloss.JoinVertical(lipgloss.Left, lines...)))
 		}
 	case "/context":
 		if len(parts) == 1 {
 			// List context
 			files := m.swarm.ListContext()
 			if len(files) == 0 {
-				m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"No files are currently pinned to the context window.")
+				m.appendMessage(agentMsgStyle.Render("✦ ") + "No files are currently pinned to the context window.")
 				return nil
 			}
 
@@ -1927,48 +1927,55 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 				lines = append(lines, "  - "+lipgloss.NewStyle().Foreground(primaryColor).Render(file))
 			}
 			icon := agentMsgStyle.Render("✦ ")
-			m.messages = append(m.messages, lipgloss.JoinHorizontal(lipgloss.Top, icon, lipgloss.JoinVertical(lipgloss.Left, lines...)))
+			m.appendMessage(lipgloss.JoinHorizontal(lipgloss.Top, icon, lipgloss.JoinVertical(lipgloss.Left, lines...)))
 		} else if parts[1] == "add" {
 			if len(parts) < 3 {
-				m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"Usage: /context add <file_path>")
+				m.appendMessage(agentMsgStyle.Render("✦ ") + "Usage: /context add <file_path>")
 				return nil
 			}
 			filePath := parts[2]
 			if err := m.swarm.AddContext(filePath); err != nil {
-				m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Render("Error pinning file: "+err.Error()))
+				m.appendMessage(lipgloss.NewStyle().Foreground(errorColor).Render("Error pinning file: " + err.Error()))
 			} else {
-				m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+fmt.Sprintf("Pinned `%s` to the active context window.", filePath))
+				m.appendMessage(agentMsgStyle.Render("✦ ") + fmt.Sprintf("Pinned `%s` to the active context window.", filePath))
 			}
 		} else {
-			m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"Usage: /context OR /context add <file_path>")
+			m.appendMessage(agentMsgStyle.Render("✦ ") + "Usage: /context OR /context add <file_path>")
 		}
 	case "/drop":
 		if len(parts) < 2 {
-			m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"Usage: /drop <file_path> OR /drop all")
+			m.appendMessage(agentMsgStyle.Render("✦ ") + "Usage: /drop <file_path> OR /drop all")
 			return nil
 		}
 		filePath := parts[1]
 		m.swarm.DropContext(filePath)
 		if filePath == "all" {
-			m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"Cleared all pinned files from the context window.")
+			m.appendMessage(agentMsgStyle.Render("✦ ") + "Cleared all pinned files from the context window.")
 		} else {
-			m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+fmt.Sprintf("Dropped `%s` from the context window.", filePath))
+			m.appendMessage(agentMsgStyle.Render("✦ ") + fmt.Sprintf("Dropped `%s` from the context window.", filePath))
 		}
 	case "/remember":
 		if len(parts) < 2 {
-			m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"Usage: /remember <fact or preference>")
+			m.appendMessage(agentMsgStyle.Render("✦ ") + "Usage: /remember <fact or preference>")
 			return nil
 		}
 		fact := strings.Join(parts[1:], " ")
 		if err := sdk.SaveMemory(fact); err != nil {
-			m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Render("Failed to save memory: "+err.Error()))
+			m.appendMessage(lipgloss.NewStyle().Foreground(errorColor).Render("Failed to save memory: " + err.Error()))
 		} else {
-			m.messages = append(m.messages, agentMsgStyle.Render("✦ ")+"Got it. I'll remember that for all future sessions.")
+			m.appendMessage(agentMsgStyle.Render("✦ ") + "Got it. I'll remember that for all future sessions.")
 		}
 	default:
-		m.messages = append(m.messages, lipgloss.NewStyle().Foreground(errorColor).Render("Unknown command: "+cmd))
+		m.appendMessage(lipgloss.NewStyle().Foreground(errorColor).Render("Unknown command: " + cmd))
 	}
 	return nil
+}
+
+func (m *model) appendMessage(msg string) {
+	m.messages = append(m.messages, msg)
+	if len(m.messages) > 500 {
+		m.messages = m.messages[len(m.messages)-500:]
+	}
 }
 
 func (m *model) updateViewport() {

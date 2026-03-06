@@ -273,12 +273,13 @@
     <div class="connection-status disconnected" id="connection-status">Connecting...</div>
 
     <script>
-        const AgentStateSpawning = 0;
-        const AgentStateThinking = 1;
-        const AgentStateExecuting = 2;
-        const AgentStateComplete = 3;
-        const AgentStateError = 4;
-        const AgentStateWaiting = 5;
+        const AgentStatePending = "pending";
+        const AgentStateSpawning = "spawning";
+        const AgentStateThinking = "thinking";
+        const AgentStateExecuting = "executing";
+        const AgentStateComplete = "complete";
+        const AgentStateError = "error";
+        const AgentStateWaiting = "waiting";
 
         // Predefined icons based on agent names/roles
         function getIconForAgent(name) {

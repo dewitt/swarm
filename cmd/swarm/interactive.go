@@ -250,6 +250,9 @@ type themeColors struct {
 	statusFg      color.Color
 	placeholderFg color.Color
 	labelFg       color.Color
+	logoMutedFg   color.Color
+	logoCaretFg   color.Color
+	logoForestFgs []color.Color
 }
 
 func defaultTheme(isDark bool) themeColors {
@@ -260,6 +263,15 @@ func defaultTheme(isDark bool) themeColors {
 		statusFg:      ld(lipgloss.Color("#555555"), lipgloss.Color("#888888")),
 		placeholderFg: ld(lipgloss.Color("#E0E0E0"), lipgloss.Color("#262626")),
 		labelFg:       ld(lipgloss.Color("#777777"), lipgloss.Color("#AAAAAA")),
+		logoMutedFg:   ld(lipgloss.Color("#D4D4D4"), lipgloss.Color("#404040")),
+		logoCaretFg:   ld(lipgloss.Color("#1E3A8A"), lipgloss.Color("#60A5FA")), // Dark blue for >, light blue for dark mode
+		logoForestFgs: []color.Color{
+			ld(lipgloss.Color("#153324"), lipgloss.Color("#2F7452")), // Dark green (S)
+			ld(lipgloss.Color("#2F7452"), lipgloss.Color("#4AB57F")), // Medium green (W)
+			ld(lipgloss.Color("#4AB57F"), lipgloss.Color("#86EFAC")), // Light green (A)
+			ld(lipgloss.Color("#2F7452"), lipgloss.Color("#4AB57F")), // Medium green (R)
+			ld(lipgloss.Color("#153324"), lipgloss.Color("#2F7452")), // Dark green (M)
+		},
 	}
 }
 
@@ -2054,14 +2066,6 @@ func (m model) renderAgentPanel() string {
 
 		if !m.hasRunTasks && m.logoFrame < 60 {
 			// Animated "paint" from left to right on boot
-			caretColor := lipgloss.Color("#FACC15") // Gold/Yellow for ">"
-			forestColors := []color.Color{
-				lipgloss.Color("#153324"), // Dark green (S)
-				lipgloss.Color("#4AB57F"), // Light green (W)
-				lipgloss.Color("#3D9469"), // Medium light green (A)
-				lipgloss.Color("#2F7452"), // Medium green (R)
-				lipgloss.Color("#153324"), // Dark green (M)
-			}
 
 			var sb strings.Builder
 			for _, line := range rawLogo {
@@ -2071,19 +2075,19 @@ func (m model) renderAgentPanel() string {
 						continue
 					}
 
-					c := t.placeholderFg
+					c := t.logoMutedFg
 					if x <= m.logoFrame {
 						if x < 12 {
-							c = caretColor
+							c = t.logoCaretFg
 						} else {
-							cIdx := ((x - 12) * len(forestColors)) / 43 // 55 - 12 = 43
+							cIdx := ((x - 12) * len(t.logoForestFgs)) / 43 // 55 - 12 = 43
 							if cIdx < 0 {
 								cIdx = 0
 							}
-							if cIdx >= len(forestColors) {
-								cIdx = len(forestColors) - 1
+							if cIdx >= len(t.logoForestFgs) {
+								cIdx = len(t.logoForestFgs) - 1
 							}
-							c = forestColors[cIdx]
+							c = t.logoForestFgs[cIdx]
 						}
 					}
 
@@ -2100,14 +2104,6 @@ func (m model) renderAgentPanel() string {
 			// If m.hasRunTasks is true, we display the muted grey.
 			// If not, we display the fully painted logo.
 			if !m.hasRunTasks {
-				caretColor := lipgloss.Color("#FACC15")
-				forestColors := []color.Color{
-					lipgloss.Color("#153324"), // Dark green (S)
-					lipgloss.Color("#4AB57F"), // Light green (W)
-					lipgloss.Color("#3D9469"), // Medium light green (A)
-					lipgloss.Color("#2F7452"), // Medium green (R)
-					lipgloss.Color("#153324"), // Dark green (M)
-				}
 				var sb strings.Builder
 				for _, line := range rawLogo {
 					for x, ch := range line {
@@ -2115,18 +2111,18 @@ func (m model) renderAgentPanel() string {
 							sb.WriteRune(ch)
 							continue
 						}
-						c := t.placeholderFg
+						c := t.logoMutedFg
 						if x < 12 {
-							c = caretColor
+							c = t.logoCaretFg
 						} else {
-							cIdx := ((x - 12) * len(forestColors)) / 43
+							cIdx := ((x - 12) * len(t.logoForestFgs)) / 43
 							if cIdx < 0 {
 								cIdx = 0
 							}
-							if cIdx >= len(forestColors) {
-								cIdx = len(forestColors) - 1
+							if cIdx >= len(t.logoForestFgs) {
+								cIdx = len(t.logoForestFgs) - 1
 							}
-							c = forestColors[cIdx]
+							c = t.logoForestFgs[cIdx]
 						}
 						style := lipgloss.NewStyle().Foreground(c).Bold(true)
 						sb.WriteString(style.Render(string(ch)))
@@ -2135,7 +2131,7 @@ func (m model) renderAgentPanel() string {
 				}
 				watermark = strings.TrimRight(sb.String(), "\n")
 			} else {
-				watermarkStyle := lipgloss.NewStyle().Foreground(t.placeholderFg).Bold(true)
+				watermarkStyle := lipgloss.NewStyle().Foreground(t.logoMutedFg).Bold(true)
 				watermark = watermarkStyle.Render(strings.Join(rawLogo, "\n"))
 			}
 		}

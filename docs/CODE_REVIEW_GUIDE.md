@@ -1,114 +1,59 @@
 # Swarm Code Review Guide
 
-This document contains specialized instructions for an AI agent (or human
-contributor) to perform a comprehensive, top-to-bottom codebase review. The
-objective of this process is to iteratively improve the quality of the Swarm
-repository over time by systematically rooting out issues.
+This document contains principled instructions for an AI agent (or human contributor) to perform a comprehensive codebase review. The objective is to iteratively improve the quality, maintainability, and reliability of the Swarm repository.
 
 ## When to Use This Guide
 
-You should execute this workflow whenever a user requests a "thorough code
-review," an "audit of the codebase," or a "daily quality check."
+Execute this workflow whenever a user requests a "thorough code review," an "audit of the codebase," or a "quality check."
 
-## Core Objectives
+## Core Principles
 
-1. **Bug Hunting**: Identify obvious logic errors, memory leaks, unhandled
-   errors, and subtle concurrency or race conditions. For the TUI
-   (`cmd/swarm`), focus heavily on Bubble Tea lifecycle bugs, out-of-bounds
-   rendering, and state management.
-1. **Dead Code Elimination**: Hunt down unused variables, functions,
-   unexported structs, abandoned prototypes, or legacy features that clutter
-   the project.
-1. **Idiomatic Practices**: Ensure the code adheres strictly to Go and Bubble
-   Tea best practices (e.g., proper error wrapping, channel closing, avoiding
-   blocking I/O in TUI `Update` loops).
-1. **Documentation Alignment**: Verify that `README.md`, `PHILOSOPHY.md`, and
-   the `docs/` folder accurately reflect the current implementation. Flag any
-   drift between what the code *does* and what the documentation *says*.
-
-______________________________________________________________________
+1. **Robustness & Reliability**: Identify logic errors, unhandled exceptions, memory leaks, and concurrency issues (e.g., race conditions, unclosed channels, orphaned goroutines).
+2. **Cleanliness & Clarity**: Hunt down dead code, unused variables, abandoned prototypes, and legacy features. Ensure the codebase remains lean.
+3. **Idiomatic Design**: Ensure the code adheres to ecosystem best practices (e.g., standard Go idioms, proper error wrapping) and framework-specific patterns (e.g., non-blocking I/O in Bubble Tea `Update` loops).
+4. **Documentation Alignment**: Verify that documentation (`README.md`, `docs/`, inline comments) accurately reflects the current implementation. Code and documentation must evolve together.
 
 ## The Code Review Workflow
 
-When instructed to perform a review, follow these phases methodically. Do not
-attempt to fix all issues in a single massive commit; instead, document your
-findings and propose a targeted strategy for the user to approve.
+Follow these phases methodically. Do not attempt to fix all issues in a single massive commit; instead, document findings and propose a targeted strategy.
 
 ### Phase 1: Static Analysis & Health Checks
 
-Before reading the logic deeply, ensure the fundamental health of the project:
-
-1. Run `go mod tidy` to check for unused or unaligned dependencies.
-1. Run `go vet ./...` to catch standard Go compilation and shadow errors.
-1. Run `go test ./... -short` to verify that existing tests pass quickly
-   without triggering long-running live LLM evaluation calls.
-1. Execute any project-specific linting if available.
+Ensure the fundamental health of the project using standard tooling:
+- Verify dependency alignment and neatness.
+- Run static analysis and vetting tools to catch compilation and shadow errors.
+- Execute the test suite to ensure baseline functionality remains intact (preferring fast/unit tests for quick feedback).
+- Apply project-specific linting or formatting.
 
 ### Phase 2: Systematic Codebase Audit
 
-Use a combination of `glob`, `grep_search`, and `read_file` to review the
-application layer by layer. Look specifically for:
+Review the application layer by layer, focusing on architectural principles rather than just syntax:
 
-#### A. Core SDK & Architecture (`pkg/sdk/`)
+#### A. Core Architecture & SDK
+- **Concurrency & Lifecycles**: Ensure all goroutines have a clear lifecycle and termination path. Verify graceful shutdown mechanisms for long-running processes.
+- **Resource Management**: Check for proper synchronization around shared resources. Ensure external processes (e.g., shell commands) are context-bound to prevent hanging.
+- **Error Handling**: Verify that errors are handled thoughtfully, providing necessary context (e.g., wrapping) without being swallowed or over-logged.
+- **Coupling & Abstraction**: Evaluate interfaces and package boundaries. Ensure concerns are properly separated.
 
-- **Concurrency & Lifecycles**: Are goroutines spawned without a clear
-  lifecycle? Are channels closed properly? Are background servers or listeners
-  provided with a graceful shutdown mechanism (e.g., `Server.Shutdown(ctx)`)?
-- **Resource Contention**: Are shared resources protected by mutexes? Are
-  tests isolated properly (e.g., using in-memory databases like
-  `file::memory:?cache=shared` instead of file-based SQLite locks)?
-- **Subprocesses**: Are external shell commands executed using
-  `exec.CommandContext` to ensure they don't hang indefinitely if the child
-  process stalls?
-- **Error Handling**: Are errors swallowed? Are they properly wrapped using
-  `fmt.Errorf("...: %w", err)`?
-- **Interfaces**: Are interfaces small and focused? Is there overly coupled
-  logic that should be abstracted?
+#### B. User Interface (TUI)
+- **Asynchronous Execution**: Verify that the main event loop (e.g., Bubble Tea `Update`) never blocks on I/O. All long-running operations must be asynchronous.
+- **Rendering Stability**: Look for layout instability, out-of-bounds rendering, or unconstrained memory growth in UI state components (e.g., unbounded history arrays).
 
-#### B. Terminal User Interface (`cmd/swarm/`)
-
-- **Bubble Tea Antipatterns**: Ensure `Update()` methods never perform
-  blocking I/O (like HTTP requests, database queries, or `exec.Command`)
-  directly; they must always return an asynchronous `tea.Cmd`.
-- **Rendering Bounds & Jitter**: Check `lipgloss` layouts and `View()`
-  functions. Are widths and heights properly calculated? Be wary of
-  `lipgloss.Width()` implicitly wrapping text; prefer
-  `lipgloss.PlaceHorizontal` or explicit margins to prevent 1-line layout
-  jitter when components are grouped.
-- **State Leaks**: Are UI models holding onto massive amounts of history,
-  logs, or telemetry arrays without capacity caps or truncation?
-
-#### C. Evaluator & Tests (`pkg/eval/`, `tests/`)
-
-- **Test Coverage**: Identify critical paths in the SDK or CLI that lack test
-  coverage.
-- **Brittle Tests**: Are tests relying on hardcoded timing, sleep statements,
-  or unstable network calls?
-- **Eval Parity**: Do the LLM-as-a-judge evaluation scenarios accurately
-  reflect the features of the current Swarm CLI?
+#### C. Testing & Evaluation
+- **Reliability**: Identify brittle tests relying on hardcoded timing (`sleep`), race conditions, or unstable external dependencies.
+- **Coverage & Scope**: Pinpoint critical paths lacking adequate test coverage or evaluation scenarios that no longer match CLI capabilities.
 
 ### Phase 3: Documentation Sync
 
-1. Read `README.md` and check the "Features" list. Does the code actually
-   implement everything listed? Are the commands accurate?
-1. Check inline godoc comments on exported SDK methods. Do they clearly
-   explain the parameters and return values?
-1. Are there `TODO.md` items that have actually been completed but not checked
-   off?
+- Check if user-facing documentation (e.g., `README.md` features) matches the actual implemented behavior.
+- Review inline documentation for exported APIs to ensure accuracy and usefulness.
+- Reconcile `TODO.md` items with actual codebase state.
 
 ### Phase 4: Reporting and Execution
 
-Synthesize your findings into a structured report.
-
-1. **Check for Duplicates**: Before finalizing your report, read the
-   `docs/CODE_ISSUES.md` file in the project root. Check if any of your
-   findings have already been logged.
-1. **Update the Backlog**: Append any *new* unique findings or significant new
-   context for existing issues to `docs/CODE_ISSUES.md`.
-1. **Group the findings** by priority (Critical Bugs, Idiomatic Refactors,
-   Dead Code, Doc Updates).
-1. Do NOT immediately start rewriting massive chunks of code.
-1. Present the report to the user and ask: *"Which of these areas would you
-   like me to tackle first?"*
-1. Proceed iteratively with the user's approval, employing the standard
-   `Plan -> Act -> Validate` loop for each fix.
+Synthesize findings into a structured report:
+1. **Deduplicate**: Review existing issues in `docs/CODE_ISSUES.md` to avoid duplicating known problems.
+2. **Update Backlog**: Append new findings or significant context to `docs/CODE_ISSUES.md`.
+3. **Categorize**: Group findings by priority (e.g., Critical Bugs, Idiomatic Refactors, Dead Code, Documentation).
+4. **Propose**: Present the report to the user and ask: *"Which of these areas would you like me to tackle first?"*
+5. **Execute**: Proceed iteratively with the user's approval, employing the `Plan -> Act -> Validate` loop for each targeted fix. Do not rewrite massive chunks of code unprompted.

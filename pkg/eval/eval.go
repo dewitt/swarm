@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/dewitt/swarm/pkg/sdk"
@@ -114,6 +115,50 @@ func (e *Evaluator) Run(ctx context.Context, s Scenario, opts ...RunOption) (*Re
 
 	// Track the current working directory to restore it gracefully
 	originalWd, _ := os.Getwd()
+
+	// Capture go caches to prevent massive CPU thrashing during evaluation
+	// when HOME is temporarily redirected to the sandbox. Without this,
+	// every scenario rebuilds the standard library and go-lint caches from scratch.
+	origHome, hasHome := os.LookupEnv("HOME")
+	origGocache, hasGocache := os.LookupEnv("GOCACHE")
+	origGomodcache, hasGomodcache := os.LookupEnv("GOMODCACHE")
+	origGolangci, hasGolangci := os.LookupEnv("GOLANGCI_LINT_CACHE")
+
+	if out, err := exec.Command("go", "env", "GOCACHE", "GOMODCACHE").Output(); err == nil {
+		lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+		if len(lines) >= 2 {
+			os.Setenv("GOCACHE", lines[0])
+			os.Setenv("GOMODCACHE", lines[1])
+		}
+	}
+	if !hasGolangci {
+		if cacheDir, err := os.UserCacheDir(); err == nil {
+			os.Setenv("GOLANGCI_LINT_CACHE", filepath.Join(cacheDir, "golangci-lint"))
+		}
+	}
+
+	defer func() {
+		if hasGocache {
+			os.Setenv("GOCACHE", origGocache)
+		} else {
+			os.Unsetenv("GOCACHE")
+		}
+		if hasGomodcache {
+			os.Setenv("GOMODCACHE", origGomodcache)
+		} else {
+			os.Unsetenv("GOMODCACHE")
+		}
+		if hasGolangci {
+			os.Setenv("GOLANGCI_LINT_CACHE", origGolangci)
+		} else {
+			os.Unsetenv("GOLANGCI_LINT_CACHE")
+		}
+		if hasHome {
+			os.Setenv("HOME", origHome)
+		} else {
+			os.Unsetenv("HOME")
+		}
+	}()
 
 	// Ensure execution uses the sandbox HOME and CWD
 	os.Setenv("HOME", sandbox)

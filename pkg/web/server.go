@@ -61,7 +61,7 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/app", func(w http.ResponseWriter, r *http.Request) {
 		index, _ := staticFiles.ReadFile("static/index.html")
 		w.Header().Set("Content-Type", "text/html")
-		w.Write(index)
+		_, _ = w.Write(index)
 	})
 
 	// SSE Endpoint

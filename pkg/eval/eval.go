@@ -162,8 +162,8 @@ func (e *Evaluator) Run(ctx context.Context, s Scenario, opts ...RunOption) (*Re
 
 	// Ensure execution uses the sandbox HOME and CWD
 	os.Setenv("HOME", sandbox)
-	os.Chdir(sandbox)
-	defer os.Chdir(originalWd)
+	_ = os.Chdir(sandbox)
+	defer func() { _ = os.Chdir(originalWd) }()
 
 	// Run fixture-specific setup script if it exists
 	if _, err := os.Stat("setup.sh"); err == nil {

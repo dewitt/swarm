@@ -7,7 +7,6 @@ import (
 	"image/color"
 	"os"
 	"os/exec"
-	"os/user"
 	"path/filepath"
 	"regexp"
 	"runtime/debug"
@@ -233,8 +232,7 @@ type model struct {
 	acMode         string // "file", "command", "history"
 	acHasMore      bool
 
-	isDark               bool
-	isRefreshingActivity bool
+	isDark bool
 
 	// Background processes
 	bgPGIDs []int
@@ -400,23 +398,6 @@ func updateAutocomplete(m *model) {
 	}
 }
 
-func getUserName() string {
-	u, err := user.Current()
-	if err == nil {
-		if u.Name != "" {
-			// Return only the first name for a less formal greeting
-			parts := strings.Fields(u.Name)
-			if len(parts) > 0 {
-				return parts[0]
-			}
-		}
-		if u.Username != "" {
-			return u.Username
-		}
-	}
-	return "Developer"
-}
-
 func getHistoryFile() string {
 	dir, err := sdk.GetConfigDir()
 	if err != nil {
@@ -447,7 +428,7 @@ func saveHistory(history []string) {
 		return
 	}
 	dir := filepath.Dir(file)
-	os.MkdirAll(dir, 0755)
+	_ = os.MkdirAll(dir, 0755)
 
 	// Keep only the last 1000 items to prevent the file from growing indefinitely
 	if len(history) > 1000 {
@@ -456,7 +437,7 @@ func saveHistory(history []string) {
 
 	b, err := json.MarshalIndent(history, "", "  ")
 	if err == nil {
-		os.WriteFile(file, b, 0644)
+		_ = os.WriteFile(file, b, 0644)
 	}
 }
 
@@ -563,9 +544,7 @@ func initialModel(planMode bool, resume bool) (model, error) {
 	if !strings.HasSuffix(os.Args[0], ".test") {
 		webServer = web.NewServer(":5050")
 		go func() {
-			if err := webServer.Start(); err != nil {
-				// server closed
-			}
+			_ = webServer.Start()
 		}()
 	}
 
@@ -677,7 +656,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					cfg, err := sdk.LoadConfig()
 					if err == nil {
 						cfg.Model = newModelName
-						sdk.SaveConfig(cfg)
+						_ = sdk.SaveConfig(cfg)
 						m.activeModel = newModelName
 						m.appendMessage(agentMsgStyle.Render("✦ ") + fmt.Sprintf("Model preference saved as '%s'.", newModelName))
 					}
@@ -1722,7 +1701,7 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 	case "/rewind":
 		n := 1
 		if len(parts) > 1 {
-			fmt.Sscanf(parts[1], "%d", &n)
+			_, _ = fmt.Sscanf(parts[1], "%d", &n)
 		}
 		if err := m.swarm.Rewind(n); err != nil {
 			m.appendMessage(lipgloss.NewStyle().Foreground(errorColor).Render("Failed to rewind: " + err.Error()))
@@ -2111,7 +2090,7 @@ func (m model) renderAgentPanel() string {
 							sb.WriteRune(ch)
 							continue
 						}
-						c := t.logoMutedFg
+						var c color.Color
 						if x < 12 {
 							c = t.logoCaretFg
 						} else {
@@ -2552,10 +2531,10 @@ func (m model) View() tea.View {
 
 func (m *model) cleanup() {
 	if m.webServer != nil {
-		m.webServer.Stop(context.Background())
+		_ = m.webServer.Stop(context.Background())
 	}
 	for _, pgid := range m.bgPGIDs {
-		syscall.Kill(-pgid, syscall.SIGKILL)
+		_ = syscall.Kill(-pgid, syscall.SIGKILL)
 	}
 }
 

@@ -6,11 +6,12 @@ debt discovered during automated and manual code reviews
 
 ## 🚨 Critical Bugs & Issues
 
-- None currently identified.
+- **Top-level `golangci-lint run` hangs:** Running the linter on the root directory of the project hangs indefinitely and eventually times out. While we mitigated this in the eval sandbox (#35), the root project itself cannot currently be fully linted in a timely manner.
 
 ## 🛠️ Refactoring & Idiomatic Improvements
 
-- None currently identified.
+- **Blocking I/O in UI Thread:** `saveHistory()` in `cmd/swarm/interactive.go` is called synchronously inside the main `Update()` loop when the user submits a message. This performs JSON marshaling and disk I/O, which violates Bubble Tea best practices. It should be converted to an asynchronous `tea.Cmd`.
+- **Hardcoded Sleeps:** The `BashExecuteResult` (in `pkg/sdk/tools.go`) uses a hardcoded `time.Sleep(500 * time.Millisecond)` to wait and see if a background process crashes immediately before returning its PID. While functional, it is a brittle race condition pattern.
 
 ## 💀 Dead Code & Unused Features
 

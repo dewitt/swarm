@@ -1945,16 +1945,21 @@ func buildBootMessage(cwd, branch string, modified bool, isDark bool, activeMode
 	// Styles
 	t := defaultTheme(isDark)
 	titleStyle := lipgloss.NewStyle().Foreground(googleBlue).Bold(true)
-	versionStyle := lipgloss.NewStyle().Foreground(t.placeholderFg)
+	versionStyle := lipgloss.NewStyle().Foreground(t.labelFg)
 	headerStyle := lipgloss.NewStyle().Foreground(t.borderColor).Bold(true).MarginBottom(1)
-	keyStyle := lipgloss.NewStyle().Foreground(t.labelFg).Width(8)
+	keyStyle := lipgloss.NewStyle().Foreground(t.labelFg).Width(9)
 	valStyle := lipgloss.NewStyle().Foreground(t.statusFg)
 	valModifiedStyle := lipgloss.NewStyle().Foreground(googleYellow)
+
+	displayVersion := version
+	if !strings.HasPrefix(displayVersion, "v") && displayVersion != "Unknown" {
+		displayVersion = "v" + displayVersion
+	}
 
 	// Top row
 	topRow := lipgloss.JoinHorizontal(lipgloss.Bottom, 
 		titleStyle.Render("🤖 Swarm CLI "), 
-		versionStyle.Render("v"+version),
+		versionStyle.Render(displayVersion),
 	)
 
 	// Environment Column

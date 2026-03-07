@@ -76,12 +76,20 @@ type RunOption func(*runOptions)
 
 type runOptions struct {
 	progressCallback func(sdk.ObservableEvent)
+	forceDonate      bool
 }
 
 // WithProgress defines a callback that will receive telemetry events as the scenario runs
 func WithProgress(cb func(sdk.ObservableEvent)) RunOption {
 	return func(opts *runOptions) {
 		opts.progressCallback = cb
+	}
+}
+
+// WithDonate forces the trajectory to be marked for donation.
+func WithDonate(donate bool) RunOption {
+	return func(opts *runOptions) {
+		opts.forceDonate = donate
 	}
 }
 
@@ -178,8 +186,10 @@ func (e *Evaluator) Run(ctx context.Context, s Scenario, opts ...RunOption) (*Re
 
 	// 3. Instantiate Swarm Engine in the sandbox
 	cfg := sdk.SwarmConfig{
-		Debug:       true,
-		DatabaseURI: "file::memory:?cache=shared",
+		Debug:         true,
+		DatabaseURI:   "file::memory:?cache=shared",
+		TrajectoryDir: "eval_trajectories",
+		ForceDonate:   options.forceDonate,
 	}
 	instance, err := sdk.NewSwarm(cfg)
 	if err != nil {

@@ -135,6 +135,9 @@ type defaultSwarm struct {
 	activeEngine        *Engine // The currently executing Engine, used for dynamic task mutability
 	outChan             chan<- ObservableEvent
 	wg                  sync.WaitGroup
+	trajectoryDir       string
+	forceDonate         bool
+	telemetryConfigured bool
 }
 
 type SwarmConfig struct {
@@ -142,6 +145,8 @@ type SwarmConfig struct {
 	ResumeLastSession bool
 	Debug             bool
 	DatabaseURI       string
+	TrajectoryDir     string // Optional override for where trajectories are saved (e.g., "eval_trajectories")
+	ForceDonate       bool   // If true, forces the "donate" telemetry flag to true for this run
 }
 
 func NewSwarm(cfg ...SwarmConfig) (Swarm, error) {
@@ -149,6 +154,14 @@ func NewSwarm(cfg ...SwarmConfig) (Swarm, error) {
 	debugMode := false
 	if len(cfg) > 0 && cfg[0].Debug {
 		debugMode = true
+	}
+	trajectoryDir := "trajectories"
+	forceDonate := false
+	if len(cfg) > 0 {
+		if cfg[0].TrajectoryDir != "" {
+			trajectoryDir = cfg[0].TrajectoryDir
+		}
+		forceDonate = cfg[0].ForceDonate
 	}
 	var flashModel, proModel, fastModel model.LLM
 	clientConfig := &genai.ClientConfig{}
@@ -270,8 +283,17 @@ func NewSwarm(cfg ...SwarmConfig) (Swarm, error) {
 	}
 	_, _ = sessionSvc.Create(ctx, &session.CreateRequest{AppName: "swarm-cli", UserID: "local_user", SessionID: sessionID})
 
+	globalCfg, _ := LoadConfig()
+	telemetryConfigured := false
+	if globalCfg != nil {
+		telemetryConfigured = globalCfg.Telemetry
+	}
+
 	m := &defaultSwarm{
 		db: db, sessionSvc: sessionSvc, userID: "local_user", sessionID: sessionID, clientCfg: clientConfig, pinnedContext: make(map[string]string), flashModel: flashModel, proModel: proModel, fastModel: fastModel, debugMode: debugMode,
+		trajectoryDir:       trajectoryDir,
+		forceDonate:         forceDonate,
+		telemetryConfigured: telemetryConfigured,
 	}
 
 	readStateTool, _ := functiontool.New(functiontool.Config{Name: "read_state"}, m.readState)
@@ -1379,7 +1401,7 @@ func (m *defaultSwarm) saveTrajectory(traj Trajectory) {
 	if err != nil {
 		return
 	}
-	dir := filepath.Join(baseDir, "trajectories")
+	dir := filepath.Join(baseDir, m.trajectoryDir)
 	_ = os.MkdirAll(dir, 0o755)
 
 	filename := fmt.Sprintf("%s.json", traj.TraceID)
@@ -1389,6 +1411,20 @@ func (m *defaultSwarm) saveTrajectory(traj Trajectory) {
 	// Sanitize output path
 	filename = strings.ReplaceAll(filename, "/", "_")
 	path := filepath.Join(dir, filename)
+
+	if m.telemetryConfigured || m.forceDonate {
+		// Convert the typed struct into a generic map so we can inject the "donate" field at the root level without altering the core schema
+		b, err := json.Marshal(traj)
+		if err == nil {
+			var dynMap map[string]interface{}
+			if err := json.Unmarshal(b, &dynMap); err == nil {
+				dynMap["donate"] = true
+				b, _ = json.MarshalIndent(dynMap, "", "  ")
+				_ = os.WriteFile(path, b, 0o600)
+				return
+			}
+		}
+	}
 
 	b, _ := json.MarshalIndent(traj, "", "  ")
 	_ = os.WriteFile(path, b, 0o600)

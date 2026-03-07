@@ -11,7 +11,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var systemSandboxFlag bool
+var (
+	systemSandboxFlag bool
+	donateFlag        bool
+)
 
 var evalCmd = &cobra.Command{
 	Use:   "eval [scenario_id]",
@@ -74,7 +77,7 @@ If no scenario_id is provided, all scenarios will be run.`,
 		for _, s := range toRun {
 			fmt.Printf("==> Scenario: %s (%s)\n", s.Name, s.ID)
 
-			res, err := evaluator.Run(context.Background(), s, eval.WithProgress(func(event sdk.ObservableEvent) {
+			res, err := evaluator.Run(context.Background(), s, eval.WithDonate(donateFlag), eval.WithProgress(func(event sdk.ObservableEvent) {
 				if !trajectoryFlag {
 					if event.State == sdk.AgentStateExecuting && event.ToolName != "" {
 						fmt.Printf("      -> [%s] Executing %s...\n", event.AgentName, event.ToolName)
@@ -129,5 +132,6 @@ If no scenario_id is provided, all scenarios will be run.`,
 
 func init() {
 	evalCmd.Flags().BoolVar(&systemSandboxFlag, "system-sandbox", false, "Run scenarios that potentially mutate the system environment")
+	evalCmd.Flags().BoolVar(&donateFlag, "donate", false, "Mark the resulting execution trajectories for telemetry donation")
 	rootCmd.AddCommand(evalCmd)
 }

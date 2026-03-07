@@ -14,8 +14,8 @@ const DefaultModel = "gemini-2.5-flash"
 
 // Config represents the global user configuration for the Swarm CLI.
 type Config struct {
-	Model string `yaml:"model"`
-	// Additional global preferences (e.g. editor, default skills dir) can go here.
+	Model     string `yaml:"model"`
+	Telemetry bool   `yaml:"telemetry,omitempty"`
 }
 
 // GetConfigDir returns the directory for Swarm configuration and state, creating it if necessary.

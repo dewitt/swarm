@@ -395,7 +395,7 @@ func (m *defaultSwarm) Reload() error {
 	var skill *Skill
 	var instruction string
 	loadedContext, loadedFiles := LoadContextFiles()
-	
+
 	// Add implicitly loaded files to pinned context so they show up in ListContext()
 	for _, f := range loadedFiles {
 		m.pinnedContext[f] = "" // Mark as loaded but don't duplicate content in memory
@@ -551,7 +551,7 @@ func (m *defaultSwarm) ListContext() []string {
 	}
 	return p
 }
-func (m *defaultSwarm) Reset() { m.sessionID = fmt.Sprintf("session_%d", rand.Int63()) }
+func (m *defaultSwarm) Reset()            { m.sessionID = fmt.Sprintf("session_%d", rand.Int63()) }
 func (m *defaultSwarm) SessionID() string { return m.sessionID }
 func (m *defaultSwarm) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	client, err := genai.NewClient(ctx, m.clientCfg)

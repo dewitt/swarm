@@ -49,12 +49,6 @@ var (
 	colorWaiting = lipgloss.Color("#FBBC05") // Yellow
 	colorError   = lipgloss.Color("#EA4335") // Red
 
-	welcomeBoxStyle = lipgloss.NewStyle().
-			Padding(1, 2)
-
-	infoBoxStyle = lipgloss.NewStyle().
-			Padding(1, 2)
-
 	promptStyle = lipgloss.NewStyle().
 			Foreground(googleBlue).
 			Bold(true)
@@ -67,104 +61,6 @@ var (
 			Foreground(errorColor).
 			Bold(true)
 )
-
-func renderLogo(isDark bool) string {
-	sMainGt := lipgloss.NewStyle().Foreground(lipgloss.Color("#334155")).Bold(true)
-	sMainS := lipgloss.NewStyle().Foreground(lipgloss.Color("#1b4332")).Bold(true)
-	sMainW := lipgloss.NewStyle().Foreground(lipgloss.Color("#2d6a4f")).Bold(true)
-	sMainA := lipgloss.NewStyle().Foreground(lipgloss.Color("#40916c")).Bold(true)
-	sMainR := lipgloss.NewStyle().Foreground(lipgloss.Color("#52b788")).Bold(true)
-	sMainM := lipgloss.NewStyle().Foreground(lipgloss.Color("#74c69d")).Bold(true)
-	ld := lipgloss.LightDark(isDark)
-	sShadow := lipgloss.NewStyle().Foreground(ld(lipgloss.Color("#cbd5e1"), lipgloss.Color("#1a1a1a")))
-
-	// Helper to colorize block characters vs line/shadow characters
-	colorize := func(lines []string, mainStyle, shadowStyle lipgloss.Style) []string {
-		var res []string
-		for _, line := range lines {
-			var sb strings.Builder
-			for _, r := range line {
-				if r == '█' || r == '▄' || r == '▀' {
-					sb.WriteString(mainStyle.Render(string(r)))
-				} else if r != ' ' {
-					sb.WriteString(shadowStyle.Render(string(r)))
-				} else {
-					sb.WriteRune(r)
-				}
-			}
-			res = append(res, sb.String())
-		}
-		return res
-	}
-
-	gt := colorize([]string{
-		"██╗    ",
-		"╚██╗   ",
-		" ╚██╗  ",
-		" ██╔╝  ",
-		"██╔╝   ",
-		"╚═╝    ",
-	}, sMainGt, sShadow)
-
-	s := colorize([]string{
-		" ██████╗",
-		"██╔════╝",
-		"╚█████╗ ",
-		" ╚═══██╗",
-		"██████╔╝",
-		"╚═════╝ ",
-	}, sMainS, sShadow)
-
-	w := colorize([]string{
-		"██╗    ██╗",
-		"██║    ██║",
-		"██║ █╗ ██║",
-		"██║███╗██║",
-		"╚███╔███╔╝",
-		" ╚══╝╚══╝ ",
-	}, sMainW, sShadow)
-
-	a := colorize([]string{
-		" █████╗ ",
-		"██╔══██╗",
-		"███████║",
-		"██╔══██║",
-		"██║  ██║",
-		"╚═╝  ╚═╝",
-	}, sMainA, sShadow)
-
-	r := colorize([]string{
-		"██████╗ ",
-		"██╔══██╗",
-		"██████╔╝",
-		"██╔══██╗",
-		"██║  ██║",
-		"╚═╝  ╚═╝",
-	}, sMainR, sShadow)
-
-	m := colorize([]string{
-		"███╗   ███╗",
-		"████╗ ████║",
-		"██╔████╔██║",
-		"██║╚██╔╝██║",
-		"██║ ╚═╝ ██║",
-		"╚═╝     ╚═╝",
-	}, sMainM, sShadow)
-
-	var sb strings.Builder
-	for i := 0; i < 6; i++ {
-		sb.WriteString(gt[i])
-		sb.WriteString(s[i])
-		sb.WriteString(w[i])
-		sb.WriteString(a[i])
-		sb.WriteString(r[i])
-		sb.WriteString(m[i])
-		if i < 5 {
-			sb.WriteString("\n")
-		}
-	}
-	return sb.String()
-}
 
 func renderScrollbar(height int, scrollPercent float64, color color.Color) []string {
 	if height <= 0 {
@@ -322,18 +218,13 @@ type model struct {
 	// Input Queueing and Async HITL
 	inputQueue []string
 	cancelChat context.CancelFunc
+// Agent Panel state
+agents         []*swarmAgent
+spans          map[string]*uiSpan
+showAgentPanel bool
+globalSummary  string
 
-	// Agent Panel state
-	agents         []*swarmAgent
-	spans          map[string]*uiSpan
-	showAgentPanel bool
-	globalSummary  string
-
-	welcomeScreen       []string
-	cachedActivity      string
-	lastActivityRefresh time.Time
-
-	// Autocomplete state
+// Autocomplete state
 	workspaceFiles []string
 	acMatches      []string
 	acIndex        int
@@ -571,72 +462,6 @@ func doGitTick() tea.Cmd {
 	})
 }
 
-type recentActivityMsg struct {
-	html string
-}
-
-func fetchRecentActivity(swarm sdk.Swarm, width int) tea.Cmd {
-	return func() tea.Msg {
-		sessions, _ := swarm.ListSessions(context.Background())
-		commits, _ := sdk.GetRecentCommits(".", 3)
-
-		var sb strings.Builder
-		sb.WriteString(lipgloss.NewStyle().Bold(true).Foreground(googleBlue).Render("Recent Activity") + "\n")
-
-		// Calculate max content width (width minus borders(2), padding(8), and " git " prefix(5))
-		maxContentWidth := width - 10 - 5
-		if maxContentWidth < 5 {
-			maxContentWidth = 5
-		}
-
-		hasActivity := false
-		if len(commits) > 0 {
-			for _, c := range commits {
-				// Remove any newlines to prevent wrapping
-				c = strings.ReplaceAll(c, "\n", " ")
-				if runewidth.StringWidth(c) > maxContentWidth {
-					c = runewidth.Truncate(c, maxContentWidth-1, "…")
-				}
-				sb.WriteString(lipgloss.NewStyle().Foreground(googleGreen).Render(" git ") + c + "\n")
-			}
-			hasActivity = true
-		}
-
-		sessionCount := 0
-		for i := len(sessions) - 1; i >= 0 && sessionCount < 3; i-- {
-			s := sessions[i]
-			summary := strings.ReplaceAll(s.Summary, "\n", " ")
-			if runewidth.StringWidth(summary) > maxContentWidth {
-				summary = runewidth.Truncate(summary, maxContentWidth-1, "…")
-			}
-			sb.WriteString(lipgloss.NewStyle().Foreground(googleYellow).Render(" chat ") + summary + "\n")
-			sessionCount++
-			hasActivity = true
-		}
-
-		if !hasActivity {
-			sb.WriteString("(none yet)\n")
-		}
-
-		// Add spacing to reach a consistent height
-		currentLines := strings.Count(sb.String(), "\n")
-		for i := currentLines; i < 7; i++ {
-			sb.WriteString("\n")
-		}
-
-		sb.WriteString("\n" + lipgloss.NewStyle().Bold(true).Foreground(googleBlue).Render("Quick Tips") + "\n")
-		if width > 50 {
-			sb.WriteString(lipgloss.NewStyle().Foreground(tipColor).Render("^O") + " toggle observe  " + lipgloss.NewStyle().Foreground(tipColor).Render("!") + " run shell\n")
-			sb.WriteString(lipgloss.NewStyle().Foreground(tipColor).Render("/plan") + " brainstorm   " + lipgloss.NewStyle().Foreground(tipColor).Render("/skills") + " skills")
-		} else {
-			sb.WriteString(lipgloss.NewStyle().Foreground(tipColor).Render("^O") + " observe  " + lipgloss.NewStyle().Foreground(tipColor).Render("!") + " shell\n")
-			sb.WriteString(lipgloss.NewStyle().Foreground(tipColor).Render("/plan") + "      " + lipgloss.NewStyle().Foreground(tipColor).Render("/skills") + "\n")
-		}
-
-		return recentActivityMsg{html: sb.String()}
-	}
-}
-
 func initialModel(planMode bool, resume bool) (model, error) {
 	isDark := lipgloss.HasDarkBackground(os.Stdin, os.Stdout)
 
@@ -720,17 +545,12 @@ func initialModel(planMode bool, resume bool) (model, error) {
 		return model{}, err
 	}
 
-	// Prepare splash screen components for dynamic rendering in View()
-	greeting := fmt.Sprintf("\n\n%s %s!", lipgloss.NewStyle().Foreground(tipColor).Render("Welcome back,"), lipgloss.NewStyle().Bold(true).Render(getUserName()))
-	logoAndGreeting := renderLogo(isDark) + greeting
-	recentActivity := "\nLoading recent activity..."
-
 	return model{
 		textArea:       ta,
 		viewport:       vp,
 		spinner:        s,
 		listModel:      l,
-		messages:       []string{"SPLASH_SCREEN"},
+		messages:       []string{buildBootMessage(cwd, branch, modified, isDark)},
 		history:        loadedHist,
 		historyIdx:     len(loadedHist),
 		swarm:          swarm,
@@ -747,9 +567,7 @@ func initialModel(planMode bool, resume bool) (model, error) {
 		agents:         agents,
 		spans:          make(map[string]*uiSpan),
 		showAgentPanel: true,
-		welcomeScreen:  []string{logoAndGreeting, recentActivity},
 		isDark:         isDark,
-		cachedActivity: recentActivity,
 	}, nil
 }
 
@@ -807,18 +625,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// If we are in the model list state, hijack the keys
 	if m.state == stateModelList {
-		if m.isRefreshingActivity {
-			// It's already refreshing or about to be triggered
-		} else if m.cachedActivity == "\nLoading recent activity..." || m.cachedActivity == "" || time.Since(m.lastActivityRefresh) > 30*time.Second {
-			m.isRefreshingActivity = true
-
-			// If we are looking at the splash screen, we need to know the width
-			rightW := (m.width - ((m.width * 2) / 3) - 2)
-			if rightW > 0 {
-				cmds = append(cmds, fetchRecentActivity(m.swarm, rightW))
-			}
-		}
-
 		switch msg := msg.(type) {
 		case tea.WindowSizeMsg:
 			// Let it pass through to the main handler below to update sizes
@@ -860,18 +666,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	if m.isRefreshingActivity {
-		// It's already refreshing or about to be triggered
-	} else if m.cachedActivity == "\nLoading recent activity..." || m.cachedActivity == "" || time.Since(m.lastActivityRefresh) > 30*time.Second {
-		m.isRefreshingActivity = true
-
-		// If we are looking at the splash screen, we need to know the width
-		rightW := (m.width - ((m.width * 2) / 3) - 2)
-		if rightW > 0 {
-			cmds = append(cmds, fetchRecentActivity(m.swarm, rightW))
-		}
-	}
-
 	switch msg := msg.(type) {
 	case tea.BackgroundColorMsg:
 		m.isDark = msg.IsDark()
@@ -892,13 +686,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case workspaceFilesMsg:
 		m.workspaceFiles = msg.files
 		updateAutocomplete(&m)
-		return m, nil
-
-	case recentActivityMsg:
-		m.cachedActivity = msg.html
-		m.lastActivityRefresh = time.Now()
-		m.isRefreshingActivity = false
-		m.updateViewport()
 		return m, nil
 
 	case gitStatusMsg:
@@ -1418,7 +1205,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		m.cachedActivity = "" // Force refresh on next updateViewport
 
 		m.textArea.SetWidth(m.width - 4)
 
@@ -2009,21 +1795,10 @@ func (m *model) updateViewport() {
 	// Prepare the dynamic message list
 	var renderedMessages []string
 	for _, msg := range m.messages {
-		if msg == "SPLASH_SCREEN" {
-			// SPLASH_SCREEN split: 2/3 Logo, 1/3 Recent Activity
-			leftW := (m.width * 2) / 3
-			rightW := m.width - leftW - 2
-
-			left := welcomeBoxStyle.Width(leftW - 4).Render(m.welcomeScreen[0])
-			right := infoBoxStyle.Width(rightW - 4).Render(m.cachedActivity)
-
-			renderedMessages = append(renderedMessages, lipgloss.JoinHorizontal(lipgloss.Top, left, right))
-		} else {
-			// Ensure each message is wrapped to the current viewport width.
-			// This prevents terminal-level wrapping that breaks viewport scrolling calculations
-			// and handles terminal resizing correctly.
-			renderedMessages = append(renderedMessages, lipgloss.NewStyle().Width(m.viewport.Width()).Render(msg))
-		}
+		// Ensure each message is wrapped to the current viewport width.
+		// This prevents terminal-level wrapping that breaks viewport scrolling calculations
+		// and handles terminal resizing correctly.
+		renderedMessages = append(renderedMessages, lipgloss.NewStyle().Width(m.viewport.Width()).Render(msg))
 	}
 
 	// Add dynamic status if loading
@@ -2099,6 +1874,56 @@ func (m *model) updateInputStyle() {
 	}
 }
 
+func buildBootMessage(cwd, branch string, modified bool, isDark bool) string {
+	version := "Unknown"
+	if info, ok := debug.ReadBuildInfo(); ok {
+		version = info.Main.Version
+		if version == "(devel)" {
+			for _, setting := range info.Settings {
+				if setting.Key == "vcs.revision" {
+					version = setting.Value
+					if len(version) > 7 {
+						version = version[:7]
+					}
+					break
+				}
+			}
+		}
+	}
+
+	modStr := ""
+	if modified {
+		modStr = " (modified)"
+	}
+
+	recentCommits := ""
+	if commits, err := sdk.GetRecentCommits(".", 3); err == nil && len(commits) > 0 {
+		for i, c := range commits {
+			commits[i] = "- " + strings.ReplaceAll(c, "\n", " ")
+		}
+		recentCommits = "\n\n**Recent Local Commits:**\n" + strings.Join(commits, "\n")
+	}
+
+	markdown := fmt.Sprintf(`**Swarm CLI** (v%s)
+
+**Environment:**
+- Directory: %s
+- Branch: %s%s%s
+
+Type a request below to begin, or type `+"`/help`"+` for available commands.
+`, version, cwd, branch, modStr, recentCommits)
+
+	style := "dark"
+	if !isDark {
+		style = "light"
+	}
+	r, _ := glamour.NewTermRenderer(glamour.WithStandardStyle(style), glamour.WithWordWrap(80))
+	if out, err := r.Render(markdown); err == nil {
+		return strings.TrimSpace(out)
+	}
+	return markdown
+}
+
 func (m model) renderAgentPanel() string {
 	t := m.theme()
 	panelStyle := lipgloss.NewStyle().
@@ -2109,10 +1934,15 @@ func (m model) renderAgentPanel() string {
 		Width(m.width - 2)
 
 	if len(m.spans) == 0 {
-		placeholderStyle := lipgloss.NewStyle().Foreground(t.placeholderFg)
+		// Display a subtle watermark logo when idle
+		watermarkStyle := lipgloss.NewStyle().Foreground(t.placeholderFg).Bold(true)
+		watermark := watermarkStyle.Render(`▄      ▄▄▄▄ ▄▄   ▄▄  ▄▄▄  ▄▄▄▄  ▄▄   ▄▄ 
+ ▀▄   ███▄▄ ██ ▄ ██ ██▀██ ██▄█▄ ██▀▄▀██ 
+▄▀    ▄▄██▀  ▀█▀█▀  ██▀██ ██ ██ ██   ██`)
+		
 		// Set a minimum height of 6 lines to reserve space for a row of cards
 		// (Card height = 4, +1 for border = 5, total panel height with its own border/padding = 7)
-		return panelStyle.Height(6).Render(placeholderStyle.Render("Task Panel"))
+		return panelStyle.Height(6).Align(lipgloss.Center).Render(lipgloss.JoinVertical(lipgloss.Center, watermark))
 	}
 
 	// Build tree

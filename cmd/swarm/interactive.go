@@ -307,6 +307,13 @@ func updateAutocomplete(m *model) {
 		return
 	}
 
+	// Do not trigger standard autocomplete while traversing history via up/down arrows
+	if m.historyIdx < len(m.history) {
+		m.acActive = false
+		m.acMode = ""
+		return
+	}
+
 	// find the last word
 	lastSpace := strings.LastIndexAny(val, " \n")
 	var lastWord string

@@ -1988,8 +1988,8 @@ func buildBootMessage(cwd, branch string, modified bool, isDark bool, activeMode
 
 	// Tips footer
 	tipsLabel := lipgloss.NewStyle().Foreground(googleYellow).Bold(true).Render("💡 Tips: ")
-	tipsContent := lipgloss.NewStyle().Foreground(t.placeholderFg).Render(
-		"[^O] toggle observe   [!] shell mode   [/plan] brainstorm   [/skills] view skills",
+	tipsContent := lipgloss.NewStyle().Foreground(t.labelFg).Render(
+		"[/help] commands   [/skills] view skills   [/debug] toggle debug   [!] shell mode",
 	)
 	footer := lipgloss.JoinHorizontal(lipgloss.Top, tipsLabel, tipsContent)
 

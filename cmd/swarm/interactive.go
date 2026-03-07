@@ -556,7 +556,7 @@ func initialModel(planMode bool, resume bool) (model, error) {
 
 	agents := []*swarmAgent{
 		{name: "Input Agent", icon: "⚙", status: "Idle", state: "idle", spin: agentSpinner, resident: true, lastActive: time.Now()},
-		{name: "Swarm Agent", icon: "◈", status: "Idle", state: "idle", spin: agentSpinner, resident: true, lastActive: time.Now()},
+		{name: "Swarm", icon: "◈", status: "Idle", state: "idle", spin: agentSpinner, resident: true, lastActive: time.Now()},
 	}
 
 	var webServer *web.Server

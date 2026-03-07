@@ -462,7 +462,7 @@ func (m *defaultSwarm) Reload() error {
 		// Core agents might need to skip the sub-agent suffix
 		instruction = skill.Instructions
 		if skill.Manifest.Name != "input_agent" && skill.Manifest.Name != "output_agent" && skill.Manifest.Name != "swarm_agent" && skill.Manifest.Name != "planning_agent" {
-			instruction += "\n\nSUB-AGENT MODE: You are being invoked by the Swarm Agent to perform a specific span. Skip all greetings and introductory talk. Focus ONLY on executing the span and providing the results."
+			instruction += "\n\nSUB-AGENT MODE: You are being invoked by Swarm to perform a specific span. Skip all greetings and introductory talk. Focus ONLY on executing the span and providing the results."
 			subAgentNames = append(subAgentNames, skill.Manifest.Name)
 			subAgentDescriptions = append(subAgentDescriptions, fmt.Sprintf("- **%s**: %s", skill.Manifest.Name, skill.Manifest.Description))
 		}
@@ -663,7 +663,7 @@ func (m *defaultSwarm) Plan(ctx context.Context, prompt string, traj Trajectory)
 func (m *defaultSwarm) Reflect(ctx context.Context, prompt string, traj Trajectory) (*Reflection, error) {
 	b, _ := json.MarshalIndent(traj.Spans, "", "  ")
 
-	systemPrompt := `You are the Swarm Reflection Agent. Your job is to evaluate whether the user's original goal has been FULLY completed based on the execution trajectory.
+	systemPrompt := `You are Swarm. Your job is to evaluate whether the user's original goal has been FULLY completed based on the execution trajectory.
 If it is completed, set is_resolved to true.
 If the agent only diagnosed a problem but did not physically apply the fix (e.g., using write_local_file), then the task is NOT resolved. You must set is_resolved to false and provide explicit next_steps to implement the fix.
 Output your response as strictly valid JSON matching this schema:
@@ -793,7 +793,7 @@ func (m *defaultSwarm) Chat(ctx context.Context, prompt string) (<-chan Observab
 
 		var target string
 		if strings.HasPrefix(inputResult, "ROUTE TO: swarm_agent") {
-			out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Input Agent", SpanID: "input", TaskName: "Classification", State: AgentStateExecuting, Thought: "Rerouting to Swarm Agent…"}
+			out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Input Agent", SpanID: "input", TaskName: "Classification", State: AgentStateExecuting, Thought: "Rerouting to Swarm…"}
 			target = "swarm_agent"
 		} else {
 			target = "swarm_agent"
@@ -814,16 +814,16 @@ func (m *defaultSwarm) Chat(ctx context.Context, prompt string) (<-chan Observab
 			// 2. Swarm Coordination / Planning
 			// If we are starting fresh or rerouting to Swarm Agent, we let it plan.
 			if target == "swarm_agent" {
-				out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm Agent", SpanID: "coordination", TaskName: "Swarm Planning", State: AgentStateThinking, Thought: "Analyzing request…"}
+				out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm", SpanID: "coordination", TaskName: "Swarm Planning", State: AgentStateThinking, Thought: "Analyzing request…"}
 				planStart := time.Now()
 				graph, err = m.Plan(ctx, cyclePrompt, o.GetTrajectory())
 				if err != nil {
-					out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm Agent", SpanID: "coordination", TaskName: "Swarm Planning", State: AgentStateError, Error: fmt.Errorf("coordination failed: %w", err)}
+					out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm", SpanID: "coordination", TaskName: "Swarm Planning", State: AgentStateError, Error: fmt.Errorf("coordination failed: %w", err)}
 					return
 				}
 
 				if graph != nil && graph.ImmediateResponse == "" {
-					out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm Agent", SpanID: "coordination", TaskName: "Swarm Planning", State: AgentStateComplete, FinalContent: "Delegated tasks to sub-agents."}
+					out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm", SpanID: "coordination", TaskName: "Swarm Planning", State: AgentStateComplete, FinalContent: "Delegated tasks to sub-agents."}
 				}
 
 				planJSON, _ := json.Marshal(graph)
@@ -866,29 +866,29 @@ func (m *defaultSwarm) Chat(ctx context.Context, prompt string) (<-chan Observab
 
 				// 4. Reflect
 				if target == "swarm_agent" {
-					out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm Agent", SpanID: "reflection", TaskName: "Reflection", State: AgentStateThinking, Thought: "Evaluating if original goal is complete..."}
+					out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm", SpanID: "reflection", TaskName: "Reflection", State: AgentStateThinking, Thought: "Evaluating if original goal is complete..."}
 
 					reflection, err := m.Reflect(ctx, originalPrompt, o.GetTrajectory())
 					if err != nil {
-						out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm Agent", SpanID: "reflection", TaskName: "Reflection", State: AgentStateError, Error: fmt.Errorf("reflection failed: %w", err)}
+						out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm", SpanID: "reflection", TaskName: "Reflection", State: AgentStateError, Error: fmt.Errorf("reflection failed: %w", err)}
 						return
 					}
 
 					if reflection.IsResolved {
-						out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm Agent", SpanID: "reflection", TaskName: "Reflection", State: AgentStateComplete, Thought: "Goal satisfied."}
+						out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm", SpanID: "reflection", TaskName: "Reflection", State: AgentStateComplete, Thought: "Goal satisfied."}
 						break
 					} else {
-						out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm Agent", SpanID: "reflection", TaskName: "Reflection", State: AgentStateComplete, Thought: "Goal not satisfied yet. Replanning."}
+						out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm", SpanID: "reflection", TaskName: "Reflection", State: AgentStateComplete, Thought: "Goal not satisfied yet. Replanning."}
 						cyclePrompt = fmt.Sprintf("Original Goal: %s\n\nReflection from last cycle: %s\nNext Steps: %s", originalPrompt, reflection.Reasoning, reflection.NextSteps)
 					}
 				} else {
 					break // Direct routes exit immediately
 				}
 			} else if graph.ImmediateResponse != "" {
-				if m.runOutputAgent(ctx, out, o, "Swarm Agent", graph.ImmediateResponse) {
+				if m.runOutputAgent(ctx, out, o, "Swarm", graph.ImmediateResponse) {
 					// Record the immediate response in the persistent session
 					m.appendEvent(ctx, "model", graph.ImmediateResponse)
-					out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm Agent", SpanID: "coordination", TaskName: "Swarm Planning", State: AgentStateComplete, FinalContent: graph.ImmediateResponse}
+					out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm", SpanID: "coordination", TaskName: "Swarm Planning", State: AgentStateComplete, FinalContent: graph.ImmediateResponse}
 				}
 				break
 			} else {

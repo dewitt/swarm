@@ -545,12 +545,13 @@ func initialModel(planMode bool, resume bool) (model, error) {
 		return model{}, err
 	}
 
+	contextFiles := swarm.ListContext()
 	return model{
 		textArea:       ta,
 		viewport:       vp,
 		spinner:        s,
 		listModel:      l,
-		messages:       []string{buildBootMessage(cwd, branch, modified, isDark)},
+		messages:       []string{buildBootMessage(cwd, branch, modified, isDark, activeModel, contextFiles, resume)},
 		history:        loadedHist,
 		historyIdx:     len(loadedHist),
 		swarm:          swarm,
@@ -1874,7 +1875,7 @@ func (m *model) updateInputStyle() {
 	}
 }
 
-func buildBootMessage(cwd, branch string, modified bool, isDark bool) string {
+func buildBootMessage(cwd, branch string, modified bool, isDark bool, activeModel string, contextFiles []string, isResume bool) string {
 	version := "Unknown"
 	if info, ok := debug.ReadBuildInfo(); ok {
 		version = info.Main.Version
@@ -1893,25 +1894,49 @@ func buildBootMessage(cwd, branch string, modified bool, isDark bool) string {
 
 	modStr := ""
 	if modified {
-		modStr = " (modified)"
+		modStr = " *(modified)*"
 	}
 
-	recentCommits := ""
-	if commits, err := sdk.GetRecentCommits(".", 3); err == nil && len(commits) > 0 {
-		for i, c := range commits {
-			commits[i] = "- " + strings.ReplaceAll(c, "\n", " ")
+	headHash := "Unknown"
+	if commits, err := sdk.GetRecentCommits(".", 1); err == nil && len(commits) > 0 {
+		headHash = strings.ReplaceAll(commits[0], "\n", " ")
+	}
+
+	sessionState := "New session"
+	if isResume {
+		sessionState = "Resuming session"
+	}
+
+	// Shorten home dir
+	homeDir, _ := os.UserHomeDir()
+	displayDir := cwd
+	if homeDir != "" && strings.HasPrefix(cwd, homeDir) {
+		displayDir = "~" + strings.TrimPrefix(cwd, homeDir)
+	}
+
+	contextStr := "None"
+	if len(contextFiles) > 0 {
+		var shortFiles []string
+		for _, f := range contextFiles {
+			// Try to show relative path if in cwd
+			if rel, err := filepath.Rel(cwd, f); err == nil && !strings.HasPrefix(rel, "..") {
+				shortFiles = append(shortFiles, "`"+rel+"`")
+			} else if homeDir != "" && strings.HasPrefix(f, homeDir) {
+				shortFiles = append(shortFiles, "`~"+strings.TrimPrefix(f, homeDir)+"`")
+			} else {
+				shortFiles = append(shortFiles, "`"+filepath.Base(f)+"`")
+			}
 		}
-		recentCommits = "\n\n**Recent Local Commits:**\n" + strings.Join(commits, "\n")
+		contextStr = strings.Join(shortFiles, ", ")
 	}
 
-	markdown := fmt.Sprintf(`**Swarm CLI** (v%s)
+	markdown := fmt.Sprintf(`**Swarm CLI** `+"`v%s`"+` | **Model:** `+"`%s`"+` | **State:** `+"`%s`"+`
 
-**Environment:**
-- Directory: %s
-- Branch: %s%s%s
+**Dir:** `+"`%s`"+` | **Branch:** `+"`%s`"+`%s | **HEAD:** %s
+**Context:** %s
 
 Type a request below to begin, or type `+"`/help`"+` for available commands.
-`, version, cwd, branch, modStr, recentCommits)
+`, version, activeModel, sessionState, displayDir, branch, modStr, headHash, contextStr)
 
 	style := "dark"
 	if !isDark {

@@ -809,7 +809,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.state == stateModelList {
 		if m.isRefreshingActivity {
 			// It's already refreshing or about to be triggered
-		} else if m.cachedActivity == "\nLoading recent activity..." || time.Since(m.lastActivityRefresh) > 30*time.Second {
+		} else if m.cachedActivity == "\nLoading recent activity..." || m.cachedActivity == "" || time.Since(m.lastActivityRefresh) > 30*time.Second {
 			m.isRefreshingActivity = true
 
 			// If we are looking at the splash screen, we need to know the width
@@ -862,7 +862,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	if m.isRefreshingActivity {
 		// It's already refreshing or about to be triggered
-	} else if m.cachedActivity == "\nLoading recent activity..." || time.Since(m.lastActivityRefresh) > 30*time.Second {
+	} else if m.cachedActivity == "\nLoading recent activity..." || m.cachedActivity == "" || time.Since(m.lastActivityRefresh) > 30*time.Second {
 		m.isRefreshingActivity = true
 
 		// If we are looking at the splash screen, we need to know the width

@@ -218,13 +218,13 @@ type model struct {
 	// Input Queueing and Async HITL
 	inputQueue []string
 	cancelChat context.CancelFunc
-// Agent Panel state
-agents         []*swarmAgent
-spans          map[string]*uiSpan
-showAgentPanel bool
-globalSummary  string
+	// Agent Panel state
+	agents         []*swarmAgent
+	spans          map[string]*uiSpan
+	showAgentPanel bool
+	globalSummary  string
 
-// Autocomplete state
+	// Autocomplete state
 	workspaceFiles []string
 	acMatches      []string
 	acIndex        int
@@ -238,7 +238,7 @@ globalSummary  string
 
 	// Background processes
 	bgPGIDs []int
-	
+
 	// Boot Logo Animation
 	logoFrame   int
 	hasRunTasks bool
@@ -1988,8 +1988,8 @@ func buildBootMessage(cwd, branch string, modified bool, isDark bool, activeMode
 	}
 
 	// Top row
-	topRow := lipgloss.JoinHorizontal(lipgloss.Bottom, 
-		titleStyle.Render("🤖 Swarm CLI "), 
+	topRow := lipgloss.JoinHorizontal(lipgloss.Bottom,
+		titleStyle.Render("🤖 Swarm CLI "),
 		versionStyle.Render(displayVersion),
 	)
 
@@ -1998,7 +1998,7 @@ func buildBootMessage(cwd, branch string, modified bool, isDark bool, activeMode
 	if modified {
 		envBranchVal += valModifiedStyle.Render(modStr)
 	}
-	
+
 	envCol := lipgloss.JoinVertical(lipgloss.Left,
 		headerStyle.Render("[ Environment ]"),
 		lipgloss.JoinHorizontal(lipgloss.Top, keyStyle.Render("Dir:"), valStyle.Render(displayDir)),
@@ -2051,16 +2051,16 @@ func (m model) renderAgentPanel() string {
 			"     .dP'    o.`Y8b   YbdPYbdP  dP__Yb  88\"Yb  88YbdP88",
 			"   .dP'      8bodP'    YP  YP  dP\"\"\"\"Yb 88  Yb 88 YY 88",
 		}
-		
+
 		if !m.hasRunTasks && m.logoFrame < 60 {
 			// Animated "paint" from left to right on boot
 			caretColor := lipgloss.Color("#FACC15") // Gold/Yellow for ">"
 			forestColors := []color.Color{
-				lipgloss.Color("#2d6a4f"), // Dark green (S)
-				lipgloss.Color("#52b788"), // Medium green (W)
-				lipgloss.Color("#95d5b2"), // Light green (A)
-				lipgloss.Color("#52b788"), // Medium green (R)
-				lipgloss.Color("#2d6a4f"), // Dark green (M)
+				lipgloss.Color("#153324"), // Dark green (S)
+				lipgloss.Color("#4AB57F"), // Light green (W)
+				lipgloss.Color("#3D9469"), // Medium light green (A)
+				lipgloss.Color("#2F7452"), // Medium green (R)
+				lipgloss.Color("#153324"), // Dark green (M)
 			}
 
 			var sb strings.Builder
@@ -2077,12 +2077,16 @@ func (m model) renderAgentPanel() string {
 							c = caretColor
 						} else {
 							cIdx := ((x - 12) * len(forestColors)) / 43 // 55 - 12 = 43
-							if cIdx < 0 { cIdx = 0 }
-							if cIdx >= len(forestColors) { cIdx = len(forestColors) - 1 }
+							if cIdx < 0 {
+								cIdx = 0
+							}
+							if cIdx >= len(forestColors) {
+								cIdx = len(forestColors) - 1
+							}
 							c = forestColors[cIdx]
 						}
 					}
-					
+
 					style := lipgloss.NewStyle().Foreground(c).Bold(true)
 					sb.WriteString(style.Render(string(ch)))
 				}
@@ -2098,11 +2102,11 @@ func (m model) renderAgentPanel() string {
 			if !m.hasRunTasks {
 				caretColor := lipgloss.Color("#FACC15")
 				forestColors := []color.Color{
-					lipgloss.Color("#2d6a4f"), // Dark green (S)
-					lipgloss.Color("#52b788"), // Medium green (W)
-					lipgloss.Color("#95d5b2"), // Light green (A)
-					lipgloss.Color("#52b788"), // Medium green (R)
-					lipgloss.Color("#2d6a4f"), // Dark green (M)
+					lipgloss.Color("#153324"), // Dark green (S)
+					lipgloss.Color("#4AB57F"), // Light green (W)
+					lipgloss.Color("#3D9469"), // Medium light green (A)
+					lipgloss.Color("#2F7452"), // Medium green (R)
+					lipgloss.Color("#153324"), // Dark green (M)
 				}
 				var sb strings.Builder
 				for _, line := range rawLogo {
@@ -2116,8 +2120,12 @@ func (m model) renderAgentPanel() string {
 							c = caretColor
 						} else {
 							cIdx := ((x - 12) * len(forestColors)) / 43
-							if cIdx < 0 { cIdx = 0 }
-							if cIdx >= len(forestColors) { cIdx = len(forestColors) - 1 }
+							if cIdx < 0 {
+								cIdx = 0
+							}
+							if cIdx >= len(forestColors) {
+								cIdx = len(forestColors) - 1
+							}
 							c = forestColors[cIdx]
 						}
 						style := lipgloss.NewStyle().Foreground(c).Bold(true)

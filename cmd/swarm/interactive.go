@@ -1438,6 +1438,7 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 			lipgloss.NewStyle().Bold(true).Render("Swarm CLI Help Menu"),
 			"",
 			"  /about       Displays version and build information.",
+			"  /copy        Copies the most recent unformatted AI response to your clipboard.",
 
 			"  /help        Shows this menu.",
 			"  /clear       Clears the conversation history.",

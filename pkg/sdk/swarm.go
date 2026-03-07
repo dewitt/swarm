@@ -102,6 +102,7 @@ type Swarm interface {
 	Skills() []*Skill
 	ListModels(ctx context.Context) ([]ModelInfo, error)
 	ListSessions(ctx context.Context) ([]SessionInfo, error)
+	SessionID() string
 	SetDebug(enabled bool)
 	IsDebug() bool
 	Explain(ctx context.Context, traj Trajectory) (string, error)
@@ -393,7 +394,12 @@ func (m *defaultSwarm) Reload() error {
 	var loadedSkills []*Skill
 	var skill *Skill
 	var instruction string
-	loadedContext := LoadContextFiles()
+	loadedContext, loadedFiles := LoadContextFiles()
+	
+	// Add implicitly loaded files to pinned context so they show up in ListContext()
+	for _, f := range loadedFiles {
+		m.pinnedContext[f] = "" // Mark as loaded but don't duplicate content in memory
+	}
 
 	// Find the skills directory by searching upwards
 	absPath, _ := filepath.Abs(".")
@@ -546,6 +552,7 @@ func (m *defaultSwarm) ListContext() []string {
 	return p
 }
 func (m *defaultSwarm) Reset() { m.sessionID = fmt.Sprintf("session_%d", rand.Int63()) }
+func (m *defaultSwarm) SessionID() string { return m.sessionID }
 func (m *defaultSwarm) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	client, err := genai.NewClient(ctx, m.clientCfg)
 	if err != nil {

@@ -245,6 +245,7 @@ type themeColors struct {
 	statusBg      color.Color
 	statusFg      color.Color
 	placeholderFg color.Color
+	labelFg       color.Color
 }
 
 func defaultTheme(isDark bool) themeColors {
@@ -254,6 +255,7 @@ func defaultTheme(isDark bool) themeColors {
 		statusBg:      ld(lipgloss.Color("#EBEBEB"), lipgloss.Color("#1A1A1A")),
 		statusFg:      ld(lipgloss.Color("#555555"), lipgloss.Color("#888888")),
 		placeholderFg: ld(lipgloss.Color("#E0E0E0"), lipgloss.Color("#262626")),
+		labelFg:       ld(lipgloss.Color("#777777"), lipgloss.Color("#AAAAAA")),
 	}
 }
 
@@ -552,7 +554,7 @@ func initialModel(planMode bool, resume bool) (model, error) {
 		viewport:       vp,
 		spinner:        s,
 		listModel:      l,
-		messages:       []string{buildBootMessage(cwd, branch, modified, isDark, activeModel, contextFiles, resume)},
+		messages:       []string{buildBootMessage(cwd, branch, modified, isDark, activeModel, contextFiles, swarm.SessionID(), resume)},
 		history:        loadedHist,
 		historyIdx:     len(loadedHist),
 		swarm:          swarm,
@@ -1876,7 +1878,7 @@ func (m *model) updateInputStyle() {
 	}
 }
 
-func buildBootMessage(cwd, branch string, modified bool, isDark bool, activeModel string, contextFiles []string, isResume bool) string {
+func buildBootMessage(cwd, branch string, modified bool, isDark bool, activeModel string, contextFiles []string, sessionID string, isResume bool) string {
 	version := "Unknown"
 	if info, ok := debug.ReadBuildInfo(); ok {
 		version = info.Main.Version
@@ -1910,7 +1912,11 @@ func buildBootMessage(cwd, branch string, modified bool, isDark bool, activeMode
 
 	sessionState := "New session"
 	if isResume {
-		sessionState = "Resuming previous session"
+		shortID := sessionID
+		if strings.HasPrefix(shortID, "session_") && len(shortID) > 16 {
+			shortID = shortID[8:16]
+		}
+		sessionState = "Resuming " + shortID
 	}
 
 	// Shorten home dir
@@ -1941,7 +1947,7 @@ func buildBootMessage(cwd, branch string, modified bool, isDark bool, activeMode
 	titleStyle := lipgloss.NewStyle().Foreground(googleBlue).Bold(true)
 	versionStyle := lipgloss.NewStyle().Foreground(t.placeholderFg)
 	headerStyle := lipgloss.NewStyle().Foreground(t.borderColor).Bold(true).MarginBottom(1)
-	keyStyle := lipgloss.NewStyle().Foreground(t.placeholderFg).Width(8)
+	keyStyle := lipgloss.NewStyle().Foreground(t.labelFg).Width(8)
 	valStyle := lipgloss.NewStyle().Foreground(t.statusFg)
 	valModifiedStyle := lipgloss.NewStyle().Foreground(googleYellow)
 

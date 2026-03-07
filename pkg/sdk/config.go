@@ -135,8 +135,9 @@ func LoadMemory() (string, error) {
 }
 
 // LoadContextFiles searches for and concatenates AGENTS.md files for context.
-func LoadContextFiles() string {
+func LoadContextFiles() (string, []string) {
 	var contextParts []string
+	var loadedFiles []string
 	seen := make(map[string]bool)
 
 	addContext := func(path string, description string) {
@@ -146,6 +147,7 @@ func LoadContextFiles() string {
 		}
 		if b, err := os.ReadFile(path); err == nil {
 			contextParts = append(contextParts, "--- Context from: "+description+" ---\n"+string(b)+"\n--- End of Context from: "+description+" ---")
+			loadedFiles = append(loadedFiles, path)
 			seen[path] = true
 		}
 	}
@@ -200,7 +202,7 @@ func LoadContextFiles() string {
 	}
 
 	if len(contextParts) == 0 {
-		return ""
+		return "", loadedFiles
 	}
-	return "\n<loaded_context>\n" + strings.Join(contextParts, "\n") + "\n</loaded_context>\n"
+	return "\n<loaded_context>\n" + strings.Join(contextParts, "\n") + "\n</loaded_context>\n", loadedFiles
 }

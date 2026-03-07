@@ -2029,10 +2029,11 @@ func buildBootMessage(cwd, branch string, modified bool, isDark bool, activeMode
 
 	// Greeting
 	var greeting string
+	prefix := agentMsgStyle.Render("✦ ")
 	if isFirstTime {
-		greeting = lipgloss.NewStyle().Foreground(t.statusFg).Render(fmt.Sprintf("Welcome, %s!", userName))
+		greeting = prefix + lipgloss.NewStyle().Foreground(t.statusFg).Render(fmt.Sprintf("Welcome, %s!", userName))
 	} else {
-		greeting = lipgloss.NewStyle().Foreground(t.statusFg).Render(fmt.Sprintf("Welcome back, %s!", userName))
+		greeting = prefix + lipgloss.NewStyle().Foreground(t.statusFg).Render(fmt.Sprintf("Welcome back, %s!", userName))
 	}
 
 	// Tips footer
@@ -2046,11 +2047,11 @@ func buildBootMessage(cwd, branch string, modified bool, isDark bool, activeMode
 	return lipgloss.JoinVertical(lipgloss.Left,
 		topRow,
 		"",
-		greeting,
-		"",
 		dashboard,
 		"",
 		footer,
+		"",
+		greeting,
 	)
 }
 

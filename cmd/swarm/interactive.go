@@ -268,7 +268,7 @@ func defaultTheme(isDark bool) themeColors {
 		logoForestFgs: []color.Color{
 			ld(lipgloss.Color("#153324"), lipgloss.Color("#86EFAC")), // Light: Dark, Dark: Light
 			ld(lipgloss.Color("#2F7452"), lipgloss.Color("#4AB57F")), // Light: Med, Dark: Med
-			ld(lipgloss.Color("#4AB57F"), lipgloss.Color("#153324")), // Light: Light, Dark: Dark
+			ld(lipgloss.Color("#4AB57F"), lipgloss.Color("#3D9469")), // Light: Light, Dark: Dark
 			ld(lipgloss.Color("#2F7452"), lipgloss.Color("#4AB57F")), // Light: Med, Dark: Med
 			ld(lipgloss.Color("#153324"), lipgloss.Color("#86EFAC")), // Light: Dark, Dark: Light
 		},

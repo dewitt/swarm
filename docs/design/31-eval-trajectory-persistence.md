@@ -117,8 +117,18 @@ telemetry opt-in mechanism.
    - Print a small log line in verbose mode indicating where the trajectory
      was saved.
 
+1. **Update CLI Flags and Configuration:**
+
+   - Add the `--donate` flag to the `eval` command to explicitly mark
+     evaluation runs for donation.
+   - Update the global `config.yaml` to include a `telemetry: true/false`
+     field.
+   - Update `pkg/sdk/swarm.go` to check the `telemetry` config flag or
+     `--donate` flag and add a `"donate": true` marker to the JSON payload
+     before saving the trajectory.
+
 1. **Verify:**
 
-   - Run `swarm eval scenario_1_linter`.
+   - Run `swarm eval scenario_1_linter --donate`.
    - Verify the `~/.config/swarm/eval_trajectories/` directory is created and
-     populated with the valid JSON file.
+     populated with the valid JSON file containing the donation marker.

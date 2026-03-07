@@ -218,6 +218,10 @@ func (e *Evaluator) Run(ctx context.Context, s Scenario, opts ...RunOption) (*Re
 		}
 	}
 
+	// Crucial: Wait for all background tasks (like trajectory saving) to complete 
+	// before the sandbox is destroyed by the deferred os.RemoveAll
+	_ = instance.Close()
+
 	// 4. Capture Sandbox Diff (For simplicity, we check if there are changes)
 	// Or we just feed the Trajectory to the LLM Judge
 

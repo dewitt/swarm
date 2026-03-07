@@ -1946,7 +1946,7 @@ func buildBootMessage(cwd, branch string, modified bool, isDark bool, activeMode
 	t := defaultTheme(isDark)
 	titleStyle := lipgloss.NewStyle().Foreground(googleBlue).Bold(true)
 	versionStyle := lipgloss.NewStyle().Foreground(t.labelFg)
-	headerStyle := lipgloss.NewStyle().Foreground(t.borderColor).Bold(true).MarginBottom(1)
+	headerStyle := lipgloss.NewStyle().Foreground(t.labelFg).Bold(true).MarginBottom(1)
 	keyStyle := lipgloss.NewStyle().Foreground(t.labelFg).Width(9)
 	valStyle := lipgloss.NewStyle().Foreground(t.statusFg)
 	valModifiedStyle := lipgloss.NewStyle().Foreground(googleYellow)

@@ -59,7 +59,9 @@ into native ecosystems.
 
 - **UNIX Piping**: Integrate agents directly into your workflows via
   single-shot prompts and standard input (e.g.,
-  `cat error.log | swarm -p "What went wrong?"`).
+  `cat error.log | swarm -p "What went wrong?"`). You can output raw JSON
+  execution traces using `--trajectory` or a human-readable execution summary
+  using `--explain`.
 
 - **Dynamic Skills Architecture**: Completely decoupled capabilities adhering
   to the open `agentskills.io` standard (`SKILL.md`). Easily write, share, and

@@ -9,18 +9,15 @@ Set BorderRadius 10
 Hide
 Type "./bin/swarm"
 Enter
-Sleep 2s
+Sleep 300ms
 Show
+
+Sleep 2s
 
 Type "Hello, what can you do?"
 Sleep 500ms
 Enter
 Sleep 8s
-
-Type "How many Go files are in this repository?"
-Sleep 500ms
-Enter
-Sleep 20s
 
 Type "! ls -l"
 Sleep 500ms
@@ -37,7 +34,7 @@ Sleep 500ms
 Enter
 Sleep 10s
 
-Type "What's your superpower?"
+Type "How many Go files are in this repository?"
 Sleep 500ms
 Enter
-Sleep 15s
+Sleep 20s

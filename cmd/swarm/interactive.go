@@ -1096,6 +1096,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, tea.Batch(listenForStream(msg.ch), agentCmd)
 				}
 
+				m.lastResponse = event.FinalContent
 				out := event.FinalContent
 				if m.renderer != nil {
 					if rOut, err := m.renderer.Render(out); err == nil {

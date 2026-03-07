@@ -218,7 +218,7 @@ func (e *Evaluator) Run(ctx context.Context, s Scenario, opts ...RunOption) (*Re
 		}
 	}
 
-	// Crucial: Wait for all background tasks (like trajectory saving) to complete 
+	// Crucial: Wait for all background tasks (like trajectory saving) to complete
 	// before the sandbox is destroyed by the deferred os.RemoveAll
 	_ = instance.Close()
 

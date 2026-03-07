@@ -27,5 +27,5 @@ A skill is a self-contained markdown file (`SKILL.md`) that defines a new sub-ag
    - Give it a descriptive name (e.g., `vercel_deployer`).
    - Give it only the tools it needs (e.g., `bash_execute`).
    - Write robust markdown instructions. *Crucially, teach the new agent how to handle errors.* If a command fails, it should not get stuck in a loop; it should explicitly return an error to Swarm or use `request_replan`.
-3. **Install**: Use the `write_local_file` tool to save the new skill to `skills/<skill_name>/SKILL.md` (creating the directory if it doesn't exist).
-4. **Notify**: Once the file is written, report back to Swarm explicitly stating: "I have successfully generated and installed the `<skill_name>` skill at `skills/<skill_name>/SKILL.md`. Swarm should now reload and delegate the original task to this new agent."
+3. **Install**: Use the `bash_execute` tool to create the directory `mkdir -p ~/.config/swarm/skills/<skill_name>` and then use `write_local_file` to save the new skill to `~/.config/swarm/skills/<skill_name>/SKILL.md`.
+4. **Notify**: Once the file is written, report back to Swarm explicitly stating: "I have successfully generated and installed the `<skill_name>` skill at `~/.config/swarm/skills/<skill_name>/SKILL.md`. Swarm should now reload and delegate the original task to this new agent."

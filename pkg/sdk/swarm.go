@@ -425,13 +425,13 @@ func (m *defaultSwarm) Reload() error {
 		m.pinnedContext[f] = "" // Mark as loaded but don't duplicate content in memory
 	}
 
-	// Find the skills directory by searching upwards
+	// 1. Find the local project skills directory (search upwards)
 	absPath, _ := filepath.Abs(".")
-	skillsPath := ""
+	localSkillsPath := ""
 	for {
 		testPath := filepath.Join(absPath, "skills")
 		if info, err := os.Stat(testPath); err == nil && info.IsDir() {
-			skillsPath = testPath
+			localSkillsPath = testPath
 			break
 		}
 		parentDir := filepath.Dir(absPath)
@@ -441,19 +441,40 @@ func (m *defaultSwarm) Reload() error {
 		absPath = parentDir
 	}
 
-	if skillsPath == "" {
-		return fmt.Errorf("could not locate skills directory")
+	// 2. Find the global config skills directory
+	globalSkillsPath := ""
+	if configDir, err := GetConfigDir(); err == nil {
+		globalSkillsPath = filepath.Join(configDir, "skills")
+		_ = os.MkdirAll(globalSkillsPath, 0o755)
 	}
 
+	// Gather all skill directories
 	skillDirs := []string{}
-	entries, err := os.ReadDir(skillsPath)
-	if err != nil {
-		return err
-	}
-	for _, entry := range entries {
-		if entry.IsDir() {
-			skillDirs = append(skillDirs, filepath.Join(skillsPath, entry.Name()))
+
+	// Collect local project skills
+	if localSkillsPath != "" {
+		if entries, err := os.ReadDir(localSkillsPath); err == nil {
+			for _, entry := range entries {
+				if entry.IsDir() {
+					skillDirs = append(skillDirs, filepath.Join(localSkillsPath, entry.Name()))
+				}
+			}
 		}
+	}
+
+	// Collect global config skills
+	if globalSkillsPath != "" {
+		if entries, err := os.ReadDir(globalSkillsPath); err == nil {
+			for _, entry := range entries {
+				if entry.IsDir() {
+					skillDirs = append(skillDirs, filepath.Join(globalSkillsPath, entry.Name()))
+				}
+			}
+		}
+	}
+
+	if len(skillDirs) == 0 {
+		return fmt.Errorf("could not locate any skills directories")
 	}
 
 	m.agents = make(map[string]agent.Agent)
@@ -510,9 +531,23 @@ func (m *defaultSwarm) Reload() error {
 		return fmt.Errorf("swarm_agent skill not found")
 	}
 
+	// Helper to find a specific skill by directory name across all paths
+	findSkillPath := func(name string) string {
+		for _, dir := range skillDirs {
+			if filepath.Base(dir) == name {
+				return dir
+			}
+		}
+		return ""
+	}
+
 	// Re-initialize Swarm Agent with sub-agents and dynamically injected specialist names and descriptions
-	skill, _ = LoadSkill(filepath.Join(skillsPath, "swarm-agent"))
-	instruction = fmt.Sprintf(skill.Instructions, specialistsList)
+	if p := findSkillPath("swarm-agent"); p != "" {
+		skill, _ = LoadSkill(p)
+		if skill != nil {
+			instruction = fmt.Sprintf(skill.Instructions, specialistsList)
+		}
+	}
 
 	var swarmTools []tool.Tool
 	swarmTools = append(swarmTools, m.toolRegistry["list_local_files"], m.toolRegistry["read_local_file"], m.toolRegistry["grep_search"])
@@ -529,20 +564,32 @@ func (m *defaultSwarm) Reload() error {
 
 	// 3. Assign core instructions
 	if _, ok := m.agents["input_agent"]; ok {
-		sk, _ := LoadSkill(filepath.Join(skillsPath, "input-agent"))
-		m.inputInstruction = sk.Instructions + loadedContext
+		if p := findSkillPath("input-agent"); p != "" {
+			if sk, err := LoadSkill(p); err == nil {
+				m.inputInstruction = sk.Instructions + loadedContext
+			}
+		}
 	}
 	if _, ok := m.agents["output_agent"]; ok {
-		sk, _ := LoadSkill(filepath.Join(skillsPath, "output-agent"))
-		m.outputInstruction = sk.Instructions + loadedContext
+		if p := findSkillPath("output-agent"); p != "" {
+			if sk, err := LoadSkill(p); err == nil {
+				m.outputInstruction = sk.Instructions + loadedContext
+			}
+		}
 	}
 	if _, ok := m.agents["routing_agent"]; ok {
-		sk, _ := LoadSkill(filepath.Join(skillsPath, "routing-agent"))
-		m.routingInstruction = sk.Instructions + loadedContext
+		if p := findSkillPath("routing-agent"); p != "" {
+			if sk, err := LoadSkill(p); err == nil {
+				m.routingInstruction = sk.Instructions + loadedContext
+			}
+		}
 	}
 	if _, ok := m.agents["planning_agent"]; ok {
-		sk, _ := LoadSkill(filepath.Join(skillsPath, "planning-agent"))
-		m.planningInstruction = sk.Instructions + loadedContext
+		if p := findSkillPath("planning-agent"); p != "" {
+			if sk, err := LoadSkill(p); err == nil {
+				m.planningInstruction = sk.Instructions + loadedContext
+			}
+		}
 	}
 
 	m.skills = loadedSkills

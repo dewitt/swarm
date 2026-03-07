@@ -238,6 +238,10 @@ globalSummary  string
 
 	// Background processes
 	bgPGIDs []int
+	
+	// Boot Logo Animation
+	logoFrame   int
+	hasRunTasks bool
 }
 
 type themeColors struct {
@@ -472,6 +476,14 @@ func doGitTick() tea.Cmd {
 	})
 }
 
+type logoTickMsg time.Time
+
+func doLogoTick() tea.Cmd {
+	return tea.Tick(time.Millisecond*100, func(t time.Time) tea.Msg {
+		return logoTickMsg(t)
+	})
+}
+
 func initialModel(planMode bool, resume bool) (model, error) {
 	isDark := lipgloss.HasDarkBackground(os.Stdin, os.Stdout)
 
@@ -579,11 +591,12 @@ func initialModel(planMode bool, resume bool) (model, error) {
 		spans:          make(map[string]*uiSpan),
 		showAgentPanel: true,
 		isDark:         isDark,
+		hasRunTasks:    resume,
 	}, nil
 }
 
 func (m model) Init() tea.Cmd {
-	cmds := []tea.Cmd{textarea.Blink, m.spinner.Tick, doGitTick(), tea.RequestBackgroundColor}
+	cmds := []tea.Cmd{textarea.Blink, m.spinner.Tick, doGitTick(), tea.RequestBackgroundColor, doLogoTick()}
 	for _, a := range m.agents {
 		cmds = append(cmds, a.spin.Tick)
 	}
@@ -706,6 +719,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case gitTickMsg:
 		return m, tea.Batch(checkGitStatus(), doGitTick())
+
+	case logoTickMsg:
+		if !m.hasRunTasks {
+			m.logoFrame++
+			return m, doLogoTick()
+		}
+		return m, nil
 
 	case tea.KeyPressMsg:
 		switch msg.String() {
@@ -966,6 +986,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		if event.SpanID != "" {
+			m.hasRunTasks = true
 			span, ok := m.spans[event.SpanID]
 			if !ok {
 				span = &uiSpan{
@@ -2023,12 +2044,66 @@ func (m model) renderAgentPanel() string {
 		Width(m.width - 2)
 
 	if len(m.spans) == 0 {
-		// Display a subtle watermark logo when idle
-		watermarkStyle := lipgloss.NewStyle().Foreground(t.placeholderFg).Bold(true)
-		watermark := watermarkStyle.Render("   `Yb.      .dP\"Y8 Yb        dP  db    88\"\"Yb 8b    d8\n" +
-			"     `Yb.    `Ybo.\"  Yb  db  dP  dPYb   88__dP 88b  d88\n" +
-			"     .dP'    o.`Y8b   YbdPYbdP  dP__Yb  88\"Yb  88YbdP88\n" +
-			"   .dP'      8bodP'    YP  YP  dP\"\"\"\"Yb 88  Yb 88 YY 88")
+		var watermark string
+		rawLogo := []string{
+			"   `Yb.      .dP\"Y8 Yb        dP  db    88\"\"Yb 8b    d8",
+			"     `Yb.    `Ybo.\"  Yb  db  dP  dPYb   88__dP 88b  d88",
+			"     .dP'    o.`Y8b   YbdPYbdP  dP__Yb  88\"Yb  88YbdP88",
+			"   .dP'      8bodP'    YP  YP  dP\"\"\"\"Yb 88  Yb 88 YY 88",
+		}
+		
+		if !m.hasRunTasks {
+			// Animated, vibrant logo on boot
+			colors := []color.Color{
+				lipgloss.Color("#4169E1"), // Royal Blue
+				lipgloss.Color("#34A853"), // Green
+				lipgloss.Color("#FBBC05"), // Yellow
+				lipgloss.Color("#EA4335"), // Red
+				lipgloss.Color("#FBBC05"), // Yellow
+				lipgloss.Color("#34A853"), // Green
+			}
+			
+			// Create a wave effect based on x and frame
+			waveLen := 60
+			waveColors := make([]color.Color, waveLen)
+			baseColor := lipgloss.Color("#333333")
+			if !m.isDark {
+				baseColor = lipgloss.Color("#CCCCCC")
+			}
+			
+			for i := range waveColors {
+				waveColors[i] = baseColor
+			}
+			
+			wavePos := m.logoFrame % waveLen
+			for i := 0; i < 15; i++ {
+				idx := (wavePos - i)
+				if idx >= 0 && idx < waveLen {
+					colorIdx := (i * len(colors)) / 15
+					if colorIdx >= len(colors) { colorIdx = len(colors) - 1 }
+					waveColors[idx] = colors[colorIdx]
+				}
+			}
+
+			var sb strings.Builder
+			for _, line := range rawLogo {
+				for x, ch := range line {
+					if string(ch) == " " {
+						sb.WriteRune(ch)
+						continue
+					}
+					cIdx := x % waveLen
+					style := lipgloss.NewStyle().Foreground(waveColors[cIdx]).Bold(true)
+					sb.WriteString(style.Render(string(ch)))
+				}
+				sb.WriteString("\n")
+			}
+			watermark = strings.TrimRight(sb.String(), "\n")
+		} else {
+			// Static, muted logo after tasks run
+			watermarkStyle := lipgloss.NewStyle().Foreground(t.placeholderFg).Bold(true)
+			watermark = watermarkStyle.Render(strings.Join(rawLogo, "\n"))
+		}
 
 		// panelStyle.Height(6) results in exactly 7 total layout lines (1 Top + 4 Inner + 1 Bottom + 1 Margin)
 		// This perfectly matches the height of 1 row of active cards, ensuring zero jump.

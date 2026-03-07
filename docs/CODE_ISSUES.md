@@ -6,11 +6,13 @@ debt discovered during automated and manual code reviews
 
 ## 🚨 Critical Bugs & Issues
 
-- None currently identified.
+- **Subprocess Hanging Risk:** In `pkg/sdk/tools.go`, functions like `bashExecuteTool`, `grepSearch`, and `runGitCommand` execute shell commands via `exec.Command` without using `exec.CommandContext`. If the child process stalls, the Swarm CLI will hang indefinitely.
 
 ## 🛠️ Refactoring & Idiomatic Improvements
 
-- None currently identified.
+- **State Leak in TUI History:** In `cmd/swarm/interactive.go`, the UI model holds onto user input history indefinitely (`m.history = append(m.history, input)`). It needs a capacity cap or truncation mechanism to prevent uncontrolled memory growth over long sessions.
+- **Bubble Tea Jitter Risk:** `cmd/swarm/interactive.go` relies heavily on `lipgloss.Width()` to set boundaries (e.g., `m.viewport.Width()`). `CODE_REVIEW_GUIDE.md` warns that this can implicitly wrap text and cause 1-line layout jitter; `lipgloss.PlaceHorizontal` or explicit margins should be preferred.
+- **Unmanaged Goroutines:** `pkg/sdk/swarm.go` launches multiple background goroutines (`go func()`) that lack apparent `sync.WaitGroup` or lifecycle tracking, which could lead to resource leaks if not properly canceled.
 
 ## 💀 Dead Code & Unused Features
 
@@ -18,7 +20,7 @@ debt discovered during automated and manual code reviews
 
 ## 📝 Documentation Alignment
 
-- None currently identified.
+- **Completed TODOs Clutter:** `TODO.md` contains numerous completed items (marked with `[x]`) under "Pending Migrations", "Feature Backlog", and "Known Bugs" that have not been removed.
 
 ______________________________________________________________________
 

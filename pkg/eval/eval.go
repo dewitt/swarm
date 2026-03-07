@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"time"
 
 	"github.com/dewitt/swarm/pkg/sdk"
 	"google.golang.org/genai"
@@ -121,7 +122,9 @@ func (e *Evaluator) Run(ctx context.Context, s Scenario, opts ...RunOption) (*Re
 
 	// Run fixture-specific setup script if it exists
 	if _, err := os.Stat("setup.sh"); err == nil {
-		cmd := exec.Command("bash", "setup.sh")
+		setupCtx, cancelSetup := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancelSetup()
+		cmd := exec.CommandContext(setupCtx, "bash", "setup.sh")
 		cmd.Dir = sandbox
 		if out, err := cmd.CombinedOutput(); err != nil {
 			return nil, fmt.Errorf("fixture setup failed:\n%s\n%w", string(out), err)

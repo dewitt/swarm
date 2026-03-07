@@ -109,7 +109,7 @@ func grepSearch(ctx tool.Context, args GrepArgs) (GrepResult, error) {
 	if args.Dir == "" {
 		args.Dir = "."
 	}
-	cmd := exec.Command("grep", "-r", "-l", args.Pattern, args.Dir)
+	cmd := exec.CommandContext(ctx, "grep", "-r", "-l", args.Pattern, args.Dir)
 	out, err := cmd.Output()
 	if err != nil {
 		if _, ok := err.(*exec.ExitError); ok {
@@ -219,7 +219,7 @@ func bashExecuteTool(ctx tool.Context, args BashExecuteArgs) (BashExecuteResult,
 		dir = "."
 	}
 
-	cmd := exec.Command("bash", "-c", args.Command)
+	cmd := exec.CommandContext(ctx, "bash", "-c", args.Command)
 	cmd.Dir = dir
 
 	if args.IsBackground {
@@ -318,8 +318,8 @@ func bashExecuteTool(ctx tool.Context, args BashExecuteArgs) (BashExecuteResult,
 // === Git Tools ===
 
 // runGitCommand is a helper to run standard Git shell commands.
-func runGitCommand(dir string, args ...string) (string, error) {
-	cmd := exec.Command("git", args...)
+func runGitCommand(ctx context.Context, dir string, args ...string) (string, error) {
+	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = dir
 
 	var stdout, stderr bytes.Buffer
@@ -343,12 +343,14 @@ func GetGitInfo(dir string) (GitInfo, error) {
 	if dir == "" {
 		dir = "."
 	}
-	branch, err := runGitCommand(dir, "rev-parse", "--abbrev-ref", "HEAD")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	branch, err := runGitCommand(ctx, dir, "rev-parse", "--abbrev-ref", "HEAD")
 	if err != nil {
 		return GitInfo{}, err
 	}
 
-	status, err := runGitCommand(dir, "status", "--porcelain")
+	status, err := runGitCommand(ctx, dir, "status", "--porcelain")
 	modified := false
 	if err == nil && len(strings.TrimSpace(status)) > 0 {
 		modified = true
@@ -361,7 +363,9 @@ func GetRecentCommits(dir string, n int) ([]string, error) {
 	if dir == "" {
 		dir = "."
 	}
-	out, err := runGitCommand(dir, "log", "-n", fmt.Sprint(n), "--pretty=format:%s")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	out, err := runGitCommand(ctx, dir, "log", "-n", fmt.Sprint(n), "--pretty=format:%s")
 	if err != nil {
 		return nil, err
 	}
@@ -397,12 +401,12 @@ func gitCommitTool(ctx tool.Context, args GitCommitArgs) (GitCommitResult, error
 	}
 
 	// For an agent, it's usually safest to just add everything they modified
-	_, err := runGitCommand(args.Dir, "add", ".")
+	_, err := runGitCommand(ctx, args.Dir, "add", ".")
 	if err != nil {
 		return GitCommitResult{Success: false, Error: err.Error()}, nil
 	}
 
-	out, err := runGitCommand(args.Dir, "commit", "-m", args.Message)
+	out, err := runGitCommand(ctx, args.Dir, "commit", "-m", args.Message)
 	if err != nil {
 		return GitCommitResult{Success: false, Error: err.Error()}, nil
 	}
@@ -429,7 +433,7 @@ func gitPushTool(ctx tool.Context, args GitPushArgs) (GitPushResult, error) {
 		args.Dir = "."
 	}
 
-	out, err := runGitCommand(args.Dir, "push")
+	out, err := runGitCommand(ctx, args.Dir, "push")
 	if err != nil {
 		return GitPushResult{Success: false, Error: err.Error()}, nil
 	}

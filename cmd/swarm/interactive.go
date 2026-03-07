@@ -264,7 +264,9 @@ type workspaceFilesMsg struct {
 func fetchWorkspaceFiles() tea.Cmd {
 	return func() tea.Msg {
 		var items []string
-		out, err := exec.Command("git", "ls-files").Output()
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		out, err := exec.CommandContext(ctx, "git", "ls-files").Output()
 		if err == nil {
 			lines := strings.Split(string(out), "\n")
 			for _, l := range lines {
@@ -1692,7 +1694,9 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 		icon := agentMsgStyle.Render("✦ ")
 		m.appendMessage(lipgloss.JoinHorizontal(lipgloss.Top, icon, lipgloss.JoinVertical(lipgloss.Left, lines...)))
 	case "/web":
-		err := exec.Command("open", "http://localhost:5050").Start()
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		err := exec.CommandContext(ctx, "open", "http://localhost:5050").Start()
 		if err != nil {
 			m.appendMessage(lipgloss.NewStyle().Foreground(errorColor).Render("Failed to open browser: " + err.Error()))
 		} else {

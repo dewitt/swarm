@@ -479,7 +479,7 @@ func doGitTick() tea.Cmd {
 type logoTickMsg time.Time
 
 func doLogoTick() tea.Cmd {
-	return tea.Tick(time.Millisecond*100, func(t time.Time) tea.Msg {
+	return tea.Tick(time.Millisecond*30, func(t time.Time) tea.Msg {
 		return logoTickMsg(t)
 	})
 }
@@ -721,7 +721,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(checkGitStatus(), doGitTick())
 
 	case logoTickMsg:
-		if !m.hasRunTasks {
+		if !m.hasRunTasks && m.logoFrame < 60 {
 			m.logoFrame++
 			return m, doLogoTick()
 		}
@@ -2052,37 +2052,15 @@ func (m model) renderAgentPanel() string {
 			"   .dP'      8bodP'    YP  YP  dP\"\"\"\"Yb 88  Yb 88 YY 88",
 		}
 		
-		if !m.hasRunTasks {
-			// Animated, vibrant logo on boot
-			colors := []color.Color{
-				lipgloss.Color("#4169E1"), // Royal Blue
-				lipgloss.Color("#34A853"), // Green
-				lipgloss.Color("#FBBC05"), // Yellow
-				lipgloss.Color("#EA4335"), // Red
-				lipgloss.Color("#FBBC05"), // Yellow
-				lipgloss.Color("#34A853"), // Green
-			}
-			
-			// Create a wave effect based on x and frame
-			waveLen := 60
-			waveColors := make([]color.Color, waveLen)
-			baseColor := lipgloss.Color("#333333")
-			if !m.isDark {
-				baseColor = lipgloss.Color("#CCCCCC")
-			}
-			
-			for i := range waveColors {
-				waveColors[i] = baseColor
-			}
-			
-			wavePos := m.logoFrame % waveLen
-			for i := 0; i < 15; i++ {
-				idx := (wavePos - i)
-				if idx >= 0 && idx < waveLen {
-					colorIdx := (i * len(colors)) / 15
-					if colorIdx >= len(colors) { colorIdx = len(colors) - 1 }
-					waveColors[idx] = colors[colorIdx]
-				}
+		if !m.hasRunTasks && m.logoFrame < 60 {
+			// Animated "paint" from left to right on boot
+			caretColor := lipgloss.Color("#FACC15") // Gold/Yellow for ">"
+			forestColors := []color.Color{
+				lipgloss.Color("#2d6a4f"),
+				lipgloss.Color("#40916c"),
+				lipgloss.Color("#52b788"),
+				lipgloss.Color("#74c69d"),
+				lipgloss.Color("#95d5b2"),
 			}
 
 			var sb strings.Builder
@@ -2092,17 +2070,63 @@ func (m model) renderAgentPanel() string {
 						sb.WriteRune(ch)
 						continue
 					}
-					cIdx := x % waveLen
-					style := lipgloss.NewStyle().Foreground(waveColors[cIdx]).Bold(true)
+
+					c := t.placeholderFg
+					if x <= m.logoFrame {
+						if x < 12 {
+							c = caretColor
+						} else {
+							cIdx := ((x - 12) * len(forestColors)) / 43 // 55 - 12 = 43
+							if cIdx < 0 { cIdx = 0 }
+							if cIdx >= len(forestColors) { cIdx = len(forestColors) - 1 }
+							c = forestColors[cIdx]
+						}
+					}
+					
+					style := lipgloss.NewStyle().Foreground(c).Bold(true)
 					sb.WriteString(style.Render(string(ch)))
 				}
 				sb.WriteString("\n")
 			}
 			watermark = strings.TrimRight(sb.String(), "\n")
 		} else {
-			// Static, muted logo after tasks run
-			watermarkStyle := lipgloss.NewStyle().Foreground(t.placeholderFg).Bold(true)
-			watermark = watermarkStyle.Render(strings.Join(rawLogo, "\n"))
+			// Static, fully painted logo after animation, until tasks run
+			// Or muted grey if tasks have run. The user requested:
+			// "The logo should start out as grey (the same grey it will be after tasks have run), but the first time it launches the logo will be "painted"...
+			// If m.hasRunTasks is true, we display the muted grey.
+			// If not, we display the fully painted logo.
+			if !m.hasRunTasks {
+				caretColor := lipgloss.Color("#FACC15")
+				forestColors := []color.Color{
+					lipgloss.Color("#2d6a4f"), lipgloss.Color("#40916c"),
+					lipgloss.Color("#52b788"), lipgloss.Color("#74c69d"), lipgloss.Color("#95d5b2"),
+				}
+				var sb strings.Builder
+				for _, line := range rawLogo {
+					for x, ch := range line {
+						if string(ch) == " " {
+							sb.WriteRune(ch)
+							continue
+						}
+						c := t.placeholderFg
+						if x < 12 {
+							c = caretColor
+						} else {
+							cIdx := ((x - 12) * len(forestColors)) / 43
+							if cIdx < 0 { cIdx = 0 }
+							if cIdx >= len(forestColors) { cIdx = len(forestColors) - 1 }
+							c = forestColors[cIdx]
+						}
+						style := lipgloss.NewStyle().Foreground(c).Bold(true)
+						sb.WriteString(style.Render(string(ch)))
+					}
+					sb.WriteString("\n")
+				}
+				watermark = strings.TrimRight(sb.String(), "\n")
+			} else {
+				watermarkStyle := lipgloss.NewStyle().Foreground(t.placeholderFg).Bold(true)
+				watermark = watermarkStyle.Render(strings.Join(rawLogo, "\n"))
+			}
 		}
 
 		// panelStyle.Height(6) results in exactly 7 total layout lines (1 Top + 4 Inner + 1 Bottom + 1 Margin)

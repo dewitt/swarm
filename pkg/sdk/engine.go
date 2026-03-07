@@ -64,7 +64,7 @@ type Engine struct {
 
 // NewEngine creates a new Engine for a given initial seed graph.
 func NewEngine(g *ExecutionGraph) *Engine {
-	traceID := fmt.Sprintf("tr-%d", rand.Int63())
+	traceID := fmt.Sprintf("tr-%d", rand.Int63()) //nolint:gosec // trace IDs do not require cryptographic security
 	o := &Engine{
 		traceID:        traceID,
 		spans:          make(map[string]Span),

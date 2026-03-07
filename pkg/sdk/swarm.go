@@ -266,7 +266,7 @@ func NewSwarm(cfg ...SwarmConfig) (Swarm, error) {
 		}
 	}
 	if sessionID == "" {
-		sessionID = fmt.Sprintf("session_%d", rand.Int63())
+		sessionID = fmt.Sprintf("session_%d", rand.Int63()) //nolint:gosec // session IDs do not require cryptographic security
 	}
 	_, _ = sessionSvc.Create(ctx, &session.CreateRequest{AppName: "swarm-cli", UserID: "local_user", SessionID: sessionID})
 
@@ -551,7 +551,9 @@ func (m *defaultSwarm) ListContext() []string {
 	}
 	return p
 }
-func (m *defaultSwarm) Reset()            { m.sessionID = fmt.Sprintf("session_%d", rand.Int63()) }
+func (m *defaultSwarm) Reset() {
+	m.sessionID = fmt.Sprintf("session_%d", rand.Int63()) //nolint:gosec // session IDs do not require cryptographic security
+}
 func (m *defaultSwarm) SessionID() string { return m.sessionID }
 func (m *defaultSwarm) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	client, err := genai.NewClient(ctx, m.clientCfg)
@@ -1384,7 +1386,7 @@ func (m *defaultSwarm) saveTrajectory(traj Trajectory) {
 	path := filepath.Join(dir, filename)
 
 	b, _ := json.MarshalIndent(traj, "", "  ")
-	_ = os.WriteFile(path, b, 0644)
+	_ = os.WriteFile(path, b, 0600)
 }
 
 // timeoutModel wraps a model.LLM to enforce a strict per-request execution timeout

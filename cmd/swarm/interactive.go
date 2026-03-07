@@ -437,7 +437,7 @@ func saveHistory(history []string) {
 
 	b, err := json.MarshalIndent(history, "", "  ")
 	if err == nil {
-		_ = os.WriteFile(file, b, 0644)
+		_ = os.WriteFile(file, b, 0600)
 	}
 }
 

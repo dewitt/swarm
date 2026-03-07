@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -40,7 +41,7 @@ func listLocalFiles(ctx tool.Context, args ListFilesArgs) (ListFilesResult, erro
 	if args.Recursive {
 		err := filepath.Walk(args.Dir, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
-				return nil // Skip errors (like permission denied)
+				return nil //nolint:nilerr // Skip errors (like permission denied)
 			}
 			// Skip hidden directories like .git
 			if info.IsDir() && strings.HasPrefix(info.Name(), ".") && info.Name() != "." {
@@ -56,12 +57,12 @@ func listLocalFiles(ctx tool.Context, args ListFilesArgs) (ListFilesResult, erro
 			return nil
 		})
 		if err != nil {
-			return ListFilesResult{Error: err.Error()}, nil
+			return ListFilesResult{Error: err.Error()}, nil //nolint:nilerr
 		}
 	} else {
 		entries, err := os.ReadDir(args.Dir)
 		if err != nil {
-			return ListFilesResult{Error: err.Error()}, nil
+			return ListFilesResult{Error: err.Error()}, nil //nolint:nilerr
 		}
 		for _, entry := range entries {
 			name := entry.Name()
@@ -91,7 +92,7 @@ type ReadFileResult struct {
 func readLocalFile(ctx tool.Context, args ReadFileArgs) (ReadFileResult, error) {
 	b, err := os.ReadFile(args.Path)
 	if err != nil {
-		return ReadFileResult{Error: err.Error()}, nil
+		return ReadFileResult{Error: err.Error()}, nil //nolint:nilerr
 	}
 	return ReadFileResult{Content: string(b)}, nil
 }
@@ -109,13 +110,14 @@ func grepSearch(ctx tool.Context, args GrepArgs) (GrepResult, error) {
 	if args.Dir == "" {
 		args.Dir = "."
 	}
-	cmd := exec.CommandContext(ctx, "grep", "-r", "-l", args.Pattern, args.Dir)
+	cmd := exec.CommandContext(ctx, "grep", "-r", "-l", args.Pattern, args.Dir) //nolint:gosec // agent tool intentionally executes with dynamic arguments
 	out, err := cmd.Output()
 	if err != nil {
-		if _, ok := err.(*exec.ExitError); ok {
+		var exitError *exec.ExitError
+		if errors.As(err, &exitError) {
 			return GrepResult{Matches: []string{}}, nil
 		}
-		return GrepResult{Error: err.Error()}, nil
+		return GrepResult{Error: err.Error()}, nil //nolint:nilerr
 	}
 	matches := strings.Split(strings.TrimSpace(string(out)), "\n")
 	return GrepResult{Matches: matches}, nil
@@ -133,10 +135,10 @@ type WriteFileResult struct {
 func writeLocalFile(ctx tool.Context, args WriteFileArgs) (WriteFileResult, error) {
 	dir := filepath.Dir(args.Path)
 	if err := os.MkdirAll(dir, 0755); err != nil {
-		return WriteFileResult{Success: false, Error: err.Error()}, nil
+		return WriteFileResult{Success: false, Error: err.Error()}, nil //nolint:nilerr
 	}
-	if err := os.WriteFile(args.Path, []byte(args.Content), 0644); err != nil {
-		return WriteFileResult{Success: false, Error: err.Error()}, nil
+	if err := os.WriteFile(args.Path, []byte(args.Content), 0644); err != nil { //nolint:gosec // agent writes code files which should be world-readable
+		return WriteFileResult{Success: false, Error: err.Error()}, nil //nolint:nilerr
 	}
 	return WriteFileResult{Success: true}, nil
 }
@@ -152,12 +154,12 @@ type WebFetchResult struct {
 func webFetch(ctx tool.Context, args WebFetchArgs) (WebFetchResult, error) {
 	resp, err := http.Get(args.URL)
 	if err != nil {
-		return WebFetchResult{Error: err.Error()}, nil
+		return WebFetchResult{Error: err.Error()}, nil //nolint:nilerr
 	}
 	defer resp.Body.Close()
 	b, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return WebFetchResult{Error: err.Error()}, nil
+		return WebFetchResult{Error: err.Error()}, nil //nolint:nilerr
 	}
 	return WebFetchResult{Content: string(b)}, nil
 }
@@ -177,11 +179,11 @@ func googleSearchFunc(ctx tool.Context, args GoogleSearchArgs) (GoogleSearchResu
 	}
 	client, err := genai.NewClient(context.Background(), &genai.ClientConfig{APIKey: apiKey})
 	if err != nil {
-		return GoogleSearchResult{Error: err.Error()}, nil
+		return GoogleSearchResult{Error: err.Error()}, nil //nolint:nilerr
 	}
 	resp, err := client.Models.GenerateContent(context.Background(), "gemini-2.5-flash", genai.Text(args.Query), &genai.GenerateContentConfig{Tools: []*genai.Tool{{GoogleSearch: &genai.GoogleSearch{}}}})
 	if err != nil {
-		return GoogleSearchResult{Error: err.Error()}, nil
+		return GoogleSearchResult{Error: err.Error()}, nil //nolint:nilerr
 	}
 	if len(resp.Candidates) > 0 && resp.Candidates[0].Content != nil && len(resp.Candidates[0].Content.Parts) > 0 {
 		return GoogleSearchResult{Response: resp.Candidates[0].Content.Parts[0].Text}, nil
@@ -219,7 +221,7 @@ func bashExecuteTool(ctx tool.Context, args BashExecuteArgs) (BashExecuteResult,
 		dir = "."
 	}
 
-	cmd := exec.CommandContext(ctx, "bash", "-c", args.Command)
+	cmd := exec.CommandContext(ctx, "bash", "-c", args.Command) //nolint:gosec // agent is explicitly permitted to run shell commands
 	cmd.Dir = dir
 
 	if args.IsBackground {
@@ -240,7 +242,7 @@ func bashExecuteTool(ctx tool.Context, args BashExecuteArgs) (BashExecuteResult,
 	var stdoutBuf, stderrBuf bytes.Buffer
 
 	if err := cmd.Start(); err != nil {
-		return BashExecuteResult{Success: false, Error: err.Error(), ExitCode: -1}, nil
+		return BashExecuteResult{Success: false, Error: err.Error(), ExitCode: -1}, nil //nolint:nilerr
 	}
 
 	var wg sync.WaitGroup
@@ -287,7 +289,8 @@ func bashExecuteTool(ctx tool.Context, args BashExecuteArgs) (BashExecuteResult,
 
 	exitCode := 0
 	if err != nil {
-		if exitError, ok := err.(*exec.ExitError); ok {
+		var exitError *exec.ExitError
+		if errors.As(err, &exitError) {
 			exitCode = exitError.ExitCode()
 		} else {
 			exitCode = -1
@@ -403,12 +406,12 @@ func gitCommitTool(ctx tool.Context, args GitCommitArgs) (GitCommitResult, error
 	// For an agent, it's usually safest to just add everything they modified
 	_, err := runGitCommand(ctx, args.Dir, "add", ".")
 	if err != nil {
-		return GitCommitResult{Success: false, Error: err.Error()}, nil
+		return GitCommitResult{Success: false, Error: err.Error()}, nil //nolint:nilerr
 	}
 
 	out, err := runGitCommand(ctx, args.Dir, "commit", "-m", args.Message)
 	if err != nil {
-		return GitCommitResult{Success: false, Error: err.Error()}, nil
+		return GitCommitResult{Success: false, Error: err.Error()}, nil //nolint:nilerr
 	}
 
 	return GitCommitResult{Success: true, Output: out}, nil
@@ -435,7 +438,7 @@ func gitPushTool(ctx tool.Context, args GitPushArgs) (GitPushResult, error) {
 
 	out, err := runGitCommand(ctx, args.Dir, "push")
 	if err != nil {
-		return GitPushResult{Success: false, Error: err.Error()}, nil
+		return GitPushResult{Success: false, Error: err.Error()}, nil //nolint:nilerr
 	}
 
 	return GitPushResult{Success: true, Output: out}, nil

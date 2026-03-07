@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/dewitt/swarm/pkg/sdk"
 )
@@ -68,8 +69,9 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/events", s.handleSSE)
 
 	s.httpServer = &http.Server{
-		Addr:    s.addr,
-		Handler: mux,
+		Addr:              s.addr,
+		Handler:           mux,
+		ReadHeaderTimeout: 3 * time.Second,
 	}
 
 	if err := s.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {

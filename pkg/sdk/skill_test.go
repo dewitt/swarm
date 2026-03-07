@@ -24,7 +24,7 @@ tools:
 ---
 You are a test skill. Do test things.
 `
-	err = os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(skillContent), 0644)
+	err = os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(skillContent), 0600)
 	assert.NoError(t, err)
 
 	skill, err := sdk.LoadSkill(skillDir)
@@ -56,7 +56,7 @@ func TestLoadSkill_NoFrontmatter(t *testing.T) {
 	assert.NoError(t, err)
 
 	skillContent := "I only have instructions."
-	err = os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(skillContent), 0644)
+	err = os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(skillContent), 0600)
 	assert.NoError(t, err)
 
 	skill, err := sdk.LoadSkill(skillDir)

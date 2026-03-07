@@ -83,7 +83,7 @@ func SaveConfig(cfg *Config) error {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
 
-	if err := os.WriteFile(path, data, 0644); err != nil {
+	if err := os.WriteFile(path, data, 0600); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
@@ -181,7 +181,7 @@ func LoadContextFiles() (string, []string) {
 		count := 0
 		_ = filepath.WalkDir(cwd, func(path string, d os.DirEntry, err error) error {
 			if err != nil {
-				return nil
+				return nil //nolint:nilerr // Ignore permission errors and continue walking
 			}
 			if d.IsDir() {
 				name := d.Name()

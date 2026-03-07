@@ -1,7 +1,6 @@
 # Swarm CLI
 
-A clean CLI and embeddable SDK for managing, building, and deploying AI agents
-into native ecosystems.
+A clean CLI and embeddable SDK for massively multi-agent orchestration and observability into native ecosystems.
 
 ![Swarm CLI Demo](docs/assets/demo.gif)
 

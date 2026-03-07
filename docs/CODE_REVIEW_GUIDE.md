@@ -23,7 +23,7 @@ Ensure the fundamental health of the project using standard tooling:
 - Verify dependency alignment and neatness.
 - Run static analysis and vetting tools to catch compilation and shadow errors.
 - Execute the test suite to ensure baseline functionality remains intact (preferring fast/unit tests for quick feedback).
-- Apply project-specific linting or formatting.
+- Apply project-specific linting or formatting. Note: Ensure `golangci-lint` is up to date with the current Go version. If it hangs or behaves unexpectedly, update it by running `go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest` and `golangci-lint cache clean`.
 
 ### Phase 2: Systematic Codebase Audit
 

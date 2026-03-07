@@ -1,5 +1,7 @@
 # Design: Dynamic Skill Generation and Execution
 
+*Resolves a key initiative in Epic #29 (The Self-Healing Swarm).*
+
 ## 1. Context & Motivation
 
 As outlined in Epic #29 (The Self-Healing Swarm), Swarm currently relies

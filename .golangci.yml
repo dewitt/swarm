@@ -1,0 +1,21 @@
+run:
+  timeout: 5m
+
+issues:
+  exclude-dirs:
+    - eval/fixtures
+
+linters:
+  disable-all: true
+  enable:
+    - govet
+    - ineffassign
+    - errcheck
+    - unused
+    - staticcheck
+    - gosimple
+    - errorlint
+    - nilerr
+    - bodyclose
+    - gosec
+    - gofumpt

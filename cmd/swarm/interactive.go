@@ -2056,11 +2056,11 @@ func (m model) renderAgentPanel() string {
 			// Animated "paint" from left to right on boot
 			caretColor := lipgloss.Color("#FACC15") // Gold/Yellow for ">"
 			forestColors := []color.Color{
-				lipgloss.Color("#2d6a4f"),
-				lipgloss.Color("#40916c"),
-				lipgloss.Color("#52b788"),
-				lipgloss.Color("#74c69d"),
-				lipgloss.Color("#95d5b2"),
+				lipgloss.Color("#2d6a4f"), // Dark green (S)
+				lipgloss.Color("#52b788"), // Medium green (W)
+				lipgloss.Color("#95d5b2"), // Light green (A)
+				lipgloss.Color("#52b788"), // Medium green (R)
+				lipgloss.Color("#2d6a4f"), // Dark green (M)
 			}
 
 			var sb strings.Builder
@@ -2098,11 +2098,11 @@ func (m model) renderAgentPanel() string {
 			if !m.hasRunTasks {
 				caretColor := lipgloss.Color("#FACC15")
 				forestColors := []color.Color{
-					lipgloss.Color("#2d6a4f"),
-					lipgloss.Color("#40916c"),
-					lipgloss.Color("#52b788"),
-					lipgloss.Color("#74c69d"),
-					lipgloss.Color("#95d5b2"),
+					lipgloss.Color("#2d6a4f"), // Dark green (S)
+					lipgloss.Color("#52b788"), // Medium green (W)
+					lipgloss.Color("#95d5b2"), // Light green (A)
+					lipgloss.Color("#52b788"), // Medium green (R)
+					lipgloss.Color("#2d6a4f"), // Dark green (M)
 				}
 				var sb strings.Builder
 				for _, line := range rawLogo {

@@ -19,6 +19,7 @@ We collect these over time to inform future sprint priorities.
 - [ ] **Web Panel Infinite Reconnect Loop:** When the CLI exits, the browser
   panel flashes a red "Disconnected - Retrying..." badge indefinitely. It
   should detect a graceful shutdown and display a clean "Session Ended" state.
+- [ ] **Boot Block Readability & Wrapping:** The initial boot message uses hardcoded 80-column markdown wrapping and lacks visual hierarchy. It needs to be refactored into a responsive, multi-column `lipgloss` dashboard that cleanly separates Environment data from Session data and restores missing "Quick Tips".
 
 ## 💡 Feature Proposals
 

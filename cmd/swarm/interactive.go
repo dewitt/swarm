@@ -240,24 +240,25 @@ globalSummary  string
 	bgPGIDs []int
 }
 
-func (m model) theme() struct {
+type themeColors struct {
 	borderColor   color.Color
 	statusBg      color.Color
 	statusFg      color.Color
 	placeholderFg color.Color
-} {
-	ld := lipgloss.LightDark(m.isDark)
-	return struct {
-		borderColor   color.Color
-		statusBg      color.Color
-		statusFg      color.Color
-		placeholderFg color.Color
-	}{
+}
+
+func defaultTheme(isDark bool) themeColors {
+	ld := lipgloss.LightDark(isDark)
+	return themeColors{
 		borderColor:   ld(lipgloss.Color("#D9D9D9"), lipgloss.Color("#333333")),
 		statusBg:      ld(lipgloss.Color("#EBEBEB"), lipgloss.Color("#1A1A1A")),
 		statusFg:      ld(lipgloss.Color("#555555"), lipgloss.Color("#888888")),
 		placeholderFg: ld(lipgloss.Color("#E0E0E0"), lipgloss.Color("#262626")),
 	}
+}
+
+func (m model) theme() themeColors {
+	return defaultTheme(m.isDark)
 }
 
 func updateAutocomplete(m *model) {
@@ -1894,17 +1895,22 @@ func buildBootMessage(cwd, branch string, modified bool, isDark bool, activeMode
 
 	modStr := ""
 	if modified {
-		modStr = " *(modified)*"
+		modStr = " (modified)"
 	}
 
 	headHash := "Unknown"
 	if commits, err := sdk.GetRecentCommits(".", 1); err == nil && len(commits) > 0 {
-		headHash = strings.ReplaceAll(commits[0], "\n", " ")
+		// Try to extract just the short hash and the first few words of the message
+		msg := strings.ReplaceAll(commits[0], "\n", " ")
+		if runewidth.StringWidth(msg) > 40 {
+			msg = runewidth.Truncate(msg, 40, "…")
+		}
+		headHash = msg
 	}
 
 	sessionState := "New session"
 	if isResume {
-		sessionState = "Resuming session"
+		sessionState = "Resuming previous session"
 	}
 
 	// Shorten home dir
@@ -1920,33 +1926,70 @@ func buildBootMessage(cwd, branch string, modified bool, isDark bool, activeMode
 		for _, f := range contextFiles {
 			// Try to show relative path if in cwd
 			if rel, err := filepath.Rel(cwd, f); err == nil && !strings.HasPrefix(rel, "..") {
-				shortFiles = append(shortFiles, "`"+rel+"`")
+				shortFiles = append(shortFiles, rel)
 			} else if homeDir != "" && strings.HasPrefix(f, homeDir) {
-				shortFiles = append(shortFiles, "`~"+strings.TrimPrefix(f, homeDir)+"`")
+				shortFiles = append(shortFiles, "~"+strings.TrimPrefix(f, homeDir))
 			} else {
-				shortFiles = append(shortFiles, "`"+filepath.Base(f)+"`")
+				shortFiles = append(shortFiles, filepath.Base(f))
 			}
 		}
 		contextStr = strings.Join(shortFiles, ", ")
 	}
 
-	markdown := fmt.Sprintf(`**Swarm CLI** `+"`v%s`"+` | **Model:** `+"`%s`"+` | **State:** `+"`%s`"+`
+	// Styles
+	t := defaultTheme(isDark)
+	titleStyle := lipgloss.NewStyle().Foreground(googleBlue).Bold(true)
+	versionStyle := lipgloss.NewStyle().Foreground(t.placeholderFg)
+	headerStyle := lipgloss.NewStyle().Foreground(t.borderColor).Bold(true).MarginBottom(1)
+	keyStyle := lipgloss.NewStyle().Foreground(t.placeholderFg).Width(8)
+	valStyle := lipgloss.NewStyle().Foreground(t.statusFg)
+	valModifiedStyle := lipgloss.NewStyle().Foreground(googleYellow)
 
-**Dir:** `+"`%s`"+` | **Branch:** `+"`%s`"+`%s | **HEAD:** %s
-**Context:** %s
+	// Top row
+	topRow := lipgloss.JoinHorizontal(lipgloss.Bottom, 
+		titleStyle.Render("🤖 Swarm CLI "), 
+		versionStyle.Render("v"+version),
+	)
 
-Type a request below to begin, or type `+"`/help`"+` for available commands.
-`, version, activeModel, sessionState, displayDir, branch, modStr, headHash, contextStr)
-
-	style := "dark"
-	if !isDark {
-		style = "light"
+	// Environment Column
+	envBranchVal := valStyle.Render(branch)
+	if modified {
+		envBranchVal += valModifiedStyle.Render(modStr)
 	}
-	r, _ := glamour.NewTermRenderer(glamour.WithStandardStyle(style), glamour.WithWordWrap(80))
-	if out, err := r.Render(markdown); err == nil {
-		return strings.TrimSpace(out)
-	}
-	return markdown
+	
+	envCol := lipgloss.JoinVertical(lipgloss.Left,
+		headerStyle.Render("[ Environment ]"),
+		lipgloss.JoinHorizontal(lipgloss.Top, keyStyle.Render("Dir:"), valStyle.Render(displayDir)),
+		lipgloss.JoinHorizontal(lipgloss.Top, keyStyle.Render("Branch:"), envBranchVal),
+		lipgloss.JoinHorizontal(lipgloss.Top, keyStyle.Render("HEAD:"), valStyle.Render(headHash)),
+	)
+
+	// Session Column
+	sessCol := lipgloss.JoinVertical(lipgloss.Left,
+		headerStyle.Render("[ Session ]"),
+		lipgloss.JoinHorizontal(lipgloss.Top, keyStyle.Render("State:"), valStyle.Render(sessionState)),
+		lipgloss.JoinHorizontal(lipgloss.Top, keyStyle.Render("Model:"), valStyle.Render(activeModel)),
+		lipgloss.JoinHorizontal(lipgloss.Top, keyStyle.Render("Context:"), valStyle.Render(contextStr)),
+	)
+
+	// Combine columns with spacing
+	dashboard := lipgloss.JoinHorizontal(lipgloss.Top, envCol, lipgloss.NewStyle().Width(4).Render(""), sessCol)
+
+	// Tips footer
+	tipsLabel := lipgloss.NewStyle().Foreground(googleYellow).Bold(true).Render("💡 Tips: ")
+	tipsContent := lipgloss.NewStyle().Foreground(t.placeholderFg).Render(
+		"[^O] toggle observe   [!] shell mode   [/plan] brainstorm   [/skills] view skills",
+	)
+	footer := lipgloss.JoinHorizontal(lipgloss.Top, tipsLabel, tipsContent)
+
+	// Assemble final block
+	return lipgloss.JoinVertical(lipgloss.Left,
+		topRow,
+		"",
+		dashboard,
+		"",
+		footer,
+	)
 }
 
 func (m model) renderAgentPanel() string {

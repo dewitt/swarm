@@ -1961,10 +1961,10 @@ func (m model) renderAgentPanel() string {
 	if len(m.spans) == 0 {
 		// Display a subtle watermark logo when idle
 		watermarkStyle := lipgloss.NewStyle().Foreground(t.placeholderFg).Bold(true)
-		watermark := watermarkStyle.Render(`Yb.      .dP"Y8 Yb        dP  db    88""Yb 8b    d8 
-  ` + "`" + `Yb.    ` + "`" + `Ybo."  Yb  db  dP  dPYb   88__dP 88b  d88 
-  .dP'    o.` + "`" + `Y8b   YbdPYbdP  dP__Yb  88"Yb  88YbdP88 
-.dP'      8bodP'    YP  YP  dP""""Yb 88  Yb 88 YY 88`)
+		watermark := watermarkStyle.Render("   `Yb.      .dP\"Y8 Yb        dP  db    88\"\"Yb 8b    d8\n" +
+			"     `Yb.    `Ybo.\"  Yb  db  dP  dPYb   88__dP 88b  d88\n" +
+			"     .dP'    o.`Y8b   YbdPYbdP  dP__Yb  88\"Yb  88YbdP88\n" +
+			"   .dP'      8bodP'    YP  YP  dP\"\"\"\"Yb 88  Yb 88 YY 88")
 
 		// panelStyle.Height(6) results in exactly 7 total layout lines (1 Top + 4 Inner + 1 Bottom + 1 Margin)
 		// This perfectly matches the height of 1 row of active cards, ensuring zero jump.

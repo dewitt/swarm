@@ -1927,7 +1927,7 @@ Type a request below to begin, or type `+"`/help`"+` for available commands.
 func (m model) renderAgentPanel() string {
 	t := m.theme()
 	panelStyle := lipgloss.NewStyle().
-		Border(lipgloss.NormalBorder()).
+		Border(lipgloss.RoundedBorder()).
 		BorderForeground(t.borderColor).
 		Padding(0, 1).
 		MarginBottom(1).
@@ -1939,12 +1939,11 @@ func (m model) renderAgentPanel() string {
 		watermark := watermarkStyle.Render(`▄      ▄▄▄▄ ▄▄   ▄▄  ▄▄▄  ▄▄▄▄  ▄▄   ▄▄ 
  ▀▄   ███▄▄ ██ ▄ ██ ██▀██ ██▄█▄ ██▀▄▀██ 
 ▄▀    ▄▄██▀  ▀█▀█▀  ██▀██ ██ ██ ██   ██`)
-		
-		// Set a minimum height of 6 lines to reserve space for a row of cards
-		// (Card height = 4, +1 for border = 5, total panel height with its own border/padding = 7)
+
+		// panelStyle.Height(6) results in exactly 7 total layout lines (1 Top + 4 Inner + 1 Bottom + 1 Margin)
+		// This perfectly matches the height of 1 row of active cards, ensuring zero jump.
 		return panelStyle.Height(6).Align(lipgloss.Center).Render(lipgloss.JoinVertical(lipgloss.Center, watermark))
 	}
-
 	// Build tree
 	type treeNode struct {
 		span     *uiSpan
@@ -2156,13 +2155,7 @@ func (m model) renderAgentPanel() string {
 
 	grid := lipgloss.JoinVertical(lipgloss.Left, rows...)
 
-	return lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(t.borderColor).
-		Padding(0, 1).
-		MarginBottom(1).
-		Width(m.width - 2).
-		Render(grid)
+	return panelStyle.Render(grid)
 }
 
 func (m *model) findAgent(name string) *swarmAgent {

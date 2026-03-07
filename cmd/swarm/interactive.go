@@ -1163,6 +1163,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			shellStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#AAAAAA")).PaddingLeft(2).Width(m.viewport.Width())
 			m.appendMessage(shellStyle.Render(msg.text))
 		} else {
+			m.lastResponse = msg.text
 			out := msg.text
 			if m.renderer != nil {
 				if rOut, err := m.renderer.Render(msg.text); err == nil {

@@ -1032,9 +1032,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			if input != "" {
 				if m.state == stateShell {
-					m.appendMessage(lipgloss.NewStyle().Render(lipgloss.NewStyle().Foreground(googleYellow).Bold(true).Render("! ") + input))
+					m.appendMessage(lipgloss.NewStyle().Width(m.viewport.Width()).Render(lipgloss.NewStyle().Foreground(googleYellow).Bold(true).Render("! ") + input))
 				} else {
-					m.appendMessage(lipgloss.NewStyle().Render(promptStyle.Render("> ") + input))
+					m.appendMessage(lipgloss.NewStyle().Width(m.viewport.Width()).Render(promptStyle.Render("> ") + input))
 				}
 
 				if len(m.history) == 0 || m.history[len(m.history)-1] != input {
@@ -1274,7 +1274,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Batch(listenForStream(msg.ch), agentCmd)
 
 		case sdk.AgentStateWaiting:
-			m.appendMessage(lipgloss.NewStyle().Foreground(googleBlue).Italic(true).Render("👀 " + event.ObserverSummary))
+			m.appendMessage(lipgloss.NewStyle().Foreground(googleBlue).Italic(true).Width(m.viewport.Width()).Render("👀 " + event.ObserverSummary))
 			m.updateViewport()
 			return m, listenForStream(msg.ch)
 
@@ -1328,7 +1328,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if event.Error != nil {
 				errMsg = event.Error.Error()
 			}
-			m.appendMessage(errorMsgStyle.Render(fmt.Sprintf("Error: %s", errMsg)))
+			m.appendMessage(errorMsgStyle.Width(m.viewport.Width()).Render(fmt.Sprintf("Error: %s", errMsg)))
 			m.loading = false
 			m.updateViewport()
 			return m, tea.Batch(m.dequeueAndRun(), agentCmd)
@@ -1349,7 +1349,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.loading = false
 		m.statusMsg = ""
 		m.observeLog = nil
-		m.appendMessage(lipgloss.NewStyle().Foreground(errorColor).Render("Error: " + msg.err.Error()))
+		m.appendMessage(lipgloss.NewStyle().Foreground(errorColor).Width(m.viewport.Width()).Render("Error: " + msg.err.Error()))
 		m.updateViewport()
 		return m, m.dequeueAndRun()
 
@@ -1359,10 +1359,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.bgPGIDs = append(m.bgPGIDs, msg.pgid)
 		}
 		if msg.err != nil {
-			m.appendMessage(lipgloss.NewStyle().Foreground(errorColor).Render("Error: " + msg.err.Error()))
+			m.appendMessage(lipgloss.NewStyle().Foreground(errorColor).Width(m.viewport.Width()).Render("Error: " + msg.err.Error()))
 		} else if msg.isShell {
 			// Style for shell output - slightly indented and perhaps a different color
-			shellStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#AAAAAA")).PaddingLeft(2)
+			shellStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#AAAAAA")).PaddingLeft(2).Width(m.viewport.Width())
 			m.appendMessage(shellStyle.Render(msg.text))
 		} else {
 			out := msg.text
@@ -1381,7 +1381,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.loading = false
 		if msg.err != nil {
 			m.state = stateChat
-			m.appendMessage(lipgloss.NewStyle().Foreground(errorColor).Render("Error fetching models: " + msg.err.Error()))
+			m.appendMessage(lipgloss.NewStyle().Foreground(errorColor).Width(m.viewport.Width()).Render("Error fetching models: " + msg.err.Error()))
 			m.updateViewport()
 			return m, tea.ClearScreen
 		}
@@ -2019,7 +2019,10 @@ func (m *model) updateViewport() {
 
 			renderedMessages = append(renderedMessages, lipgloss.JoinHorizontal(lipgloss.Top, left, right))
 		} else {
-			renderedMessages = append(renderedMessages, msg)
+			// Ensure each message is wrapped to the current viewport width.
+			// This prevents terminal-level wrapping that breaks viewport scrolling calculations
+			// and handles terminal resizing correctly.
+			renderedMessages = append(renderedMessages, lipgloss.NewStyle().Width(m.viewport.Width()).Render(msg))
 		}
 	}
 

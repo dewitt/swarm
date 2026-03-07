@@ -258,7 +258,7 @@ type themeColors struct {
 func defaultTheme(isDark bool) themeColors {
 	ld := lipgloss.LightDark(isDark)
 	return themeColors{
-		borderColor:   ld(lipgloss.Color("#D9D9D9"), lipgloss.Color("#333333")),
+		borderColor:   ld(lipgloss.Color("#D9D9D9"), lipgloss.Color("#444444")),
 		statusBg:      ld(lipgloss.Color("#EBEBEB"), lipgloss.Color("#1A1A1A")),
 		statusFg:      ld(lipgloss.Color("#555555"), lipgloss.Color("#888888")),
 		placeholderFg: ld(lipgloss.Color("#E0E0E0"), lipgloss.Color("#262626")),
@@ -266,11 +266,11 @@ func defaultTheme(isDark bool) themeColors {
 		logoMutedFg:   ld(lipgloss.Color("#D4D4D4"), lipgloss.Color("#404040")),
 		logoCaretFg:   ld(lipgloss.Color("#1E3A8A"), lipgloss.Color("#60A5FA")), // Dark blue for >, light blue for dark mode
 		logoForestFgs: []color.Color{
-			ld(lipgloss.Color("#153324"), lipgloss.Color("#2F7452")), // Dark green (S)
-			ld(lipgloss.Color("#2F7452"), lipgloss.Color("#4AB57F")), // Medium green (W)
-			ld(lipgloss.Color("#4AB57F"), lipgloss.Color("#86EFAC")), // Light green (A)
-			ld(lipgloss.Color("#2F7452"), lipgloss.Color("#4AB57F")), // Medium green (R)
-			ld(lipgloss.Color("#153324"), lipgloss.Color("#2F7452")), // Dark green (M)
+			ld(lipgloss.Color("#153324"), lipgloss.Color("#86EFAC")), // Light: Dark, Dark: Light
+			ld(lipgloss.Color("#2F7452"), lipgloss.Color("#4AB57F")), // Light: Med, Dark: Med
+			ld(lipgloss.Color("#4AB57F"), lipgloss.Color("#153324")), // Light: Light, Dark: Dark
+			ld(lipgloss.Color("#2F7452"), lipgloss.Color("#4AB57F")), // Light: Med, Dark: Med
+			ld(lipgloss.Color("#153324"), lipgloss.Color("#86EFAC")), // Light: Dark, Dark: Light
 		},
 	}
 }

@@ -105,6 +105,7 @@ type Swarm interface {
 	SetDebug(enabled bool)
 	IsDebug() bool
 	Explain(ctx context.Context, traj Trajectory) (string, error)
+	Close() error
 }
 
 type telemetryContextKey struct{}
@@ -132,6 +133,7 @@ type defaultSwarm struct {
 	lastAgent           string  // Tracks the last agent to respond
 	activeEngine        *Engine // The currently executing Engine, used for dynamic task mutability
 	outChan             chan<- ObservableEvent
+	wg                  sync.WaitGroup
 }
 
 type SwarmConfig struct {
@@ -379,6 +381,11 @@ func (m *defaultSwarm) Explain(ctx context.Context, traj Trajectory) (string, er
 		}
 	}
 	return strings.TrimSpace(exp), nil
+}
+
+func (m *defaultSwarm) Close() error {
+	m.wg.Wait()
+	return nil
 }
 
 func (m *defaultSwarm) Reload() error {
@@ -706,7 +713,9 @@ func (m *defaultSwarm) Chat(ctx context.Context, prompt string) (<-chan Observab
 	// Record the user's initial prompt in the persistent session
 	m.appendEvent(ctx, "user", prompt)
 
+	m.wg.Add(1)
 	go func() {
+		defer m.wg.Done()
 		defer close(out)
 		swarmStartTime := time.Now()
 		o := NewEngine(nil)
@@ -900,7 +909,9 @@ func (m *defaultSwarm) Execute(ctx context.Context, g *ExecutionGraph, o *Engine
 		}
 	}
 
+	m.wg.Add(1)
 	go func() {
+		defer m.wg.Done()
 		defer close(out)
 		defer func() {
 			if m.activeEngine == o {

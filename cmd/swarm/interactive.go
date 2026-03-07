@@ -7,6 +7,7 @@ import (
 	"image/color"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
 	"regexp"
 	"runtime/debug"
@@ -400,6 +401,22 @@ func updateAutocomplete(m *model) {
 	}
 }
 
+func getUserName() string {
+	u, err := user.Current()
+	if err == nil {
+		if u.Name != "" {
+			parts := strings.Fields(u.Name)
+			if len(parts) > 0 {
+				return parts[0]
+			}
+		}
+		if u.Username != "" {
+			return u.Username
+		}
+	}
+	return "Developer"
+}
+
 func getHistoryFile() string {
 	dir, err := sdk.GetConfigDir()
 	if err != nil {
@@ -566,7 +583,7 @@ func initialModel(planMode bool, resume bool) (model, error) {
 		viewport:       vp,
 		spinner:        s,
 		listModel:      l,
-		messages:       []string{buildBootMessage(cwd, branch, modified, isDark, activeModel, contextFiles, swarm.SessionID(), resume)},
+		messages:       []string{buildBootMessage(cwd, branch, modified, isDark, activeModel, contextFiles, swarm.SessionID(), resume, len(loadedHist) == 0, getUserName())},
 		history:        loadedHist,
 		historyIdx:     len(loadedHist),
 		swarm:          swarm,
@@ -1902,7 +1919,7 @@ func (m *model) updateInputStyle() {
 	}
 }
 
-func buildBootMessage(cwd, branch string, modified bool, isDark bool, activeModel string, contextFiles []string, sessionID string, isResume bool) string {
+func buildBootMessage(cwd, branch string, modified bool, isDark bool, activeModel string, contextFiles []string, sessionID string, isResume bool, isFirstTime bool, userName string) string {
 	version := "Unknown"
 	if info, ok := debug.ReadBuildInfo(); ok {
 		version = info.Main.Version
@@ -2010,6 +2027,14 @@ func buildBootMessage(cwd, branch string, modified bool, isDark bool, activeMode
 	// Combine columns with spacing
 	dashboard := lipgloss.JoinHorizontal(lipgloss.Top, envCol, lipgloss.NewStyle().Width(4).Render(""), sessCol)
 
+	// Greeting
+	var greeting string
+	if isFirstTime {
+		greeting = lipgloss.NewStyle().Foreground(t.statusFg).Render(fmt.Sprintf("Welcome, %s!", userName))
+	} else {
+		greeting = lipgloss.NewStyle().Foreground(t.statusFg).Render(fmt.Sprintf("Welcome back, %s!", userName))
+	}
+
 	// Tips footer
 	tipsLabel := lipgloss.NewStyle().Foreground(googleYellow).Bold(true).Render("💡 Tips: ")
 	tipsContent := lipgloss.NewStyle().Foreground(t.labelFg).Render(
@@ -2020,6 +2045,8 @@ func buildBootMessage(cwd, branch string, modified bool, isDark bool, activeMode
 	// Assemble final block
 	return lipgloss.JoinVertical(lipgloss.Left,
 		topRow,
+		"",
+		greeting,
 		"",
 		dashboard,
 		"",

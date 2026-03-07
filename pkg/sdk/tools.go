@@ -134,10 +134,10 @@ type WriteFileResult struct {
 
 func writeLocalFile(ctx tool.Context, args WriteFileArgs) (WriteFileResult, error) {
 	dir := filepath.Dir(args.Path)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return WriteFileResult{Success: false, Error: err.Error()}, nil //nolint:nilerr
 	}
-	if err := os.WriteFile(args.Path, []byte(args.Content), 0644); err != nil { //nolint:gosec // agent writes code files which should be world-readable
+	if err := os.WriteFile(args.Path, []byte(args.Content), 0o644); err != nil { //nolint:gosec // agent writes code files which should be world-readable
 		return WriteFileResult{Success: false, Error: err.Error()}, nil //nolint:nilerr
 	}
 	return WriteFileResult{Success: true}, nil

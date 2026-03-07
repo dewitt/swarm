@@ -26,7 +26,7 @@ func GetConfigDir() (string, error) {
 	}
 
 	configDir := filepath.Join(home, ".config", "swarm")
-	if err := os.MkdirAll(configDir, 0755); err != nil {
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
 		return "", fmt.Errorf("failed to create config directory: %w", err)
 	}
 
@@ -83,7 +83,7 @@ func SaveConfig(cfg *Config) error {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
 
-	if err := os.WriteFile(path, data, 0600); err != nil {
+	if err := os.WriteFile(path, data, 0o600); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
@@ -106,7 +106,7 @@ func SaveMemory(fact string) error {
 		return err
 	}
 
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
 		return err
 	}

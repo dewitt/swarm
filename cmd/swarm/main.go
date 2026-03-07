@@ -14,11 +14,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var promptFlag string
-var planFlag bool
-var resumeFlag bool
-var trajectoryFlag bool
-var explainFlag bool
+var (
+	promptFlag     string
+	planFlag       bool
+	resumeFlag     bool
+	trajectoryFlag bool
+	explainFlag    bool
+)
 
 var configCmd = &cobra.Command{
 	Use:   "config",
@@ -152,6 +154,7 @@ func init() {
 	rootCmd.Flags().BoolVar(&explainFlag, "explain", false, "Provide a human-readable explanation of the swarm trajectory")
 	rootCmd.AddCommand(configCmd)
 }
+
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

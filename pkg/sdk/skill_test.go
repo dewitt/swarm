@@ -12,7 +12,7 @@ import (
 func TestLoadSkill_ValidSkill(t *testing.T) {
 	tempDir := t.TempDir()
 	skillDir := filepath.Join(tempDir, "test-skill")
-	err := os.Mkdir(skillDir, 0755)
+	err := os.Mkdir(skillDir, 0o755)
 	assert.NoError(t, err)
 
 	skillContent := `---
@@ -24,7 +24,7 @@ tools:
 ---
 You are a test skill. Do test things.
 `
-	err = os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(skillContent), 0600)
+	err = os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(skillContent), 0o600)
 	assert.NoError(t, err)
 
 	skill, err := sdk.LoadSkill(skillDir)
@@ -40,7 +40,7 @@ You are a test skill. Do test things.
 func TestLoadSkill_MissingSkillMd(t *testing.T) {
 	tempDir := t.TempDir()
 	skillDir := filepath.Join(tempDir, "empty-skill")
-	err := os.Mkdir(skillDir, 0755)
+	err := os.Mkdir(skillDir, 0o755)
 	assert.NoError(t, err)
 
 	skill, err := sdk.LoadSkill(skillDir)
@@ -52,11 +52,11 @@ func TestLoadSkill_MissingSkillMd(t *testing.T) {
 func TestLoadSkill_NoFrontmatter(t *testing.T) {
 	tempDir := t.TempDir()
 	skillDir := filepath.Join(tempDir, "simple-skill")
-	err := os.Mkdir(skillDir, 0755)
+	err := os.Mkdir(skillDir, 0o755)
 	assert.NoError(t, err)
 
 	skillContent := "I only have instructions."
-	err = os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(skillContent), 0600)
+	err = os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(skillContent), 0o600)
 	assert.NoError(t, err)
 
 	skill, err := sdk.LoadSkill(skillDir)

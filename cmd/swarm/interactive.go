@@ -107,8 +107,10 @@ type responseMsg struct {
 	pgid    int
 }
 
-type globalSummaryMsg string
-type triggerGlobalSummaryMsg struct{}
+type (
+	globalSummaryMsg        string
+	triggerGlobalSummaryMsg struct{}
+)
 
 type modelsLoadedMsg struct {
 	models []sdk.ModelInfo
@@ -428,7 +430,7 @@ func saveHistory(history []string) {
 		return
 	}
 	dir := filepath.Dir(file)
-	_ = os.MkdirAll(dir, 0755)
+	_ = os.MkdirAll(dir, 0o755)
 
 	// Keep only the last 1000 items to prevent the file from growing indefinitely
 	if len(history) > 1000 {
@@ -437,7 +439,7 @@ func saveHistory(history []string) {
 
 	b, err := json.MarshalIndent(history, "", "  ")
 	if err == nil {
-		_ = os.WriteFile(file, b, 0600)
+		_ = os.WriteFile(file, b, 0o600)
 	}
 }
 

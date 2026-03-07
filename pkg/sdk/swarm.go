@@ -304,7 +304,8 @@ func (m *defaultSwarm) readState(ctx tool.Context, req struct{ Key string }) (st
 func (m *defaultSwarm) writeState(ctx tool.Context, req struct {
 	Key   string
 	Value any
-}) (string, error) {
+},
+) (string, error) {
 	resp, err := m.sessionSvc.Get(context.Background(), &session.GetRequest{AppName: "swarm-cli", UserID: m.userID, SessionID: m.sessionID})
 	if err != nil {
 		return "", err
@@ -332,7 +333,8 @@ func (m *defaultSwarm) spawnSubtask(ctx tool.Context, req struct {
 	Prompt       string   `json:"prompt"`
 	Dependencies []string `json:"dependencies"`
 	ParentID     string   `json:"parent_id,omitempty"`
-}) (string, error) {
+},
+) (string, error) {
 	if m.activeEngine == nil {
 		return "", fmt.Errorf("no active execution engine")
 	}
@@ -537,6 +539,7 @@ func (m *defaultSwarm) AddContext(path string) error {
 	m.pinnedContext[path] = string(b)
 	return nil
 }
+
 func (m *defaultSwarm) DropContext(path string) {
 	if path == "all" {
 		m.pinnedContext = make(map[string]string)
@@ -544,6 +547,7 @@ func (m *defaultSwarm) DropContext(path string) {
 		delete(m.pinnedContext, path)
 	}
 }
+
 func (m *defaultSwarm) ListContext() []string {
 	var p []string
 	for path := range m.pinnedContext {
@@ -551,6 +555,7 @@ func (m *defaultSwarm) ListContext() []string {
 	}
 	return p
 }
+
 func (m *defaultSwarm) Reset() {
 	m.sessionID = fmt.Sprintf("session_%d", rand.Int63()) //nolint:gosec // session IDs do not require cryptographic security
 }
@@ -1375,7 +1380,7 @@ func (m *defaultSwarm) saveTrajectory(traj Trajectory) {
 		return
 	}
 	dir := filepath.Join(baseDir, "trajectories")
-	_ = os.MkdirAll(dir, 0755)
+	_ = os.MkdirAll(dir, 0o755)
 
 	filename := fmt.Sprintf("%s.json", traj.TraceID)
 	if m.sessionID != "" {
@@ -1386,7 +1391,7 @@ func (m *defaultSwarm) saveTrajectory(traj Trajectory) {
 	path := filepath.Join(dir, filename)
 
 	b, _ := json.MarshalIndent(traj, "", "  ")
-	_ = os.WriteFile(path, b, 0600)
+	_ = os.WriteFile(path, b, 0o600)
 }
 
 // timeoutModel wraps a model.LLM to enforce a strict per-request execution timeout

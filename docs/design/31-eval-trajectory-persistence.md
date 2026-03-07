@@ -29,6 +29,9 @@ sandbox is destroyed. This satisfies the global mandate in `GEMINI.md`:
 *"Every time a swarm eval test is run, ensure the resulting trajectories are
 persisted to a durable location for subsequent review."*
 
+Furthermore, establish the foundation for voluntarily "donating" these
+trajectories to a centralized dataset to improve the Swarm ecosystem globally.
+
 ## 3. Proposed Solution
 
 ### 3.1. Durable Storage Location
@@ -44,7 +47,22 @@ personal session history.
   config directory (`~/.config/swarm/eval_trajectories/`) to prevent local
   repository bloat, but allow an optional flag to dump them locally.**
 
-### 3.2. Architecture Changes
+### 3.2. The `--donate` Flag (Telemetry Opt-In)
+
+To support the vision of collective improvement, we will introduce a
+`--donate` flag (or similar industry-standard telemetry opt-in, e.g.,
+`swarm config set telemetry true`).
+
+- **Short-Term (This PR):** The flag will simply act as a semantic marker. If
+  `--donate` is passed to `swarm eval`, or if telemetry is globally enabled,
+  the CLI will explicitly log that the trajectory was saved and "marked for
+  donation".
+- **Long-Term:** A background worker or subsequent command (e.g.,
+  `swarm telemetry push`) will securely transmit these annotated trajectories
+  to a centralized Swarm dataset (e.g., a HuggingFace dataset or dedicated
+  API) after stripping personal secrets.
+
+### 3.3. Architecture Changes
 
 **A. `pkg/eval/eval.go` (The Evaluator Engine)**
 

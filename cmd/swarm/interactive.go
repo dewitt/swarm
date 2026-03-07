@@ -1910,7 +1910,7 @@ func buildBootMessage(cwd, branch string, modified bool, isDark bool, activeMode
 		headHash = msg
 	}
 
-	sessionState := "New session"
+	sessionState := "New session (/sessions to resume)"
 	if isResume {
 		shortID := sessionID
 		if strings.HasPrefix(shortID, "session_") && len(shortID) > 16 {

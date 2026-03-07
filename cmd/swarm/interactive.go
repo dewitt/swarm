@@ -583,7 +583,7 @@ func initialModel(planMode bool, resume bool) (model, error) {
 		viewport:       vp,
 		spinner:        s,
 		listModel:      l,
-		messages:       []string{buildBootMessage(cwd, branch, modified, isDark, activeModel, contextFiles, swarm.SessionID(), resume, len(loadedHist) == 0, getUserName())},
+		messages:       []string{buildBootMessage(cwd, branch, modified, isDark, activeModel, contextFiles, swarm.SessionID(), resume, len(loadedHist) == 0, getUserName(), len(swarm.Skills()))},
 		history:        loadedHist,
 		historyIdx:     len(loadedHist),
 		swarm:          swarm,
@@ -1919,7 +1919,7 @@ func (m *model) updateInputStyle() {
 	}
 }
 
-func buildBootMessage(cwd, branch string, modified bool, isDark bool, activeModel string, contextFiles []string, sessionID string, isResume bool, isFirstTime bool, userName string) string {
+func buildBootMessage(cwd, branch string, modified bool, isDark bool, activeModel string, contextFiles []string, sessionID string, isResume bool, isFirstTime bool, userName string, numSkills int) string {
 	version := "Unknown"
 	if info, ok := debug.ReadBuildInfo(); ok {
 		version = info.Main.Version
@@ -2021,6 +2021,7 @@ func buildBootMessage(cwd, branch string, modified bool, isDark bool, activeMode
 		headerStyle.Render("[ Session ]"),
 		lipgloss.JoinHorizontal(lipgloss.Top, keyStyle.Render("State:"), valStyle.Render(sessionState)),
 		lipgloss.JoinHorizontal(lipgloss.Top, keyStyle.Render("Model:"), valStyle.Render(activeModel)),
+		lipgloss.JoinHorizontal(lipgloss.Top, keyStyle.Render("Skills:"), valStyle.Render(fmt.Sprintf("%d enabled", numSkills))),
 		lipgloss.JoinHorizontal(lipgloss.Top, keyStyle.Render("Context:"), valStyle.Render(contextStr)),
 	)
 

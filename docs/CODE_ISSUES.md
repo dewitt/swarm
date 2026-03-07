@@ -6,7 +6,7 @@ debt discovered during automated and manual code reviews
 
 ## 🚨 Critical Bugs & Issues
 
-- **Top-level `golangci-lint run` hangs:** Running the linter on the root directory of the project hangs indefinitely and eventually times out. While we mitigated this in the eval sandbox (#35), the root project itself cannot currently be fully linted in a timely manner.
+- None currently identified.
 
 ## 🛠️ Refactoring & Idiomatic Improvements
 

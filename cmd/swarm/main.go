@@ -20,6 +20,7 @@ var (
 	resumeFlag     bool
 	trajectoryFlag bool
 	explainFlag    bool
+	verboseFlag    bool
 )
 
 var configCmd = &cobra.Command{
@@ -101,6 +102,10 @@ When run without arguments, it launches a persistent, interactive terminal sessi
 				}
 
 				if event.State == sdk.AgentStateComplete && event.FinalContent != "" && !trajectoryFlag {
+					// In non-verbose mode, skip the internal routing and sanity check confirmations
+					if !verboseFlag && (event.AgentName == "Input Agent" || event.AgentName == "Output Agent" || event.AgentName == "Routing Agent") {
+						continue
+					}
 					fmt.Printf("[%s] %s\n", event.AgentName, event.FinalContent)
 				} else if event.State == sdk.AgentStateError {
 					if event.Error != nil {
@@ -108,7 +113,7 @@ When run without arguments, it launches a persistent, interactive terminal sessi
 					} else if event.FinalContent != "" {
 						fmt.Fprintf(os.Stderr, "Error: %s\n", event.FinalContent)
 					}
-				} else if !trajectoryFlag {
+				} else if !trajectoryFlag && verboseFlag {
 					if event.State == sdk.AgentStateThinking && event.Thought != "" {
 						fmt.Fprintf(os.Stderr, "[%s] 🤔 %s\n", event.AgentName, event.Thought)
 					} else if event.State == sdk.AgentStateExecuting && event.ObserverSummary != "" {
@@ -152,6 +157,7 @@ func init() {
 	rootCmd.Flags().BoolVar(&resumeFlag, "resume", false, "Resume the last interactive session")
 	rootCmd.PersistentFlags().BoolVar(&trajectoryFlag, "trajectory", false, "Output the full swarm trajectory JSON to stdout instead of the response")
 	rootCmd.Flags().BoolVar(&explainFlag, "explain", false, "Provide a human-readable explanation of the swarm trajectory")
+	rootCmd.Flags().BoolVarP(&verboseFlag, "verbose", "v", false, "Print detailed internal routing and agent thoughts")
 	rootCmd.AddCommand(configCmd)
 }
 

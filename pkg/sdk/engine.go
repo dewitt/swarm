@@ -197,15 +197,20 @@ func (o *Engine) Prune() {
 
 	for id, t := range o.spans {
 		if t.Status == SpanStatusComplete && t.Attributes != nil {
+			// Prune Completion
 			if res, ok := t.Attributes["gen_ai.completion"].(string); ok {
 				if len(res) > 500 {
 					// Keep a snippet for continuity, but drop the vast majority of the payload.
-					// This relies on the fact that Reflect() has already extracted timeless facts to Semantic Memory.
-					t.Attributes["gen_ai.completion"] = res[:250] + "\n... [EPISODIC DATA TRUNCATED. FACTS EXTRACTED TO SEMANTIC MEMORY] ...\n" + res[len(res)-200:]
+					t.Attributes["gen_ai.completion"] = res[:250] + "\n... [DATA TRUNCATED] ...\n" + res[len(res)-200:]
 					o.spans[id] = t
-
-					// Also update o.result so GetContext() returns the compressed version
 					o.result[id] = t.Attributes["gen_ai.completion"].(string)
+				}
+			}
+			// Prune Prompt
+			if prompt, ok := t.Attributes["gen_ai.prompt"].(string); ok {
+				if len(prompt) > 500 {
+					t.Attributes["gen_ai.prompt"] = prompt[:250] + "\n... [PROMPT TRUNCATED] ...\n" + prompt[len(prompt)-200:]
+					o.spans[id] = t
 				}
 			}
 		}

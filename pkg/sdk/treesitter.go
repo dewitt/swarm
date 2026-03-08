@@ -53,8 +53,12 @@ func generateGoSkeleton(path string) (string, error) {
 		}
 		for _, c := range m.Captures {
 			node := c.Node
-			
+			startPos := node.StartPoint()
+			line := startPos.Row + 1
+			col := startPos.Column + 1
+
 			if node.Type() == "function_declaration" || node.Type() == "method_declaration" {
+				sb.WriteString(fmt.Sprintf("// L%d:C%d\n", line, col))
 				for i := 0; i < int(node.ChildCount()); i++ {
 					child := node.Child(i)
 					if child.Type() == "block" {
@@ -65,8 +69,7 @@ func generateGoSkeleton(path string) (string, error) {
 				}
 				sb.WriteString("{ /* ... */ }\n")
 			} else if node.Type() == "type_declaration" {
-				// We print the whole type declaration (structs, interfaces)
-				// We could theoretically strip inner methods of interfaces, but structs are fine.
+				sb.WriteString(fmt.Sprintf("// L%d:C%d\n", line, col))
 				sb.WriteString(node.Content(code) + "\n")
 			}
 			sb.WriteString("\n")

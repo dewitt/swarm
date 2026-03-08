@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/mark3labs/mcp-go/mcp"
 	"google.golang.org/adk/tool"
 	"google.golang.org/genai"
 )
@@ -506,8 +507,9 @@ func getCodeSkeletonTool(ctx tool.Context, args GetCodeSkeletonArgs) (GetCodeSke
 // === LSP Tools ===
 
 type LSPToolArgs struct {
-	Symbol string `json:"symbol,omitempty"`
-	Path   string `json:"path,omitempty"`
+	File    string `json:"file"`
+	Line    int    `json:"line"`
+	Column  int    `json:"column"`
 	NewName string `json:"new_name,omitempty"`
 }
 
@@ -516,59 +518,94 @@ type LSPToolResult struct {
 	Error   string `json:"error,omitempty"`
 }
 
+func resolveLSPPath(p string) string {
+	p = expandHomeDir(p)
+	if !filepath.IsAbs(p) {
+		abs, err := filepath.Abs(p)
+		if err == nil {
+			return abs
+		}
+	}
+	return p
+}
+
 func (s *defaultSwarm) analyzeImpact(ctx tool.Context, args LSPToolArgs) (LSPToolResult, error) {
 	if s.lsp == nil {
 		return LSPToolResult{Error: "LSP is not configured for this session"}, nil
 	}
-	// mcp-gopls uses "FindReferences"
 	res, err := s.lsp.CallTool(context.Background(), "FindReferences", map[string]interface{}{
-		"symbol": args.Symbol,
+		"file":   resolveLSPPath(args.File),
+		"line":   args.Line,
+		"column": args.Column,
 	})
 	if err != nil {
 		return LSPToolResult{Error: err.Error()}, nil
 	}
-	return LSPToolResult{Content: fmt.Sprintf("%v", res.Content)}, nil
+	if res.IsError {
+		return LSPToolResult{Error: fmt.Sprintf("LSP Error: %v", res.Content)}, nil
+	}
+	return LSPToolResult{Content: formatMCPContent(res.Content)}, nil
 }
 
 func (s *defaultSwarm) getAPISignature(ctx tool.Context, args LSPToolArgs) (LSPToolResult, error) {
 	if s.lsp == nil {
 		return LSPToolResult{Error: "LSP is not configured for this session"}, nil
 	}
-	// mcp-gopls uses "Hover"
 	res, err := s.lsp.CallTool(context.Background(), "Hover", map[string]interface{}{
-		"symbol": args.Symbol,
+		"file":   resolveLSPPath(args.File),
+		"line":   args.Line,
+		"column": args.Column,
 	})
 	if err != nil {
 		return LSPToolResult{Error: err.Error()}, nil
 	}
-	return LSPToolResult{Content: fmt.Sprintf("%v", res.Content)}, nil
+	if res.IsError {
+		return LSPToolResult{Error: fmt.Sprintf("LSP Error: %v", res.Content)}, nil
+	}
+	return LSPToolResult{Content: formatMCPContent(res.Content)}, nil
 }
 
-func (s *defaultSwarm) validateCode(ctx tool.Context, args LSPToolArgs) (LSPToolResult, error) {
+func (s *defaultSwarm) validateCode(ctx tool.Context, args struct {
+	File string `json:"file"`
+}) (LSPToolResult, error) {
 	if s.lsp == nil {
 		return LSPToolResult{Error: "LSP is not configured for this session"}, nil
 	}
-	// mcp-gopls uses "GetDiagnostics"
 	res, err := s.lsp.CallTool(context.Background(), "GetDiagnostics", map[string]interface{}{
-		"path": args.Path,
+		"file": resolveLSPPath(args.File),
 	})
 	if err != nil {
 		return LSPToolResult{Error: err.Error()}, nil
 	}
-	return LSPToolResult{Content: fmt.Sprintf("%v", res.Content)}, nil
+	if res.IsError {
+		return LSPToolResult{Error: fmt.Sprintf("LSP Error: %v", res.Content)}, nil
+	}
+	return LSPToolResult{Content: formatMCPContent(res.Content)}, nil
 }
 
 func (s *defaultSwarm) renameSymbol(ctx tool.Context, args LSPToolArgs) (LSPToolResult, error) {
 	if s.lsp == nil {
 		return LSPToolResult{Error: "LSP is not configured for this session"}, nil
 	}
-	// mcp-gopls uses "RenameSymbol"
 	res, err := s.lsp.CallTool(context.Background(), "RenameSymbol", map[string]interface{}{
-		"symbol":   args.Symbol,
-		"new_name": args.NewName,
+		"file":    resolveLSPPath(args.File),
+		"line":    args.Line,
+		"column":  args.Column,
+		"newName": args.NewName,
 	})
 	if err != nil {
 		return LSPToolResult{Error: err.Error()}, nil
 	}
-	return LSPToolResult{Content: fmt.Sprintf("%v", res.Content)}, nil
+	if res.IsError {
+		return LSPToolResult{Error: fmt.Sprintf("LSP Error: %v", res.Content)}, nil
+	}
+	return LSPToolResult{Content: formatMCPContent(res.Content)}, nil
+}
+
+func formatMCPContent(content []mcp.Content) string {
+	var sb strings.Builder
+	for _, c := range content {
+		sb.WriteString(mcp.GetTextFromContent(c))
+	}
+	return sb.String()
 }

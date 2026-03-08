@@ -190,6 +190,7 @@ func (e *Evaluator) Run(ctx context.Context, s Scenario, opts ...RunOption) (*Re
 		DatabaseURI:   "file::memory:?cache=shared",
 		TrajectoryDir: "eval_trajectories",
 		ForceDonate:   options.forceDonate,
+		LSPCommand:    "mcp-gopls",
 	}
 	instance, err := sdk.NewSwarm(cfg)
 	if err != nil {

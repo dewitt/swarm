@@ -1503,7 +1503,7 @@ func (m *defaultSwarm) runOutputAgent(ctx context.Context, out chan<- Observable
 		if err == nil && resp.Content != nil && len(resp.Content.Parts) > 0 {
 			res = resp.Content.Parts[0].Text
 			if strings.HasPrefix(res, "FIX:") {
-				out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Output Agent", State: AgentStateError, Thought: "Rejected: " + res}
+				out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Output Agent", State: AgentStateError, FinalContent: "Rejected: " + res}
 				approved = false
 			}
 		}

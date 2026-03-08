@@ -1159,10 +1159,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if event.Error != nil {
 				errMsg = event.Error.Error()
 			}
+			if errMsg == "" && event.Thought != "" {
+				errMsg = event.Thought
+			}
+			if errMsg == "" {
+				errMsg = "Unknown internal error"
+			}
 			m.appendMessage(errorMsgStyle.Width(m.viewport.Width()).Render(fmt.Sprintf("Error: %s", errMsg)))
-			m.loading = false
 			m.updateViewport()
-			return m, tea.Batch(m.dequeueAndRun(), agentCmd)
+			return m, tea.Batch(listenForStream(msg.ch), agentCmd)
 		}
 
 		return m, listenForStream(msg.ch)

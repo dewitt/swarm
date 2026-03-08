@@ -1889,8 +1889,6 @@ func (m *model) updateViewport() {
 		return
 	}
 
-	wasAtBottom := m.viewport.AtBottom() || m.viewport.YOffset() == 0
-
 	// Prepare the dynamic message list
 	var renderedMessages []string
 	vpWidth := m.viewport.Width()
@@ -1931,9 +1929,12 @@ func (m *model) updateViewport() {
 
 	m.viewport.SetContent(strings.Join(renderedMessages, "\n\n"))
 
-	if wasAtBottom {
-		m.viewport.GotoBottom()
-	}
+	// Give the viewport a moment to update its internal geometry before forcing the scroll.
+	// Since Update() isn't inherently asynchronous with respect to geometry here,
+	// we force the goto bottom if we were already there OR if we just added a command response.
+	// Actually, the most reliable way to prevent the "hidden text" bug when appending large blocks
+	// is to just unconditionally go to the bottom when new messages arrive.
+	m.viewport.GotoBottom()
 }
 
 func (m *model) updateInputStyle() {

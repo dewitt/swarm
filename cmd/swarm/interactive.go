@@ -511,8 +511,8 @@ func doLogoTick() tea.Cmd {
 	})
 }
 
-func initialModel(planMode bool, resume bool) (model, error) {
-	// We assume dark mode initially. We will rely on tea.RequestBackgroundColor 
+func initialModel(planMode bool, resume bool, s sdk.Swarm) (model, error) {
+	// We assume dark mode initially. We will rely on tea.RequestBackgroundColor
 	// later in the update loop to adjust it if needed.
 	isDark := true
 
@@ -534,9 +534,9 @@ func initialModel(planMode bool, resume bool) (model, error) {
 	vp := viewport.New(viewport.WithWidth(0), viewport.WithHeight(0))
 	vp.YPosition = 0
 
-	s := spinner.New()
-	s.Spinner = spinner.Dot
-	s.Style = lipgloss.NewStyle().Foreground(primaryColor)
+	spin := spinner.New()
+	spin.Spinner = spinner.Dot
+	spin.Style = lipgloss.NewStyle().Foreground(primaryColor)
 
 	l := list.New([]list.Item{}, list.NewDefaultDelegate(), 0, 0)
 	l.Title = "Select an LLM Provider"
@@ -577,7 +577,6 @@ func initialModel(planMode bool, resume bool) (model, error) {
 	}
 
 	var webServer *web.Server
-	var swarm sdk.Swarm
 	isTest := strings.HasSuffix(os.Args[0], ".test")
 
 	if !isTest {
@@ -590,17 +589,16 @@ func initialModel(planMode bool, resume bool) (model, error) {
 				_ = webServer.Start()
 			}
 		}()
-	} else {
-		// Initialize synchronously in tests to avoid race conditions with mocks
-		swarm, _ = sdk.NewSwarm(sdk.SwarmConfig{ResumeLastSession: resume, DatabaseURI: "file::memory:?cache=shared"})
 	}
+
+	contextFiles := s.ListContext()
 
 	return model{
 		textArea:       ta,
 		viewport:       vp,
-		spinner:        s,
+		spinner:        spin,
 		listModel:      l,
-		messages:       []string{buildBootMessage(cwd, branch, modified, isDark, activeModel, nil, "Loading...", resume, len(loadedHist) == 0, getUserName(), 0, false)},
+		messages:       []string{buildBootMessage(cwd, branch, modified, isDark, activeModel, contextFiles, s.SessionID(), resume, len(loadedHist) == 0, getUserName(), len(s.Skills()), s.Memory().Semantic().FTSEnabled())},
 		history:        loadedHist,
 		historyIdx:     len(loadedHist),
 		loading:        false,
@@ -618,33 +616,12 @@ func initialModel(planMode bool, resume bool) (model, error) {
 		showAgentPanel: true,
 		isDark:         isDark,
 		hasRunTasks:    resume,
-		swarm:          swarm,
-		// We pass the swarmConfig via the model to initialize it asynchronously in Init
-		pendingSwarmCfg: sdk.SwarmConfig{ResumeLastSession: resume},
+		swarm:          s,
 	}, nil
 }
-
-type swarmInitMsg struct {
-	swarm sdk.Swarm
-	err   error
-}
-
-func initSwarmCmd(cfg sdk.SwarmConfig) tea.Cmd {
-	return func() tea.Msg {
-		if strings.HasSuffix(os.Args[0], ".test") {
-			cfg.DatabaseURI = "file::memory:?cache=shared"
-		}
-		s, err := sdk.NewSwarm(cfg)
-		return swarmInitMsg{swarm: s, err: err}
-	}
-}
-
 func (m model) Init() tea.Cmd {
-	cmds := []tea.Cmd{textarea.Blink, m.spinner.Tick, doGitTick(), doLogoTick()}
+	cmds := []tea.Cmd{textarea.Blink, m.spinner.Tick, doGitTick(), doLogoTick(), tea.RequestBackgroundColor}
 
-	if !strings.HasSuffix(os.Args[0], ".test") {
-		cmds = append(cmds, initSwarmCmd(m.pendingSwarmCfg))
-	}
 	for _, a := range m.agents {
 		cmds = append(cmds, a.spin.Tick)
 	}
@@ -658,47 +635,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		spCmd tea.Cmd
 		cmds  []tea.Cmd
 	)
-
-	// Block input if we are still initializing
-	if m.swarm == nil && !m.quitting {
-		// Handle async initialization
-		if initMsg, ok := msg.(swarmInitMsg); ok {
-			if initMsg.err != nil {
-				m.quitting = true
-				m.fatalErr = initMsg.err
-				return m, tea.Quit
-			}
-			m.swarm = initMsg.swarm
-
-			// Get the actual bound port
-			if m.webServer != nil {
-				// Give the web server a tiny moment to bind if it was re-attempting on :0
-				time.Sleep(50 * time.Millisecond)
-			}
-
-			// Update the boot message now that we have the swarm instance
-			contextFiles := m.swarm.ListContext()
-			m.messages[0] = buildBootMessage(m.cwd, m.gitBranch, m.gitModified, m.isDark, m.activeModel, contextFiles, m.swarm.SessionID(), m.pendingSwarmCfg.ResumeLastSession, len(m.history) == 0, getUserName(), len(m.swarm.Skills()), m.swarm.Memory().Semantic().FTSEnabled())
-			m.updateViewport()
-			return m, nil
-		}
-		switch msg := msg.(type) {
-		case tea.KeyMsg:
-			if msg.String() == "ctrl+c" {
-				m.quitting = true
-				return m, tea.Quit
-			}
-		case tea.WindowSizeMsg:
-			m.width = msg.Width
-			m.height = msg.Height
-			m.updateViewport()
-			m.textArea.SetWidth(msg.Width - 4)
-			return m, nil
-		}
-
-		m.spinner, spCmd = m.spinner.Update(msg)
-		return m, spCmd
-	}
 
 	// Global intercept for double Ctrl+C to quit
 	if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
@@ -2811,10 +2747,21 @@ func (m *model) cleanup() {
 }
 
 func launchInteractiveShell(planMode bool, resume bool) error {
-	m, err := initialModel(planMode, resume)
+	// Initialize SDK first to avoid terminal artifacts on early exit (e.g., missing API key)
+	cfg := sdk.SwarmConfig{ResumeLastSession: resume}
+	if strings.HasSuffix(os.Args[0], ".test") {
+		cfg.DatabaseURI = "file::memory:?cache=shared"
+	}
+	s, err := sdk.NewSwarm(cfg)
 	if err != nil {
 		return err
 	}
+
+	m, err := initialModel(planMode, resume, s)
+	if err != nil {
+		return err
+	}
+
 	p := tea.NewProgram(m)
 	finalModel, err := p.Run()
 	if err != nil {
@@ -2823,7 +2770,7 @@ func launchInteractiveShell(planMode bool, resume bool) error {
 	}
 
 	m.cleanup()
-	
+
 	if fm, ok := finalModel.(model); ok {
 		if fm.fatalErr != nil {
 			return fm.fatalErr

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -76,13 +77,19 @@ func (sm *SemanticMemory) Retrieve(query string, limit int) ([]string, error) {
 	var err error
 
 	if sm.ftsEnabled {
+		// Basic sanitization for FTS5: remove characters that trigger FTS5 special syntax
+		safeQuery := query
+		for _, char := range []string{"\"", "'", "*", "^", "-", ".", "(", ")", "[", "]", "{", "}"} {
+			safeQuery = strings.ReplaceAll(safeQuery, char, " ")
+		}
+
 		err = sm.db.Raw(`
 			SELECT sf.* FROM semantic_facts sf
 			JOIN semantic_facts_fts fts ON sf.id = fts.rowid
 			WHERE semantic_facts_fts MATCH ?
 			ORDER BY rank
 			LIMIT ?
-		`, query, limit).Scan(&facts).Error
+		`, safeQuery, limit).Scan(&facts).Error
 	} else {
 		// Fallback to simple LIKE search if FTS5 is not available in the binary
 		err = sm.db.Where("fact LIKE ?", "%"+query+"%").Order("created_at desc").Limit(limit).Find(&facts).Error
@@ -101,7 +108,7 @@ func (sm *SemanticMemory) Retrieve(query string, limit int) ([]string, error) {
 
 func (sm *SemanticMemory) List(limit int) ([]string, error) {
 	var facts []SemanticFact
-	err := sm.db.Order("created_at desc").Limit(limit).Find(&facts).Error
+	err := sm.db.Order("id desc").Limit(limit).Find(&facts).Error
 	if err != nil {
 		return nil, err
 	}

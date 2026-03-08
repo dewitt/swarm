@@ -10,6 +10,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"runtime/debug"
 	"sort"
 	"strings"
@@ -2014,6 +2015,7 @@ func buildBootMessage(cwd, branch string, modified bool, isDark bool, activeMode
 		lipgloss.JoinHorizontal(lipgloss.Top, keyStyle.Render("Dir:"), valStyle.Render(displayDir)),
 		lipgloss.JoinHorizontal(lipgloss.Top, keyStyle.Render("Branch:"), envBranchVal),
 		lipgloss.JoinHorizontal(lipgloss.Top, keyStyle.Render("HEAD:"), valStyle.Render(headHash)),
+		lipgloss.JoinHorizontal(lipgloss.Top, keyStyle.Render("OS/Arch:"), valStyle.Render(fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH))),
 	)
 
 	// Session Column

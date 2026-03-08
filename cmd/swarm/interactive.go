@@ -2200,7 +2200,7 @@ func buildBootMessage(cwd, branch string, modified bool, isDark bool, activeMode
 	// Tips footer
 	tipsLabel := lipgloss.NewStyle().Foreground(googleYellow).Bold(true).Render("💡 Tips: ")
 	tipsContent := lipgloss.NewStyle().Foreground(t.labelFg).Render(
-		"[/help] commands   [/memory] view facts   [/skills] view skills   [!] shell mode",
+		"[/help] commands   [/memory] view facts   [/skills] view skills   [/model] change model   [!] shell mode",
 	)
 	footer := lipgloss.JoinHorizontal(lipgloss.Top, tipsLabel, tipsContent)
 

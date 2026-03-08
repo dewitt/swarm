@@ -395,12 +395,19 @@
                 }
             };
 
-            evtSource.onerror = function (err) {
-                statusIndicator.textContent = "Disconnected - Retrying...";
-                statusIndicator.className = "connection-status disconnected";
+            evtSource.onerror = async function (err) {
                 evtSource.close();
-                // Reconnect after 3 seconds
-                setTimeout(connectSSE, 3000);
+                try {
+                    // Ping the server to see if it's completely gone
+                    await fetch("/");
+                    statusIndicator.textContent = "Disconnected - Retrying...";
+                    statusIndicator.className = "connection-status disconnected";
+                    setTimeout(connectSSE, 3000);
+                } catch (e) {
+                    // Server is unreachable, assume graceful shutdown
+                    statusIndicator.textContent = "Session Ended";
+                    statusIndicator.className = "connection-status disconnected";
+                }
             };
         }
 

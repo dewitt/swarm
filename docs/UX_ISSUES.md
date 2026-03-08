@@ -34,9 +34,11 @@ collect these over time to inform future sprint priorities.
   mention how to change the active LLM. We should add `/model` to the tips so
   it's discoverable without reading `/help`. Fix: Added to boot message
   footer.
-- [ ] **Web Panel Infinite Reconnect Loop:** When the CLI exits, the browser
+- [x] **Web Panel Infinite Reconnect Loop:** When the CLI exits, the browser
   panel flashes a red "Disconnected - Retrying..." badge indefinitely. It
   should detect a graceful shutdown and display a clean "Session Ended" state.
+  Fix: Added a fetch ping on SSE error to gracefully halt reconnects if the
+  server is unreachable.
 
 ## 💡 Feature Proposals
 

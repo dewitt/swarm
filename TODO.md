@@ -14,7 +14,7 @@ debt that should be addressed as the project evolves.
 
 ## Feature Backlog
 
-- [ ] **Semantic Codebase Awareness**: Implement specialized `SKILL.md`
+- [x] **Semantic Codebase Awareness**: Implement specialized `SKILL.md`
   wrappers for Language Server Protocol (LSP) and `tree-sitter`. This will
   provide the Swarm with deterministic, topological codebase mapping (e.g.,
   finding all references to a symbol, extracting AST components) rather than

@@ -642,21 +642,21 @@ func (m *defaultSwarm) Save(fact string) error {
 
 func (m *defaultSwarm) GlobalStats() MemoryStats {
 	content, _ := LoadMemory()
-	
+
 	tokens := len(content) / 4
 	count := 1
-	
+
 	// Add pinned context files to global memory tokens
 	for p, c := range m.pinnedContext {
 		count++
 		if c == "" {
-		    b, _ := os.ReadFile(p)
-		    tokens += len(b) / 4
+			b, _ := os.ReadFile(p)
+			tokens += len(b) / 4
 		} else {
-		    tokens += len(c) / 4
+			tokens += len(c) / 4
 		}
 	}
-	
+
 	// Add skills and instructions size
 	for _, sk := range m.skills {
 		count++

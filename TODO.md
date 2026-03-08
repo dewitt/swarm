@@ -14,7 +14,11 @@ debt that should be addressed as the project evolves.
 
 ## Feature Backlog
 
-- [ ] **Semantic Codebase Awareness**: Implement specialized `SKILL.md` wrappers for Language Server Protocol (LSP) and `tree-sitter`. This will provide the Swarm with deterministic, topological codebase mapping (e.g., finding all references to a symbol, extracting AST components) rather than relying on noisy and inaccurate `grep` searches.
+- [ ] **Semantic Codebase Awareness**: Implement specialized `SKILL.md`
+  wrappers for Language Server Protocol (LSP) and `tree-sitter`. This will
+  provide the Swarm with deterministic, topological codebase mapping (e.g.,
+  finding all references to a symbol, extracting AST components) rather than
+  relying on noisy and inaccurate `grep` searches.
 
 - [ ] **Agent Panel Interactivity**: Implement mouse support for Agent Cards,
   allowing users to click cards to "drill down" into logs or micro-steer

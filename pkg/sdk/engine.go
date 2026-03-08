@@ -203,7 +203,7 @@ func (o *Engine) Prune() {
 					// This relies on the fact that Reflect() has already extracted timeless facts to Semantic Memory.
 					t.Attributes["gen_ai.completion"] = res[:250] + "\n... [EPISODIC DATA TRUNCATED. FACTS EXTRACTED TO SEMANTIC MEMORY] ...\n" + res[len(res)-200:]
 					o.spans[id] = t
-					
+
 					// Also update o.result so GetContext() returns the compressed version
 					o.result[id] = t.Attributes["gen_ai.completion"].(string)
 				}

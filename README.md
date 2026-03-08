@@ -1,6 +1,7 @@
 # Swarm CLI
 
-A clean CLI and embeddable SDK for massively multi-agent orchestration and observability into native ecosystems.
+A clean CLI and embeddable SDK for massively multi-agent orchestration and
+observability into native ecosystems.
 
 ![Swarm CLI Demo](docs/assets/demo.gif)
 
@@ -48,11 +49,18 @@ A clean CLI and embeddable SDK for massively multi-agent orchestration and obser
   brainstorm architecture with the agent explicitly sandboxed from modifying
   your filesystem.
 
-- **4-Tier Hierarchical Memory**: Swarm implements a robust, OS-inspired memory architecture to prevent context rot during long-horizon tasks.
-  - *Working Memory*: The immediate token window, automatically pruned of massive tool outputs to preserve inference speed.
+- **4-Tier Hierarchical Memory**: Swarm implements a robust, OS-inspired
+  memory architecture to prevent context rot during long-horizon tasks.
+
+  - *Working Memory*: The immediate token window, automatically pruned of
+    massive tool outputs to preserve inference speed.
   - *Episodic Memory*: The chronological audit log of the active session.
-  - *Semantic Memory*: An embedded SQLite/FTS5 database that passively extracts "timeless facts" (e.g., project build commands, API keys) during execution and automatically injects them into future agent prompts.
-  - *Global Memory*: Cross-project preferences set via `/remember` or `.gemini/GEMINI.md` files. View real-time token stats for all tiers using the `/memory` command.
+  - *Semantic Memory*: An embedded SQLite/FTS5 database that passively
+    extracts "timeless facts" (e.g., project build commands, API keys) during
+    execution and automatically injects them into future agent prompts.
+  - *Global Memory*: Cross-project preferences set via `/remember` or
+    `.gemini/GEMINI.md` files. View real-time token stats for all tiers using
+    the `/memory` command.
 
 - **Web Fetch & Search**: Native capabilities to search the web and fetch
   up-to-date documentation during task execution using the `web_researcher`

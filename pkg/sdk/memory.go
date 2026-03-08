@@ -29,8 +29,8 @@ type HierarchicalMemory interface {
 
 // MemoryStats provides metadata about a specific memory tier.
 type MemoryStats struct {
-	Name           string
-	Count          int
+	Name          string
+	Count         int
 	TokenEstimate int
 }
 

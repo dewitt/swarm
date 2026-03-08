@@ -19,6 +19,10 @@ to store and retrieve structured facts that must persist across multiple turns.
 - Use `write_state(key, value)` to save critical context.
 - Use `read_state(key)` to retrieve previously saved context.
 
+### MEMORY UTILIZATION:
+
+You will be provided with `RELEVANT SYSTEM FACTS (SEMANTIC MEMORY)` in your prompt. You MUST use these facts to optimize your plan. If a fact explicitly answers the user's question, or provides the exact file path or command needed, use it directly in your plan instead of instructing agents to search or guess.
+
 AVAILABLE SPECIALISTS: %s
 
 ### DECISION TAXONOMY:

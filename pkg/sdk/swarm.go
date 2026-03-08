@@ -775,9 +775,10 @@ func (m *defaultSwarm) ListSessions(ctx context.Context) ([]SessionInfo, error) 
 }
 
 func (m *defaultSwarm) Plan(ctx context.Context, prompt string, traj Trajectory) (*ExecutionGraph, error) {
+	promptForLLM := prompt
 	if len(traj.Spans) > 0 {
 		b, _ := json.MarshalIndent(traj.Spans, "", "  ")
-		prompt = prompt + "\n\n### PREVIOUS EXECUTION TRAJECTORY:\n" + string(b)
+		promptForLLM = promptForLLM + "\n\n### PREVIOUS EXECUTION TRAJECTORY:\n" + string(b)
 	}
 
 	// Recompile the descriptions since they aren't stored on the struct
@@ -800,7 +801,7 @@ func (m *defaultSwarm) Plan(ctx context.Context, prompt string, traj Trajectory)
 			injectedFacts = append(injectedFacts, sysFacts...)
 		}
 
-		// 2. Look for semantic memories related to the user's actual prompt
+		// 2. Look for semantic memories related to the user's actual prompt (not the trajectory json)
 		if userFacts, err := m.memory.Semantic().Retrieve(prompt, 3); err == nil && len(userFacts) > 0 {
 			injectedFacts = append(injectedFacts, userFacts...)
 		}
@@ -810,7 +811,7 @@ func (m *defaultSwarm) Plan(ctx context.Context, prompt string, traj Trajectory)
 		}
 	}
 	respIter := m.fastModel.GenerateContent(ctx, &model.LLMRequest{
-		Contents: []*genai.Content{genai.NewContentFromText(prompt, genai.Role("user"))},
+		Contents: []*genai.Content{genai.NewContentFromText(promptForLLM, genai.Role("user"))},
 		Config:   &genai.GenerateContentConfig{SystemInstruction: genai.NewContentFromText(routingPrompt, genai.Role("system"))},
 	}, false)
 	var jsonStr string
@@ -827,13 +828,20 @@ func (m *defaultSwarm) Plan(ctx context.Context, prompt string, traj Trajectory)
 		planningPrompt := fmt.Sprintf(m.planningInstruction, specialistsList)
 
 		if m.memory != nil && m.memory.Semantic() != nil {
+			var injectedFacts []string
 			if facts, err := m.memory.Semantic().Retrieve("TOOL FAILURE OFFLINE", 5); err == nil && len(facts) > 0 {
-				planningPrompt += "\n\n### CRITICAL SYSTEM FACTS (SEMANTIC MEMORY):\n" + strings.Join(facts, "\n")
+				injectedFacts = append(injectedFacts, facts...)
+			}
+			if userFacts, err := m.memory.Semantic().Retrieve(prompt, 5); err == nil && len(userFacts) > 0 {
+				injectedFacts = append(injectedFacts, userFacts...)
+			}
+			if len(injectedFacts) > 0 {
+				planningPrompt += "\n\n### RELEVANT SYSTEM FACTS (SEMANTIC MEMORY):\n" + strings.Join(injectedFacts, "\n")
 			}
 		}
 
 		respIter = m.proModel.GenerateContent(ctx, &model.LLMRequest{
-			Contents: []*genai.Content{genai.NewContentFromText(prompt, genai.Role("user"))},
+			Contents: []*genai.Content{genai.NewContentFromText(promptForLLM, genai.Role("user"))},
 			Config: &genai.GenerateContentConfig{
 				SystemInstruction: genai.NewContentFromText(planningPrompt, genai.Role("system")),
 				ResponseMIMEType:  "application/json",

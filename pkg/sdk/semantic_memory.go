@@ -69,6 +69,10 @@ func NewSemanticMemory(workspaceDir string) (SemanticMemory, error) {
 				INSERT INTO semantic_facts_fts(rowid, fact) VALUES (new.id, new.fact);
 			END;
 		`)
+
+		// Rebuild the FTS index to ensure it is fully synchronized with the underlying semantic_facts table.
+		// This guarantees that if FTS was previously disabled and is now enabled, existing facts are indexed.
+		db.Exec(`INSERT INTO semantic_facts_fts(semantic_facts_fts) VALUES('rebuild');`)
 	}
 
 	return &sqliteSemanticMemory{db: db, ftsEnabled: ftsEnabled}, nil
@@ -84,11 +88,16 @@ func (sm *sqliteSemanticMemory) Retrieve(query string, limit int) ([]string, err
 
 	if sm.ftsEnabled {
 		// Aggressive sanitization for FTS5 natural language:
-		// 1. Remove all common punctuation that triggers FTS5 special syntax or causes mismatch
-		safeQuery := query
-		for _, char := range []string{"\"", "'", "*", "^", "-", ".", "(", ")", "[", "]", "{", "}", "?", "!", ":", ";", ",", "/"} {
-			safeQuery = strings.ReplaceAll(safeQuery, char, " ")
+		// Remove all characters except letters, numbers, and spaces
+		var sb strings.Builder
+		for _, r := range query {
+			if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == ' ' {
+				sb.WriteRune(r)
+			} else {
+				sb.WriteRune(' ') // Replace special chars with space
+			}
 		}
+		safeQuery := sb.String()
 
 		// 2. Convert spaces to OR operators so that if ANY keyword matches, the fact is retrieved.
 		// This makes retrieval much more robust for natural language prompts.
@@ -105,10 +114,16 @@ func (sm *sqliteSemanticMemory) Retrieve(query string, limit int) ([]string, err
 		`, safeQuery, limit).Scan(&facts).Error
 	} else {
 		// Fallback to simple LIKE search if FTS5 is not available in the binary
-		safeQuery := query
-		for _, char := range []string{"\"", "'", "*", "^", "-", ".", "(", ")", "[", "]", "{", "}", "?", "!", ":", ";", ",", "/"} {
-			safeQuery = strings.ReplaceAll(safeQuery, char, " ")
+		var sb strings.Builder
+		for _, r := range query {
+			if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == ' ' {
+				sb.WriteRune(r)
+			} else {
+				sb.WriteRune(' ') // Replace special chars with space
+			}
 		}
+		safeQuery := sb.String()
+
 		var orQueries []string
 		var orArgs []interface{}
 		for _, word := range strings.Fields(safeQuery) {

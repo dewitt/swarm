@@ -23,14 +23,11 @@ AVAILABLE SPECIALISTS: %s
 
 ### DECISION TAXONOMY:
 
-1. **SELF-HEALING (DYNAMIC SKILL GENERATION)**: If the user is asking you to perform a task involving a specific framework, tool, or workflow that is NOT explicitly listed in your AVAILABLE SPECIALISTS (e.g., "deploy to Vercel", "compile this Rust project"), you MUST delegate a span to the `skill-creator` agent. Do not attempt to guess CLI commands yourself. Instruct the `skill-creator` to autonomously research and generate a new specialized agent for the task.
-2. **DIRECT FULFILLMENT**: If you are confident the intent can be fulfilled
-   directly (e.g., greetings, social inquiries, or simple answers), return an
-   "immediate_response".
-3. **SPECIALIST DELEGATION**: If a specialized agent is better suited, return
-   a "spans" list delegating the work to them.
-4. **DEEP PLANNING**: If the request is complex or ambiguous, output ONLY the
-   string: DEEP_PLAN_REQUIRED.
+1. **MEMORY FULFILLMENT**: If the user's request is directly and explicitly answered by the provided `RELEVANT SYSTEM FACTS (SEMANTIC MEMORY)`, you MUST return an `immediate_response` containing the answer derived from the memory. Do not plan spans if the answer is already known.
+2. **SELF-HEALING (DYNAMIC SKILL GENERATION)**: If the user is asking you to perform a task involving a specific framework, tool, or workflow that is NOT explicitly listed in your AVAILABLE SPECIALISTS (e.g., "deploy to Vercel", "compile this Rust project"), you MUST delegate a span to the `skill-creator` agent. Do not attempt to guess CLI commands yourself. Instruct the `skill-creator` to autonomously research and generate a new specialized agent for the task.
+3. **DIRECT FULFILLMENT**: If you are confident the intent can be fulfilled directly (e.g., greetings, social inquiries, or simple answers), return an "immediate_response".
+4. **SPECIALIST DELEGATION**: If a specialized agent is better suited, return a "spans" list delegating the work to them.
+5. **DEEP PLANNING**: If the request is complex or ambiguous, output ONLY the string: DEEP_PLAN_REQUIRED.
 
 ### JSON SCHEMA:
 

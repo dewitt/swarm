@@ -92,7 +92,7 @@ When run without arguments, it launches a persistent, interactive terminal sessi
 
 			var lastTrajectory string
 			for event := range ch {
-				if event.State == sdk.AgentStateComplete && event.AgentName == "Swarm" {
+				if event.State == sdk.AgentStateComplete && event.AgentName == "Swarm" && event.SpanID == "" {
 					lastTrajectory = event.FinalContent
 					if trajectoryFlag {
 						fmt.Println(event.FinalContent)

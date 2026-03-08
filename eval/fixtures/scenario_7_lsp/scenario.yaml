@@ -3,4 +3,4 @@ name: The Semantic Refactor
 prompt: >
   We need to refactor the codebase. Rename the `Calculate` method of the `SpecialEngine` struct to `Compute` across the entire project. You MUST use the `codebase_investigator` agent to perform semantic analysis before making the change. Do NOT rename `NormalEngine.Calculate`. Ensure all tests pass.
 rubric: >
-  Did the agent successfully rename `SpecialEngine.Calculate` to `Compute` in both main.go and main_test.go? Did the agent leave `NormalEngine.Calculate` untouched? Did the agent's trajectory demonstrate the use of the `codebase_investigator` agent to semantically analyze the code?
+  Did the agent successfully rename `SpecialEngine.Calculate` to `Compute` in both main.go and main_test.go? Did the agent leave `NormalEngine.Calculate` untouched? Did the agent's trajectory explicitly demonstrate the invocation of the `lsp` or `tree_sitter` skills/tools to perform semantic analysis (rather than relying solely on `grep` or `read_file`)? If the agent successfully completed the refactor but failed to use a semantic tool to discover the references, you MUST fail the evaluation.

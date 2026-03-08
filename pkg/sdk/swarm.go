@@ -81,10 +81,11 @@ type ObservableEvent struct {
 }
 
 type Reflection struct {
-	IsResolved bool     `json:"is_resolved"`
-	Reasoning  string   `json:"reasoning"`
-	NextSteps  string   `json:"next_steps"`
-	NewFacts   []string `json:"new_facts,omitempty"`
+	IsResolved     bool     `json:"is_resolved"`
+	NeedsUserInput bool     `json:"needs_user_input"`
+	Reasoning      string   `json:"reasoning"`
+	NextSteps      string   `json:"next_steps"`
+	NewFacts       []string `json:"new_facts,omitempty"`
 }
 
 type Swarm interface {
@@ -967,6 +968,7 @@ func (m *defaultSwarm) Reflect(ctx context.Context, prompt string, traj Trajecto
 	systemPrompt := `You are Swarm. Your job is to evaluate whether the user's original goal has been FULLY completed based on the execution trajectory.
 If it is completed, set is_resolved to true.
 If the agent only diagnosed a problem but did not physically apply the fix (e.g., using write_local_file), then the task is NOT resolved. You must set is_resolved to false and provide explicit next_steps to implement the fix.
+If a sub-agent explicitly asked the user a question (e.g., "Do you approve this action?", "Which option do you prefer?"), or if the swarm is completely stuck and requires human intervention to proceed, you MUST set needs_user_input to true and return the question in the reasoning.
 
 Additionally, you MUST identify any "timeless facts" discovered during this execution. A timeless fact is a piece of information that is true across sessions and projects (e.g., "The build command for this repo is X", "The secret ingredient is Y", "Tool Z is currently down").
 If you find such facts, include them in the "new_facts" array. Be exhaustive but precise. Avoid ephemeral conversational state.
@@ -974,6 +976,7 @@ If you find such facts, include them in the "new_facts" array. Be exhaustive but
 Output your response as strictly valid JSON matching this schema:
 {
   "is_resolved": boolean,
+  "needs_user_input": boolean,
   "reasoning": "string",
   "next_steps": "string",
   "new_facts": ["string"]
@@ -989,16 +992,17 @@ Output your response as strictly valid JSON matching this schema:
 			ResponseSchema: &genai.Schema{
 				Type: genai.TypeObject,
 				Properties: map[string]*genai.Schema{
-					"is_resolved": {Type: genai.TypeBoolean, Description: "True if the original goal has been fully completed and verified."},
-					"reasoning":   {Type: genai.TypeString, Description: "Explanation for why the task is or isn't resolved."},
-					"next_steps":  {Type: genai.TypeString, Description: "Explicit instructions for what to do next if not resolved."},
+					"is_resolved":      {Type: genai.TypeBoolean, Description: "True if the original goal has been fully completed and verified."},
+					"needs_user_input": {Type: genai.TypeBoolean, Description: "True if an agent explicitly asked the user a question or needs human intervention."},
+					"reasoning":        {Type: genai.TypeString, Description: "Explanation for why the task is or isn't resolved. If needs_user_input is true, state the question here."},
+					"next_steps":       {Type: genai.TypeString, Description: "Explicit instructions for what to do next if not resolved."},
 					"new_facts": {
 						Type:        genai.TypeArray,
 						Items:       &genai.Schema{Type: genai.TypeString},
 						Description: "Timeless facts discovered during this execution to be saved to semantic memory.",
 					},
 				},
-				Required: []string{"is_resolved", "reasoning"},
+				Required: []string{"is_resolved", "needs_user_input", "reasoning"},
 			},
 		},
 	}, false)
@@ -1239,7 +1243,10 @@ func (m *defaultSwarm) Chat(ctx context.Context, prompt string) (<-chan Observab
 					// Passively compress the episodic working memory now that facts are extracted
 					o.Prune()
 
-					if reflection.IsResolved {
+					if reflection.NeedsUserInput {
+						out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm", SpanID: "reflection", TaskName: "Reflection", State: AgentStateComplete, Thought: "Waiting for user input.", FinalContent: reflection.Reasoning}
+						break
+					} else if reflection.IsResolved {
 						out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm", SpanID: "reflection", TaskName: "Reflection", State: AgentStateComplete, Thought: "Goal satisfied."}
 						break
 					} else {

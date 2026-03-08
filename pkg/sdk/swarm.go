@@ -102,6 +102,7 @@ type Swarm interface {
 	Reload() error
 	Rewind(n int) error
 	Skills() []*Skill
+	Memory() HierarchicalMemory
 	ListModels(ctx context.Context) ([]ModelInfo, error)
 	ListSessions(ctx context.Context) ([]SessionInfo, error)
 	SessionID() string
@@ -638,7 +639,29 @@ func (m *defaultSwarm) GetContext() map[string]string {
 	return make(map[string]string)
 }
 
+func (m *defaultSwarm) Stats() MemoryStats {
+	if m.activeEngine == nil {
+		return MemoryStats{Name: "Working Memory (Tier 1)"}
+	}
+	traj := m.activeEngine.GetTrajectory()
+	tokens := 0
+	for _, s := range traj.Spans {
+		tokens += len(s.Prompt) / 4
+		if res, ok := s.Attributes["gen_ai.completion"].(string); ok {
+			tokens += len(res) / 4
+		}
+	}
+	return MemoryStats{
+		Name:          "Working Memory (Tier 1)",
+		Count:         len(traj.Spans),
+		TokenEstimate: tokens,
+	}
+}
+
 func (m *defaultSwarm) Skills() []*Skill { return m.skills }
+
+func (m *defaultSwarm) Memory() HierarchicalMemory { return m.memory }
+
 func (m *defaultSwarm) AddContext(path string) error {
 	b, err := os.ReadFile(path)
 	if err != nil {
@@ -1055,6 +1078,9 @@ func (m *defaultSwarm) Chat(ctx context.Context, prompt string) (<-chan Observab
 							_ = m.memory.Semantic().Commit(fact)
 						}
 					}
+
+					// Passively compress the episodic working memory now that facts are extracted
+					o.Prune()
 
 					if reflection.IsResolved {
 						out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm", SpanID: "reflection", TaskName: "Reflection", State: AgentStateComplete, Thought: "Goal satisfied."}

@@ -27,6 +27,13 @@ type HierarchicalMemory interface {
 	Global() GlobalMemory
 }
 
+// MemoryStats provides metadata about a specific memory tier.
+type MemoryStats struct {
+	Name           string
+	Count          int
+	TokenEstimate int
+}
+
 // WorkingMemory provides access to the current active execution context (Tier 1).
 type WorkingMemory interface {
 	// AddSpans records new execution spans.
@@ -37,6 +44,9 @@ type WorkingMemory interface {
 
 	// GetContext returns a synthesis of completed span results.
 	GetContext() map[string]string
+
+	// Stats returns metadata about working memory.
+	Stats() MemoryStats
 }
 
 // EpisodicMemory provides access to session-scoped state and chronological logs (Tier 2).
@@ -52,6 +62,9 @@ type EpisodicMemory interface {
 
 	// GetRecentHistory retrieves the most recent conversation history for a session.
 	GetRecentHistory(ctx context.Context, sessionID string, limit int) ([]string, error)
+
+	// Stats returns metadata about episodic memory for a specific session.
+	Stats(ctx context.Context, sessionID string) MemoryStats
 }
 
 // SemanticMemory represents persistent, workspace-local facts (Tier 3).
@@ -64,6 +77,9 @@ type SemanticMemory interface {
 
 	// List returns the most recently committed facts.
 	List(limit int) ([]string, error)
+
+	// Stats returns metadata about semantic memory.
+	Stats() MemoryStats
 }
 
 // GlobalMemory provides access to system-wide parameters and preferences (Tier 4).
@@ -73,6 +89,9 @@ type GlobalMemory interface {
 
 	// Save appends a new fact or preference globally.
 	Save(fact string) error
+
+	// Stats returns metadata about global memory.
+	Stats() MemoryStats
 }
 
 // globalMemoryImpl implements GlobalMemory
@@ -88,6 +107,15 @@ func (g *globalMemoryImpl) Load() (string, error) {
 
 func (g *globalMemoryImpl) Save(fact string) error {
 	return SaveMemory(fact)
+}
+
+func (g *globalMemoryImpl) Stats() MemoryStats {
+	content, _ := LoadMemory()
+	return MemoryStats{
+		Name:          "Global Memory (Tier 4)",
+		Count:         1,
+		TokenEstimate: len(content) / 4,
+	}
 }
 
 // episodicMemoryImpl implements EpisodicMemory backed by an ADK session.Service
@@ -175,6 +203,30 @@ func (e *episodicMemoryImpl) GetRecentHistory(ctx context.Context, sessionID str
 	}
 
 	return history, nil
+}
+
+func (e *episodicMemoryImpl) Stats(ctx context.Context, sessionID string) MemoryStats {
+	resp, err := e.svc.Get(ctx, &session.GetRequest{AppName: "swarm-cli", UserID: e.userID, SessionID: sessionID})
+	if err != nil {
+		return MemoryStats{Name: "Episodic Memory (Tier 2)"}
+	}
+
+	count := 0
+	tokens := 0
+	for ev := range resp.Session.Events().All() {
+		count++
+		if ev.Content != nil {
+			for _, part := range ev.Content.Parts {
+				tokens += len(part.Text) / 4
+			}
+		}
+	}
+
+	return MemoryStats{
+		Name:          "Episodic Memory (Tier 2)",
+		Count:         count,
+		TokenEstimate: tokens,
+	}
 }
 
 // defaultHierarchicalMemory implements the HierarchicalMemory interface.

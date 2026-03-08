@@ -1909,16 +1909,36 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 		var sb strings.Builder
 		sb.WriteString("### Hierarchical Memory State\n\n")
 
-		// 1. Global Memory
-		globalMem, _ := sdk.LoadMemory()
+		mem := m.swarm.Memory()
+
+		// 1. Stats Table
+		sb.WriteString("| Tier | Count | Token Estimate |\n")
+		sb.WriteString("| :--- | :---: | :------------: |\n")
+
+		wStats := mem.Working().Stats()
+		sb.WriteString(fmt.Sprintf("| %s | %d | %d |\n", wStats.Name, wStats.Count, wStats.TokenEstimate))
+
+		eStats := mem.Episodic().Stats(context.Background(), m.swarm.SessionID())
+		sb.WriteString(fmt.Sprintf("| %s | %d | %d |\n", eStats.Name, eStats.Count, eStats.TokenEstimate))
+
+		sStats := mem.Semantic().Stats()
+		sb.WriteString(fmt.Sprintf("| %s | %d | %d |\n", sStats.Name, sStats.Count, sStats.TokenEstimate))
+
+		gStats := mem.Global().Stats()
+		sb.WriteString(fmt.Sprintf("| %s | %d | %d |\n", gStats.Name, gStats.Count, gStats.TokenEstimate))
+
+		sb.WriteString("\n---\n\n")
+
+		// 2. Global Memory
+		globalMem, _ := mem.Global().Load()
 		if globalMem != "" {
 			sb.WriteString("#### [ Global Preferences ]\n")
 			sb.WriteString(strings.TrimSpace(globalMem))
 			sb.WriteString("\n\n")
 		}
 
-		// 2. Semantic Memory
-		facts, err := m.swarm.ListFacts(10)
+		// 3. Semantic Memory
+		facts, err := mem.Semantic().List(10)
 		if err != nil {
 			sb.WriteString("#### [ Semantic Project Facts ]\n")
 			sb.WriteString(fmt.Sprintf("> Error reading semantic memory: %s\n", err.Error()))

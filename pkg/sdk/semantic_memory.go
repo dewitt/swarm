@@ -146,3 +146,17 @@ func (sm *sqliteSemanticMemory) List(limit int) ([]string, error) {
 	}
 	return results, nil
 }
+
+func (sm *sqliteSemanticMemory) Stats() MemoryStats {
+	var count int64
+	sm.db.Model(&SemanticFact{}).Count(&count)
+
+	var totalChars int64
+	sm.db.Model(&SemanticFact{}).Select("sum(length(fact))").Scan(&totalChars)
+
+	return MemoryStats{
+		Name:          "Semantic Memory (Tier 3)",
+		Count:         int(count),
+		TokenEstimate: int(totalChars) / 4,
+	}
+}

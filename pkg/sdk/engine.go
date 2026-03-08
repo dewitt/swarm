@@ -187,7 +187,32 @@ func (o *Engine) MarkComplete(spanID string, result string) {
 
 	o.trajectory = append(o.trajectory, t)
 	o.detectDeadlock(t)
-} // MarkFailed marks a span as failed and invalidates its dependents.
+}
+
+// Prune passively compresses the working memory by truncating large tool outputs
+// from older, completed spans. This prevents context rot and token exhaustion.
+func (o *Engine) Prune() {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+
+	for id, t := range o.spans {
+		if t.Status == SpanStatusComplete && t.Attributes != nil {
+			if res, ok := t.Attributes["gen_ai.completion"].(string); ok {
+				if len(res) > 500 {
+					// Keep a snippet for continuity, but drop the vast majority of the payload.
+					// This relies on the fact that Reflect() has already extracted timeless facts to Semantic Memory.
+					t.Attributes["gen_ai.completion"] = res[:250] + "\n... [EPISODIC DATA TRUNCATED. FACTS EXTRACTED TO SEMANTIC MEMORY] ...\n" + res[len(res)-200:]
+					o.spans[id] = t
+					
+					// Also update o.result so GetContext() returns the compressed version
+					o.result[id] = t.Attributes["gen_ai.completion"].(string)
+				}
+			}
+		}
+	}
+}
+
+// MarkFailed marks a span as failed and invalidates its dependents.
 func (o *Engine) MarkFailed(spanID string) {
 	o.mu.Lock()
 	defer o.mu.Unlock()

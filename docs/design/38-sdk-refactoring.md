@@ -1,7 +1,7 @@
 # Design Doc: SDK Refactoring & Modularization
 
-**Status:** Proposed **Author:** Code Quality Advocate
-(@code_review) **Date:** March 2026
+**Status:** Proposed **Author:** Code Reviewer (@code_review) **Date:** March
+2026
 
 ## 1. Problem Statement
 

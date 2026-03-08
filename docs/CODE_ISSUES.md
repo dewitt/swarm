@@ -1,8 +1,8 @@
 # Code Quality & Technical Debt Backlog
 
 This document is a running log of architectural flaws, bugs, and technical
-debt discovered during automated and manual code reviews
-by the Code Quality Advocate (`skills/code_review/SKILL.md`).
+debt discovered during automated and manual code reviews by the Code Reviewer
+(`skills/code_review/SKILL.md`).
 
 ## 🚨 Critical Bugs & Issues
 

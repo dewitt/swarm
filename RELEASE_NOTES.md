@@ -127,7 +127,7 @@ frameworks.
   - `CODE_REVIEW_GUIDE.md`: The Architect's lens for rooting out synchronous
     UI-blocking I/O, dead code, and unhandled errors. (This directly led to
     the elimination of critical SQLite file locks during testing!).
-  - `UX_REVIEW_GUIDE.md`: The User Advocate's lens for identifying onboarding
+  - `UX_REVIEW_GUIDE.md`: The UX Reviewer's lens for identifying onboarding
     friction, confusing error dumps, and aesthetic inconsistencies.
   - `AGENTIC_QUALITY_REVIEW_GUIDE.md`: The ML Expert's lens for evaluating
     prompt efficacy, agent cognitive loops, and LLM-as-a-judge rubric

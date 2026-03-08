@@ -1872,6 +1872,7 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 		m.updateViewport()
 	default:
 		m.appendMessage(lipgloss.NewStyle().Foreground(errorColor).Render("Unknown command: " + cmd))
+		m.updateViewport()
 	}
 	return nil
 }

@@ -170,6 +170,40 @@ trail for the next agent:
    commit messages should not use a 'word:' prefix (e.g., 'feat:', 'docs:')
    and should focus on "why" rather than "what".
 
+## 6. Specialized Advocate Agents
+
+The Swarm ecosystem includes specialized sub-agents designed to perform
+rigorous, persona-driven reviews of the project. These agents are defined in
+the `skills/` directory and can be invoked directly to audit the codebase,
+user experience, or agentic performance.
+
+To utilize these advocates, you can explicitly instruct an agent (like Gemini
+CLI, Claude Code, or the Swarm CLI itself) to adopt their persona:
+
+- **`@code_quality_advocate`**: Invokes the Code Quality Advocate
+  (`skills/code-quality-advocate/SKILL.md`). Use this for comprehensive
+  codebase reviews, identifying architectural flaws, and enforcing idiomatic
+  design.
+  - *Example:* "As the @code_quality_advocate, audit the `pkg/sdk/` package
+    for race conditions and unhandled errors."
+- **`@user_advocate`**: Invokes the User Advocate
+  (`skills/user-advocate/SKILL.md`). Use this for user-centric UX evaluations,
+  hunting friction points, and polishing terminal and web interfaces.
+  - *Example:* "@user_advocate review the splash screen discoverability and
+    propose layout improvements."
+- **`@agentic_quality_advocate`**: Invokes the Agentic Quality Advocate
+  (`skills/agentic-quality-advocate/SKILL.md`). Use this to evaluate
+  trajectory efficiency, tool-use rigor, orchestration handoffs, and
+  LLM-as-a-Judge grading rubrics.
+  - *Example:* "Run an agentic quality audit using the
+    @agentic_quality_advocate skill on the latest trajectory logs in
+    `scenario_3`."
+
+When instructed to act as one of these advocates, you MUST strictly adhere to
+the workflow and reporting formats defined in their respective `SKILL.md`
+files, ensuring all findings are properly deduplicated and logged in their
+corresponding `docs/*_ISSUES.md` backlogs.
+
 ______________________________________________________________________
 
 By adhering to this guide, you ensure that the `swarm` codebase remains an

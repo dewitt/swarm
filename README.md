@@ -101,8 +101,11 @@ To build the `swarm` binary from source:
 git clone https://github.com/dewitt/swarm.git
 cd swarm
 
-# Build the binary
+# Build the binary (Standard)
 go build -o bin/swarm ./cmd/swarm
+
+# Build the binary with FTS5 Semantic Search (Recommended)
+go build -tags fts5 -o bin/swarm ./cmd/swarm
 
 # Run the CLI
 ./bin/swarm

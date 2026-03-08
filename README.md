@@ -18,6 +18,20 @@ observability into native ecosystems.
   parallel via live "Agent Cards" featuring **Live Telemetry** (e.g.,
   real-time scrolling build logs and test outputs) and dynamic status updates.
 
+- **Semantic Codebase Awareness**: Native integration with **Language Server
+  Protocol (LSP)** and **Tree-sitter**. Swarm agents perform deterministic,
+  type-aware code navigation (Go-to-Definition, Find References) and fast
+  structural parsing rather than relying on noisy text searches.
+
+- **Specialized Reviewers**: Invoke hyper-focused agent personas for rigorous
+  audits. Type `@code_review` for architectural analysis, `@ux_review` for
+  friction hunting, or `@quality_review` for agentic performance evaluation.
+
+- **Sysadmin & Environment Remediation**: A dedicated `sysadmin` agent
+  autonomously diagnoses host operating systems and safely resolves missing
+  dependencies (via Homebrew, APT, npm, etc.) so other agents can succeed
+  without manual intervention.
+
 - **Direct Shell Execution (`!`)**: Toggle into a dedicated shell mode or run
   single-shot bash commands instantly from within the REPL without breaking
   your flow.
@@ -36,6 +50,19 @@ observability into native ecosystems.
   conversation history with `/rewind`, and easily pick up where you left off
   using the `--resume` flag.
 
+- **4-Tier Hierarchical Memory**: Swarm implements a robust, OS-inspired
+  memory architecture to prevent context rot during long-horizon tasks.
+
+  - *Working Memory*: The immediate token window, automatically pruned of
+    massive tool outputs.
+  - *Episodic Memory*: The chronological audit log of the active session.
+  - *Semantic Memory*: An embedded SQLite/FTS5 database that passively
+    extracts "timeless facts" (e.g., project build commands, API keys) during
+    execution and automatically injects them into future prompts. Use
+    `/forget` to purge hallucinated or outdated facts.
+  - *Global Memory*: Cross-project preferences set via `/remember` or
+    `.gemini/GEMINI.md` files.
+
 - **Async Execution & Input Queueing**: The CLI operates asynchronously. You
   are never locked out while agents are working. You can queue up multiple
   instructions or seamlessly interrupt (`Ctrl+C` or `Esc`) a runaway agent
@@ -48,19 +75,6 @@ observability into native ecosystems.
 - **Read-Only Plan Mode**: Use the `/plan` command or `--plan` flag to safely
   brainstorm architecture with the agent explicitly sandboxed from modifying
   your filesystem.
-
-- **4-Tier Hierarchical Memory**: Swarm implements a robust, OS-inspired
-  memory architecture to prevent context rot during long-horizon tasks.
-
-  - *Working Memory*: The immediate token window, automatically pruned of
-    massive tool outputs to preserve inference speed.
-  - *Episodic Memory*: The chronological audit log of the active session.
-  - *Semantic Memory*: An embedded SQLite/FTS5 database that passively
-    extracts "timeless facts" (e.g., project build commands, API keys) during
-    execution and automatically injects them into future agent prompts.
-  - *Global Memory*: Cross-project preferences set via `/remember` or
-    `.gemini/GEMINI.md` files. View real-time token stats for all tiers using
-    the `/memory` command.
 
 - **Web Fetch & Search**: Native capabilities to search the web and fetch
   up-to-date documentation during task execution using the `web_researcher`
@@ -79,49 +93,71 @@ observability into native ecosystems.
 - **Framework Agnostic**: Natively supports Google ADK, LangGraph, and custom
   architectures via `agent.yaml` manifests.
 
-- **Native CI/CD Integration**: Seamlessly scaffolds standard CI/CD pipelines
-  (like GitHub Actions) and integrates directly with your native ecosystem.
-
 - **Agent Swarms**: The core SDK is powered by the Google Agent Development
-  Kit (ADK) and orchestrates a swarm of specialized internal agents (Swarm
-  Agent, Builder, Deployment) using a cascading model architecture (fast
-  models for routing, reasoning models for execution). Agent responses are
-  attributed with colorful badges in the chat log.
+  Kit (ADK) and orchestrates a swarm of specialized internal agents using a
+  cascading model architecture (fast models for routing, reasoning models for
+  execution).
 
-## Prerequisites
+## Installation
 
-- Go 1.21 or higher.
+### Using Go
 
-## Building from Source
+If you have Go installed, you can install the `swarm` CLI directly:
 
-To build the `swarm` binary from source:
+```bash
+go install github.com/dewitt/swarm/cmd/swarm@latest
+```
+
+Ensure your `GOBIN` directory (typically `~/go/bin`) is in your system's
+`PATH`.
+
+### From Source
+
+To build and install from source:
 
 ```bash
 # Clone the repository
 git clone https://github.com/dewitt/swarm.git
 cd swarm
 
-# Build the binary (Standard)
-go build -o bin/swarm ./cmd/swarm
+# Install the binary (Standard)
+go install ./cmd/swarm
 
-# Build the binary with FTS5 Semantic Search (Recommended)
-go build -tags fts5 -o bin/swarm ./cmd/swarm
-
-# Run the CLI
-./bin/swarm
+# Install with FTS5 Semantic Search support (Recommended)
+go install -tags fts5 ./cmd/swarm
 ```
 
-## Running the CLI
+## Getting Started
 
-Simply running the binary launches the full-screen interactive Terminal User
+### 1. Set your API Key
+
+Swarm requires an active Google AI (Gemini) API key. You can get one from
+[https://aistudio.google.dev/app/apikey](https://aistudio.google.dev/app/apikey).
+
+```bash
+export GOOGLE_API_KEY="your-api-key-here"
+```
+
+### 2. Launch the CLI
+
+Simply running `swarm` launches the full-screen interactive Terminal User
 Interface (TUI):
 
 ```bash
-./bin/swarm
+swarm
 ```
 
-From here, you can start conversing with the internal Swarm Agent, scaffold
-new projects, or deploy existing agents.
+### 3. Change Models
+
+To change the active LLM provider, use the `/model` command:
+
+```bash
+# Select auto-mode (default)
+/model auto
+
+# List all available models and select interactively
+/model list
+```
 
 ## Web Agent Panel
 
@@ -148,32 +184,22 @@ Our native end-to-end evaluation harness spins up sandboxed, ephemeral
 workspaces, issues high-level natural language directives to the Swarm, and
 collects the entire execution trajectory (actions, tools, shell commands, and
 final code state). A designated "Judge LLM" then evaluates this trajectory
-against a strict, scenario-specific rubric to determine if the agent
-successfully achieved the intended outcome without breaking the workspace.
-This approach mirrors actual human workflows and ensures our agents remain
-robust and capable as underlying foundation models evolve.
+against a strict, scenario-specific rubric.
 
 To run the full evaluation suite:
 
 ```bash
-# Requires an active AI API key
-export GOOGLE_API_KEY="..."
-
-# Run all scenarios
+# Requires an active AI API key and E2E flag enabled
+export SWARM_RUN_E2E=1
 swarm eval
 ```
 
 To run a single, specific scenario (useful for debugging):
 
 ```bash
-# Run a specific scenario by ID
-swarm eval scenario_1
+# Run a specific scenario by ID (e.g. scenario_7 for LSP)
+swarm eval scenario_7
 ```
-
-If you wish to add a new scenario, define its metadata (Name, Prompt, Rubric,
-and Fixture Path) in `pkg/eval/scenarios.go` and add the sandbox code fixture
-to the `eval/fixtures/` directory. Be sure to use the `--debug` flag natively
-if you need to debug the AST parsing logic behind the harness.
 
 ## Documentation & Philosophy
 

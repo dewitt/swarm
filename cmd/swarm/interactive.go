@@ -585,17 +585,12 @@ func initialModel(planMode bool, resume bool) (model, error) {
 		swarm, _ = sdk.NewSwarm(sdk.SwarmConfig{ResumeLastSession: resume, DatabaseURI: "file::memory:?cache=shared"})
 	}
 
-	webAddr := ""
-	if webServer != nil {
-		webAddr = webServer.Addr()
-	}
-
 	return model{
 		textArea:       ta,
 		viewport:       vp,
 		spinner:        s,
 		listModel:      l,
-		messages:       []string{buildBootMessage(cwd, branch, modified, isDark, activeModel, nil, "Loading...", resume, len(loadedHist) == 0, getUserName(), 0, false, webAddr)},
+		messages:       []string{buildBootMessage(cwd, branch, modified, isDark, activeModel, nil, "Loading...", resume, len(loadedHist) == 0, getUserName(), 0, false)},
 		history:        loadedHist,
 		historyIdx:     len(loadedHist),
 		loading:        false,
@@ -666,16 +661,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.swarm = initMsg.swarm
 
 			// Get the actual bound port
-			webAddr := ""
 			if m.webServer != nil {
 				// Give the web server a tiny moment to bind if it was re-attempting on :0
 				time.Sleep(50 * time.Millisecond)
-				webAddr = m.webServer.Addr()
 			}
 
 			// Update the boot message now that we have the swarm instance
 			contextFiles := m.swarm.ListContext()
-			m.messages[0] = buildBootMessage(m.cwd, m.gitBranch, m.gitModified, m.isDark, m.activeModel, contextFiles, m.swarm.SessionID(), m.pendingSwarmCfg.ResumeLastSession, len(m.history) == 0, getUserName(), len(m.swarm.Skills()), m.swarm.Memory().Semantic().FTSEnabled(), webAddr)
+			m.messages[0] = buildBootMessage(m.cwd, m.gitBranch, m.gitModified, m.isDark, m.activeModel, contextFiles, m.swarm.SessionID(), m.pendingSwarmCfg.ResumeLastSession, len(m.history) == 0, getUserName(), len(m.swarm.Skills()), m.swarm.Memory().Semantic().FTSEnabled())
 			m.updateViewport()
 			return m, nil
 		}
@@ -2125,7 +2118,7 @@ func (m *model) updateInputStyle() {
 	}
 }
 
-func buildBootMessage(cwd, branch string, modified bool, isDark bool, activeModel string, contextFiles []string, sessionID string, isResume bool, isFirstTime bool, userName string, numSkills int, ftsEnabled bool, webAddr string) string {
+func buildBootMessage(cwd, branch string, modified bool, isDark bool, activeModel string, contextFiles []string, sessionID string, isResume bool, isFirstTime bool, userName string, numSkills int, ftsEnabled bool) string {
 	version := "Unknown"
 	if info, ok := debug.ReadBuildInfo(); ok {
 		version = info.Main.Version
@@ -2231,24 +2224,13 @@ func buildBootMessage(cwd, branch string, modified bool, isDark bool, activeMode
 	)
 
 	// Session Column
-	webUIVal := "Disabled"
-	if webAddr != "" {
-		if strings.HasPrefix(webAddr, ":") {
-			webUIVal = "http://localhost" + webAddr
-		} else {
-			webUIVal = "http://" + webAddr
-		}
-	}
-	
 	sessCol := lipgloss.JoinVertical(lipgloss.Left,
 		headerStyle.Render("[ Session ]"),
 		lipgloss.JoinHorizontal(lipgloss.Top, keyStyle.Render("State:"), valStyle.Render(sessionState)),
 		lipgloss.JoinHorizontal(lipgloss.Top, keyStyle.Render("Model:"), valStyle.Render(activeModel)),
 		lipgloss.JoinHorizontal(lipgloss.Top, keyStyle.Render("Skills:"), valStyle.Render(fmt.Sprintf("%d enabled", numSkills))),
 		lipgloss.JoinHorizontal(lipgloss.Top, keyStyle.Render("Context:"), valStyle.Render(contextStr)),
-		lipgloss.JoinHorizontal(lipgloss.Top, keyStyle.Render("Web UI:"), valStyle.Render(webUIVal)),
 	)
-
 	// Combine columns with spacing
 	dashboard := lipgloss.JoinHorizontal(lipgloss.Top, envCol, lipgloss.NewStyle().Width(4).Render(""), sessCol)
 
@@ -2761,8 +2743,19 @@ func (m model) View() tea.View {
 		}
 		cwdText += fmt.Sprintf(" (%s%s)", m.gitBranch, mod)
 	}
+
+	webUIVal := "swarm mode"
+	if m.webServer != nil && m.webServer.Addr() != "" {
+		addr := m.webServer.Addr()
+		if strings.HasPrefix(addr, ":") {
+			webUIVal = "Web UI: http://localhost" + addr
+		} else {
+			webUIVal = "Web UI: http://" + addr
+		}
+	}
+
 	p1 := statusBarStyle.Width(w1).Align(lipgloss.Left).Render(cwdText)
-	p2 := statusBarStyle.Width(w2).Align(lipgloss.Center).Render("swarm mode")
+	p2 := statusBarStyle.Width(w2).Align(lipgloss.Center).Render(webUIVal)
 	p3 := statusBarStyle.Width(w3).Align(lipgloss.Right).Render(m.activeModel + " ")
 	statusView := lipgloss.JoinHorizontal(lipgloss.Top, p1, p2, p3)
 

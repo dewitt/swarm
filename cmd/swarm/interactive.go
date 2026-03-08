@@ -2766,9 +2766,13 @@ func (m *model) cleanup() {
 	}
 }
 
-func launchInteractiveShell(planMode bool, resume bool) error {
+func launchInteractiveShell(planMode bool, resume bool, lspCmd string, lspArgs []string) error {
 	// Initialize SDK first to avoid terminal artifacts on early exit (e.g., missing API key)
-	cfg := sdk.SwarmConfig{ResumeLastSession: resume}
+	cfg := sdk.SwarmConfig{
+		ResumeLastSession: resume,
+		LSPCommand:        lspCmd,
+		LSPArgs:           lspArgs,
+	}
 	if strings.HasSuffix(os.Args[0], ".test") {
 		cfg.DatabaseURI = "file::memory:?cache=shared"
 	}

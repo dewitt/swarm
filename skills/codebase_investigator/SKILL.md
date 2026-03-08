@@ -7,6 +7,10 @@ tools:
   - list_local_files
   - read_local_file
   - get_code_skeleton
+  - analyze_impact
+  - get_api_signature
+  - validate_code
+  - rename_symbol
   - grep_search
   - bash_execute
   - commit_fact

@@ -82,6 +82,25 @@ func (l *ManagedLSP) Close() error {
 	return err
 }
 
+// ListTools retrieves the list of tools provided by the MCP server.
+func (l *ManagedLSP) ListTools(ctx context.Context) ([]mcp.Tool, error) {
+	l.mu.RLock()
+	if !l.connected || l.client == nil {
+		l.mu.RUnlock()
+		return nil, fmt.Errorf("MCP client is not connected")
+	}
+	mcpClient := l.client
+	l.mu.RUnlock()
+
+	req := mcp.ListToolsRequest{}
+	resp, err := mcpClient.ListTools(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.Tools, nil
+}
+
 // CallTool invokes a specific abstracted tool on the language server.
 func (l *ManagedLSP) CallTool(ctx context.Context, name string, args map[string]interface{}) (*mcp.CallToolResult, error) {
 	l.mu.RLock()

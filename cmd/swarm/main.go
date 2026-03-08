@@ -21,6 +21,8 @@ var (
 	trajectoryFlag bool
 	explainFlag    bool
 	verboseFlag    bool
+	lspCommandFlag string
+	lspArgsFlag    []string
 )
 
 var configCmd = &cobra.Command{
@@ -75,7 +77,10 @@ When run without arguments, it launches a persistent, interactive terminal sessi
 			}
 
 			var swarm sdk.Swarm
-			swarm, err := sdk.NewSwarm()
+			swarm, err := sdk.NewSwarm(sdk.SwarmConfig{
+				LSPCommand: lspCommandFlag,
+				LSPArgs:    lspArgsFlag,
+			})
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 				os.Exit(1)
@@ -141,7 +146,7 @@ When run without arguments, it launches a persistent, interactive terminal sessi
 		}
 
 		// Launch the interactive Bubble Tea shell
-		if err := launchInteractiveShell(planFlag, resumeFlag); err != nil {
+		if err := launchInteractiveShell(planFlag, resumeFlag, lspCommandFlag, lspArgsFlag); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
@@ -158,6 +163,8 @@ func init() {
 	rootCmd.PersistentFlags().BoolVar(&trajectoryFlag, "trajectory", false, "Output the full swarm trajectory JSON to stdout instead of the response")
 	rootCmd.Flags().BoolVar(&explainFlag, "explain", false, "Provide a human-readable explanation of the swarm trajectory")
 	rootCmd.Flags().BoolVarP(&verboseFlag, "verbose", "v", false, "Print detailed internal routing and agent thoughts")
+	rootCmd.Flags().StringVar(&lspCommandFlag, "lsp-command", "", "Command to start an MCP-compatible LSP server")
+	rootCmd.Flags().StringSliceVar(&lspArgsFlag, "lsp-args", []string{}, "Arguments for the LSP command")
 	rootCmd.AddCommand(configCmd)
 }
 

@@ -91,6 +91,7 @@ type Swarm interface {
 	SetDebug(enabled bool)
 	IsDebug() bool
 	Explain(ctx context.Context, traj Trajectory) (string, error)
+	LSP() *ManagedLSP // Provides access to the language server bridge
 	Close() error
 }
 
@@ -125,6 +126,7 @@ type defaultSwarm struct {
 	forceDonate         bool
 	telemetryConfigured bool
 	memory              HierarchicalMemory
+	lsp                 *ManagedLSP
 }
 
 type SwarmConfig struct {
@@ -133,7 +135,9 @@ type SwarmConfig struct {
 	Debug             bool
 	DatabaseURI       string
 	TrajectoryDir     string // Optional override for where trajectories are saved (e.g., "eval_trajectories")
-	ForceDonate       bool   // If true, forces the "donate" telemetry flag to true for this run
+	ForceDonate       bool           // If true, forces the "donate" telemetry flag to true for this run
+	LSPCommand        string         // Optional command to start an MCP-compatible LSP server
+	LSPArgs           []string       // Arguments for the LSP command
 }
 
 func NewSwarm(cfg ...SwarmConfig) (Swarm, error) {
@@ -299,14 +303,28 @@ func NewSwarm(cfg ...SwarmConfig) (Swarm, error) {
 	}
 	m.memory = NewHierarchicalMemory(m, NewEpisodicMemory(sessionSvc, m.userID), semanticMem, m)
 
+	if len(cfg) > 0 && cfg[0].LSPCommand != "" {
+		m.lsp = NewManagedLSP(cfg[0].LSPCommand, cfg[0].LSPArgs...)
+		// We start it asynchronously so it doesn't block the UI boot
+		go func() {
+			_ = m.lsp.Start(context.Background())
+		}()
+	}
+
 	readStateTool, _ := functiontool.New(functiontool.Config{Name: "read_state"}, m.readState)
 	writeStateTool, _ := functiontool.New(functiontool.Config{Name: "write_state"}, m.writeState)
 	retrieveFactTool, _ := functiontool.New(functiontool.Config{Name: "retrieve_fact"}, m.retrieveFact)
 	spawnSubtaskTool, _ := functiontool.New(functiontool.Config{Name: "spawn_subtask"}, m.spawnSubtask)
 	codeSkeletonTool, _ := functiontool.New(functiontool.Config{Name: "get_code_skeleton"}, getCodeSkeletonTool)
+	analyzeImpactTool, _ := functiontool.New(functiontool.Config{Name: "analyze_impact"}, m.analyzeImpact)
+	getAPISignatureTool, _ := functiontool.New(functiontool.Config{Name: "get_api_signature"}, m.getAPISignature)
+	validateCodeTool, _ := functiontool.New(functiontool.Config{Name: "validate_code"}, m.validateCode)
+	renameSymbolTool, _ := functiontool.New(functiontool.Config{Name: "rename_symbol"}, m.renameSymbol)
+
 	m.toolRegistry = map[string]tool.Tool{
 		"list_local_files": listTool, "read_local_file": readTool, "grep_search": grepTool, "write_local_file": writeTool, "git_commit": gitCommit, "git_push": gitPush, "bash_execute": bashExecute, "web_fetch": webFetchTool, "google_search": googleSearchTool, "request_replan": replanTool,
 		"read_state": readStateTool, "write_state": writeStateTool, "retrieve_fact": retrieveFactTool, "spawn_subtask": spawnSubtaskTool, "get_code_skeleton": codeSkeletonTool,
+		"analyze_impact": analyzeImpactTool, "get_api_signature": getAPISignatureTool, "validate_code": validateCodeTool, "rename_symbol": renameSymbolTool,
 	}
 
 	if err := m.Reload(); err != nil {
@@ -334,7 +352,12 @@ func (m *defaultSwarm) Explain(ctx context.Context, traj Trajectory) (string, er
 	return strings.TrimSpace(exp), nil
 }
 
+func (m *defaultSwarm) LSP() *ManagedLSP { return m.lsp }
+
 func (m *defaultSwarm) Close() error {
+	if m.lsp != nil {
+		_ = m.lsp.Close()
+	}
 	m.wg.Wait()
 	return nil
 }

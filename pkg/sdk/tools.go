@@ -502,3 +502,71 @@ func getCodeSkeletonTool(ctx tool.Context, args GetCodeSkeletonArgs) (GetCodeSke
 	}
 	return GetCodeSkeletonResult{Content: skeleton}, nil
 }
+
+// === LSP Tools ===
+
+type LSPToolArgs struct {
+	Symbol string `json:"symbol,omitempty"`
+	Path   string `json:"path,omitempty"`
+	NewName string `json:"new_name,omitempty"`
+}
+
+type LSPToolResult struct {
+	Content string `json:"content"`
+	Error   string `json:"error,omitempty"`
+}
+
+func (s *defaultSwarm) analyzeImpact(ctx tool.Context, args LSPToolArgs) (LSPToolResult, error) {
+	if s.lsp == nil {
+		return LSPToolResult{Error: "LSP is not configured for this session"}, nil
+	}
+	// Note: In a real implementation, we would map 'analyze_impact' to the MCP 'textDocument/references' tool.
+	// For now, we delegate to the MCP bridge.
+	res, err := s.lsp.CallTool(context.Background(), "textDocument/references", map[string]interface{}{
+		"symbol": args.Symbol,
+	})
+	if err != nil {
+		return LSPToolResult{Error: err.Error()}, nil
+	}
+	return LSPToolResult{Content: fmt.Sprintf("%v", res.Content)}, nil
+}
+
+func (s *defaultSwarm) getAPISignature(ctx tool.Context, args LSPToolArgs) (LSPToolResult, error) {
+	if s.lsp == nil {
+		return LSPToolResult{Error: "LSP is not configured for this session"}, nil
+	}
+	res, err := s.lsp.CallTool(context.Background(), "textDocument/hover", map[string]interface{}{
+		"symbol": args.Symbol,
+	})
+	if err != nil {
+		return LSPToolResult{Error: err.Error()}, nil
+	}
+	return LSPToolResult{Content: fmt.Sprintf("%v", res.Content)}, nil
+}
+
+func (s *defaultSwarm) validateCode(ctx tool.Context, args LSPToolArgs) (LSPToolResult, error) {
+	if s.lsp == nil {
+		return LSPToolResult{Error: "LSP is not configured for this session"}, nil
+	}
+	res, err := s.lsp.CallTool(context.Background(), "textDocument/publishDiagnostics", map[string]interface{}{
+		"path": args.Path,
+	})
+	if err != nil {
+		return LSPToolResult{Error: err.Error()}, nil
+	}
+	return LSPToolResult{Content: fmt.Sprintf("%v", res.Content)}, nil
+}
+
+func (s *defaultSwarm) renameSymbol(ctx tool.Context, args LSPToolArgs) (LSPToolResult, error) {
+	if s.lsp == nil {
+		return LSPToolResult{Error: "LSP is not configured for this session"}, nil
+	}
+	res, err := s.lsp.CallTool(context.Background(), "textDocument/rename", map[string]interface{}{
+		"symbol":   args.Symbol,
+		"new_name": args.NewName,
+	})
+	if err != nil {
+		return LSPToolResult{Error: err.Error()}, nil
+	}
+	return LSPToolResult{Content: fmt.Sprintf("%v", res.Content)}, nil
+}

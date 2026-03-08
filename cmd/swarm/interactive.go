@@ -1510,6 +1510,22 @@ func (m model) fetchModels() tea.Cmd {
 	}
 }
 
+func formatInt(n int) string {
+	s := fmt.Sprintf("%d", n)
+	if len(s) <= 3 {
+		return s
+	}
+	var res []string
+	for len(s) > 3 {
+		res = append([]string{s[len(s)-3:]}, res...)
+		s = s[:len(s)-3]
+	}
+	if len(s) > 0 {
+		res = append([]string{s}, res...)
+	}
+	return strings.Join(res, ",")
+}
+
 func (m *model) handleSlashCommand(input string) tea.Cmd {
 	parts := strings.Fields(input)
 	if len(parts) == 0 {
@@ -1913,19 +1929,19 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 
 		// 1. Stats Table
 		sb.WriteString("| Tier | Count | Token Estimate |\n")
-		sb.WriteString("| :--- | :---: | :------------: |\n")
+		sb.WriteString("| :--- | ---: | ---: |\n")
 
 		wStats := mem.Working().WorkingStats()
-		sb.WriteString(fmt.Sprintf("| %s | %d | %d |\n", wStats.Name, wStats.Count, wStats.TokenEstimate))
+		sb.WriteString(fmt.Sprintf("| %s | %s | %s |\n", wStats.Name, formatInt(wStats.Count), formatInt(wStats.TokenEstimate)))
 
 		eStats := mem.Episodic().EpisodicStats(context.Background(), m.swarm.SessionID())
-		sb.WriteString(fmt.Sprintf("| %s | %d | %d |\n", eStats.Name, eStats.Count, eStats.TokenEstimate))
+		sb.WriteString(fmt.Sprintf("| %s | %s | %s |\n", eStats.Name, formatInt(eStats.Count), formatInt(eStats.TokenEstimate)))
 
 		sStats := mem.Semantic().SemanticStats()
-		sb.WriteString(fmt.Sprintf("| %s | %d | %d |\n", sStats.Name, sStats.Count, sStats.TokenEstimate))
+		sb.WriteString(fmt.Sprintf("| %s | %s | %s |\n", sStats.Name, formatInt(sStats.Count), formatInt(sStats.TokenEstimate)))
 
 		gStats := mem.Global().GlobalStats()
-		sb.WriteString(fmt.Sprintf("| %s | %d | %d |\n", gStats.Name, gStats.Count, gStats.TokenEstimate))
+		sb.WriteString(fmt.Sprintf("| %s | %s | %s |\n", gStats.Name, formatInt(gStats.Count), formatInt(gStats.TokenEstimate)))
 
 		sb.WriteString("\n---\n\n")
 

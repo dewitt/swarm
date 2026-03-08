@@ -1834,34 +1834,41 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 			m.appendMessage(agentMsgStyle.Render("✦ ") + "Got it. I'll remember that for all future sessions.")
 		}
 	case "/memory":
-		var lines []string
-		lines = append(lines, lipgloss.NewStyle().Bold(true).Render("Hierarchical Memory State"))
-		lines = append(lines, "")
+		var sb strings.Builder
+		sb.WriteString("### Hierarchical Memory State\n\n")
 
 		// 1. Global Memory
 		globalMem, _ := sdk.LoadMemory()
 		if globalMem != "" {
-			lines = append(lines, lipgloss.NewStyle().Foreground(googleYellow).Render("[ Global Preferences ]"))
-			lines = append(lines, strings.TrimSpace(globalMem))
-			lines = append(lines, "")
+			sb.WriteString("#### [ Global Preferences ]\n")
+			sb.WriteString(strings.TrimSpace(globalMem))
+			sb.WriteString("\n\n")
 		}
 
 		// 2. Semantic Memory
 		facts, err := m.swarm.ListFacts(10)
 		if err != nil {
-			lines = append(lines, lipgloss.NewStyle().Foreground(errorColor).Render("Failed to read semantic memory: "+err.Error()))
+			sb.WriteString("#### [ Semantic Project Facts ]\n")
+			sb.WriteString(fmt.Sprintf("> Error reading semantic memory: %s\n", err.Error()))
 		} else if len(facts) > 0 {
-			lines = append(lines, lipgloss.NewStyle().Foreground(googleBlue).Render("[ Semantic Project Facts ]"))
+			sb.WriteString("#### [ Semantic Project Facts ]\n")
 			for _, f := range facts {
-				lines = append(lines, "  - "+f)
+				sb.WriteString(fmt.Sprintf("- %s\n", f))
 			}
 		} else {
-			lines = append(lines, lipgloss.NewStyle().Foreground(googleBlue).Render("[ Semantic Project Facts ]"))
-			lines = append(lines, "  (No semantic facts recorded for this project yet)")
+			sb.WriteString("#### [ Semantic Project Facts ]\n")
+			sb.WriteString("_No semantic facts recorded for this project yet._\n")
+		}
+
+		out := sb.String()
+		if m.renderer != nil {
+			if rOut, err := m.renderer.Render(out); err == nil {
+				out = rOut
+			}
 		}
 
 		icon := agentMsgStyle.Render("✦ ")
-		m.appendMessage(lipgloss.JoinHorizontal(lipgloss.Top, icon, lipgloss.JoinVertical(lipgloss.Left, lines...)))
+		m.appendMessage(lipgloss.JoinHorizontal(lipgloss.Top, icon, strings.TrimSpace(out)))
 	default:
 		m.appendMessage(lipgloss.NewStyle().Foreground(errorColor).Render("Unknown command: " + cmd))
 	}

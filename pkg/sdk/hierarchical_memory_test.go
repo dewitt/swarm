@@ -24,6 +24,7 @@ func TestSemanticRetrievalInjection(t *testing.T) {
 	// 2. Initialize Swarm
 	swarm, err := NewSwarm(SwarmConfig{
 		DatabaseURI: "file::memory:?cache=shared",
+		Model:       &MockModel{Response: "{}"},
 	})
 	if err != nil {
 		t.Fatalf("failed to init swarm: %v", err)

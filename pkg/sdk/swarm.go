@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -774,6 +773,31 @@ func (m *defaultSwarm) ListSessions(ctx context.Context) ([]SessionInfo, error) 
 	return infos, nil
 }
 
+// extractJSON attempts to locate and extract a JSON object or array from a string
+// that may be wrapped in markdown or contain leading/trailing conversational text.
+func extractJSON(s string) string {
+	s = strings.TrimSpace(s)
+	startObj := strings.Index(s, "{")
+	startArr := strings.Index(s, "[")
+
+	start := -1
+	end := -1
+
+	if startObj != -1 && (startArr == -1 || startObj < startArr) {
+		start = startObj
+		end = strings.LastIndex(s, "}")
+	} else if startArr != -1 && (startObj == -1 || startArr < startObj) {
+		start = startArr
+		end = strings.LastIndex(s, "]")
+	}
+
+	if start != -1 && end != -1 && end > start {
+		return s[start : end+1]
+	}
+
+	return s
+}
+
 func (m *defaultSwarm) Plan(ctx context.Context, prompt string, traj Trajectory) (*ExecutionGraph, error) {
 	promptForLLM := prompt
 	if len(traj.Spans) > 0 {
@@ -858,14 +882,10 @@ func (m *defaultSwarm) Plan(ctx context.Context, prompt string, traj Trajectory)
 		}
 		jsonStr = strings.TrimSpace(jsonStr)
 	}
-	re := regexp.MustCompile(`(?s)\{.*\}`)
-	match := re.FindString(jsonStr)
-	if match != "" {
-		jsonStr = match
-	}
+	jsonStr = extractJSON(jsonStr)
 	var graph ExecutionGraph
 	if err := json.Unmarshal([]byte(jsonStr), &graph); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to parse orchestration plan from LLM output (expected JSON): %w\nRaw output:\n%s", err, jsonStr)
 	}
 	return &graph, nil
 }
@@ -908,9 +928,10 @@ Output your response as strictly valid JSON matching this schema:
 		}
 	}
 
+	jsonStr = extractJSON(jsonStr)
 	var reflection Reflection
 	if err := json.Unmarshal([]byte(jsonStr), &reflection); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to parse reflection from LLM output (expected JSON): %w\nRaw output:\n%s", err, jsonStr)
 	}
 	return &reflection, nil
 }

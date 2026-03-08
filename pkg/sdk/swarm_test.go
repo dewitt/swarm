@@ -2,73 +2,16 @@ package sdk_test
 
 import (
 	"context"
-	"iter"
 	"strings"
 	"testing"
 
 	"github.com/dewitt/swarm/pkg/sdk"
-	"google.golang.org/adk/model"
-	"google.golang.org/genai"
 )
 
-// MockModel implements model.LLM for testing
-type MockModel struct {
-	response string
-}
-
-func (m *MockModel) Name() string {
-	return "mock-model"
-}
-
-func (m *MockModel) GenerateContent(ctx context.Context, req *model.LLMRequest, stream bool) iter.Seq2[*model.LLMResponse, error] {
-	return func(yield func(*model.LLMResponse, error) bool) {
-		responseText := m.response
-
-		// If system instruction mentions Planning Agent, return a plan
-		if req.Config != nil && req.Config.SystemInstruction != nil {
-			for _, p := range req.Config.SystemInstruction.Parts {
-				// Match the new skills/planning-agent/SKILL.md content or legacy names
-				if p.Text != "" && (contains(p.Text, "planning_agent") || contains(p.Text, "Planning Agent") || contains(p.Text, "DAG") || contains(p.Text, "ExecutionGraph")) {
-					userPrompt := strings.ToLower(req.Contents[0].Parts[0].Text)
-					if contains(userPrompt, "hello") {
-						responseText = `{"immediate_response": "Hello from trivial plan!"}`
-					} else {
-						responseText = `{"spans": [{"id": "t1", "name": "Test Span", "agent": "swarm_agent", "prompt": "do it", "dependencies": []}]}`
-					}
-					break
-				}
-				// Match the new skills/routing-agent/SKILL.md content
-				if p.Text != "" && (contains(p.Text, "routing_agent") || contains(p.Text, "Input Agent") || contains(p.Text, "ROUTE TO")) {
-					responseText = "ROUTE TO: swarm_agent"
-					break
-				}
-			}
-		}
-
-		resp := &model.LLMResponse{
-			Content: &genai.Content{
-				Parts: []*genai.Part{
-					{Text: responseText},
-				},
-				Role: "model",
-			},
-			TurnComplete: true,
-		}
-		yield(resp, nil)
-	}
-}
-
-func contains(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
-}
+// Mocks and helpers are in mock_model_test.go
 
 func TestNewSwarm(t *testing.T) {
-	mockLLM := &MockModel{response: "Hello from the mock agent!"}
+	mockLLM := &sdk.MockModel{Response: "Hello from the mock agent!"}
 	swarm, err := sdk.NewSwarm(sdk.SwarmConfig{Model: mockLLM})
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
@@ -93,24 +36,24 @@ func TestNewSwarm(t *testing.T) {
 	}
 
 	if len(finalResponses) == 0 {
-		t.Fatalf("expected at least one final response")
+		t.Fatalf("expected at least one final Response")
 	}
 
 	expected := "Hello from trivial plan!"
 	found := false
 	for _, r := range finalResponses {
-		if contains(r, expected) {
+		if strings.Contains(r, expected) {
 			found = true
 			break
 		}
 	}
 	if !found {
-		t.Fatalf("expected content '%s' in responses, got %v", expected, finalResponses)
+		t.Fatalf("expected content '%s' in Responses, got %v", expected, finalResponses)
 	}
 }
 
 func TestChat_TrivialResponse(t *testing.T) {
-	mockLLM := &MockModel{response: "Trivial Response"}
+	mockLLM := &sdk.MockModel{Response: "Trivial Response"}
 	swarm, err := sdk.NewSwarm(sdk.SwarmConfig{Model: mockLLM})
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
@@ -136,6 +79,6 @@ func TestChat_TrivialResponse(t *testing.T) {
 	}
 
 	if !foundFinal {
-		t.Fatalf("expected a final response event for trivial query")
+		t.Fatalf("expected a final Response event for trivial query")
 	}
 }

@@ -13,6 +13,10 @@ func TestScenarios(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping agentic evaluation in short mode")
 	}
+	if os.Getenv("SWARM_RUN_E2E") == "" {
+		t.Skip("Skipping live E2E test; set SWARM_RUN_E2E=1 to run")
+	}
+
 	apiKey := os.Getenv("GOOGLE_API_KEY")
 	if apiKey == "" {
 		t.Skip("skipping agentic evaluation; GOOGLE_API_KEY not set")

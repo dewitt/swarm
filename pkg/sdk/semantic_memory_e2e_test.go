@@ -16,6 +16,10 @@ func TestSemanticMemoryE2E(t *testing.T) {
 		t.Skip("skipping E2E test in short mode")
 	}
 
+	if os.Getenv("SWARM_RUN_E2E") == "" {
+		t.Skip("Skipping live E2E test; set SWARM_RUN_E2E=1 to run")
+	}
+
 	if os.Getenv("GOOGLE_API_KEY") == "" {
 		t.Skip("skipping E2E test because GOOGLE_API_KEY is not set")
 	}

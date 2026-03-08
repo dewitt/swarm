@@ -21,11 +21,25 @@ an issue** first.
 
 All changes should be proposed via Pull Requests (PRs).
 
-- Ensure your code passes all tests (`go test ./...`) and builds successfully
-  before submitting the PR.
+- Ensure your code passes all unit tests and builds successfully before
+  submitting the PR.
 - Reference the issue number in the PR description (e.g., `Fixes #123`).
 
-### 3. Branch Management
+### 3. Testing
+
+We maintain a strict separation between deterministic unit tests and
+non-deterministic End-to-End (E2E) tests.
+
+- **Unit Tests:** These run by default and use mocks for LLM interactions. Run
+  them with: `go test ./...`.
+- **E2E Tests:** These exercise live models (Gemini/Claude) and require a
+  valid `GOOGLE_API_KEY`. They are skipped by default. To run them, set the
+  `SWARM_RUN_E2E` environment variable:
+  ```bash
+  SWARM_RUN_E2E=1 go test ./...
+  ```
+
+### 4. Branch Management
 
 - Create a **new, dedicated branch** for each PR you work on (e.g.,
   `git checkout -b fix-issue-123`).

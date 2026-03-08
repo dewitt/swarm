@@ -204,6 +204,7 @@ type model struct {
 	historyIdx   int
 	currentInput string
 	swarm        sdk.Swarm
+	pendingSwarmCfg sdk.SwarmConfig
 	width        int
 	height       int
 	loading      bool
@@ -566,33 +567,27 @@ func initialModel(planMode bool, resume bool) (model, error) {
 	}
 
 	var webServer *web.Server
-	if !strings.HasSuffix(os.Args[0], ".test") {
+	var swarm sdk.Swarm
+	isTest := strings.HasSuffix(os.Args[0], ".test")
+
+	if !isTest {
 		webServer = web.NewServer(":5050")
 		go func() {
 			_ = webServer.Start()
 		}()
+	} else {
+		// Initialize synchronously in tests to avoid race conditions with mocks
+		swarm, _ = sdk.NewSwarm(sdk.SwarmConfig{ResumeLastSession: resume, DatabaseURI: "file::memory:?cache=shared"})
 	}
 
-	// Use in-memory DB for tests to prevent SQLite file locks
-	swarmConfig := sdk.SwarmConfig{ResumeLastSession: resume}
-	if strings.HasSuffix(os.Args[0], ".test") {
-		swarmConfig.DatabaseURI = "file::memory:?cache=shared"
-	}
-	swarm, err := sdk.NewSwarm(swarmConfig)
-	if err != nil {
-		return model{}, err
-	}
-
-	contextFiles := swarm.ListContext()
 	return model{
 		textArea:       ta,
 		viewport:       vp,
 		spinner:        s,
 		listModel:      l,
-		messages:       []string{buildBootMessage(cwd, branch, modified, isDark, activeModel, contextFiles, swarm.SessionID(), resume, len(loadedHist) == 0, getUserName(), len(swarm.Skills()))},
+		messages:       []string{buildBootMessage(cwd, branch, modified, isDark, activeModel, nil, "Loading...", resume, len(loadedHist) == 0, getUserName(), 0)},
 		history:        loadedHist,
 		historyIdx:     len(loadedHist),
-		swarm:          swarm,
 		loading:        false,
 		quitting:       false,
 		planMode:       planMode,
@@ -608,11 +603,34 @@ func initialModel(planMode bool, resume bool) (model, error) {
 		showAgentPanel: true,
 		isDark:         isDark,
 		hasRunTasks:    resume,
+		swarm:          swarm,
+		// We pass the swarmConfig via the model to initialize it asynchronously in Init
+		pendingSwarmCfg: sdk.SwarmConfig{ResumeLastSession: resume},
 	}, nil
+}
+
+type swarmInitMsg struct {
+	swarm sdk.Swarm
+	err   error
+}
+
+func initSwarmCmd(cfg sdk.SwarmConfig) tea.Cmd {
+	return func() tea.Msg {
+		if strings.HasSuffix(os.Args[0], ".test") {
+			cfg.DatabaseURI = "file::memory:?cache=shared"
+		}
+		s, err := sdk.NewSwarm(cfg)
+		return swarmInitMsg{swarm: s, err: err}
+	}
 }
 
 func (m model) Init() tea.Cmd {
 	cmds := []tea.Cmd{textarea.Blink, m.spinner.Tick, doGitTick(), tea.RequestBackgroundColor, doLogoTick()}
+	
+	if !strings.HasSuffix(os.Args[0], ".test") {
+		cmds = append(cmds, initSwarmCmd(m.pendingSwarmCfg))
+	}
+	
 	for _, a := range m.agents {
 		cmds = append(cmds, a.spin.Tick)
 	}
@@ -626,6 +644,41 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		spCmd tea.Cmd
 		cmds  []tea.Cmd
 	)
+
+	// Block input if we are still initializing
+	if m.swarm == nil && !m.quitting {
+		// Handle async initialization
+		if initMsg, ok := msg.(swarmInitMsg); ok {
+			if initMsg.err != nil {
+				m.appendMessage(lipgloss.NewStyle().Foreground(errorColor).Render(fmt.Sprintf("Failed to initialize Swarm: %v", initMsg.err)))
+				return m, nil
+			}
+			m.swarm = initMsg.swarm
+			
+			// Update the boot message now that we have the swarm instance
+			contextFiles := m.swarm.ListContext()
+			m.messages[0] = buildBootMessage(m.cwd, m.gitBranch, m.gitModified, m.isDark, m.activeModel, contextFiles, m.swarm.SessionID(), m.pendingSwarmCfg.ResumeLastSession, len(m.history) == 0, getUserName(), len(m.swarm.Skills()))
+			m.updateViewport()
+			return m, nil
+		}
+
+		switch msg := msg.(type) {
+		case tea.KeyMsg:
+			if msg.String() == "ctrl+c" {
+				m.quitting = true
+				return m, tea.Quit
+			}
+		case tea.WindowSizeMsg:
+			m.width = msg.Width
+			m.height = msg.Height
+			m.updateViewport()
+			m.textArea.SetWidth(msg.Width - 4)
+			return m, nil
+		}
+		
+		m.spinner, spCmd = m.spinner.Update(msg)
+		return m, spCmd
+	}
 
 	// Global intercept for double Ctrl+C to quit
 	if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
@@ -1432,8 +1485,17 @@ func (m model) runShellCommand(ctx context.Context, command string) tea.Cmd {
 	return func() tea.Msg {
 		cmd := exec.CommandContext(ctx, "bash", "-c", command)
 		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+		cmd.Cancel = func() error {
+			if cmd.Process != nil {
+				return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+			}
+			return nil
+		}
 		out, err := cmd.CombinedOutput()
-		pgid, _ := syscall.Getpgid(cmd.Process.Pid)
+		var pgid int
+		if cmd.Process != nil {
+			pgid, _ = syscall.Getpgid(cmd.Process.Pid)
+		}
 		if err != nil {
 			return responseMsg{text: string(out), err: err, isShell: true, pgid: pgid}
 		}

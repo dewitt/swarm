@@ -82,6 +82,7 @@ func (s *Server) Start() error {
 
 // Stop gracefully shuts down the web server.
 func (s *Server) Stop(ctx context.Context) error {
+	close(s.eventStream)
 	if s.httpServer != nil {
 		// Use Close instead of Shutdown to immediately drop long-lived SSE connections
 		return s.httpServer.Close()

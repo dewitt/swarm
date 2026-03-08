@@ -889,6 +889,30 @@ func (m *defaultSwarm) Plan(ctx context.Context, prompt string, traj Trajectory)
 			Config: &genai.GenerateContentConfig{
 				SystemInstruction: genai.NewContentFromText(planningPrompt, genai.Role("system")),
 				ResponseMIMEType:  "application/json",
+				ResponseSchema: &genai.Schema{
+					Type: genai.TypeObject,
+					Properties: map[string]*genai.Schema{
+						"immediate_response": {Type: genai.TypeString, Description: "Use this to short-circuit the planning phase and respond directly to trivial conversational requests without delegating to sub-agents."},
+						"spans": {
+							Type: genai.TypeArray,
+							Items: &genai.Schema{
+								Type: genai.TypeObject,
+								Properties: map[string]*genai.Schema{
+									"id":           {Type: genai.TypeString, Description: "A unique identifier for this span, like 't1'."},
+									"operation_name": {Type: genai.TypeString, Description: "A short, descriptive name for the task."},
+									"agent":        {Type: genai.TypeString, Description: "The exact name of the sub-agent to execute this span."},
+									"prompt":       {Type: genai.TypeString, Description: "The comprehensive instruction prompt for the sub-agent."},
+									"dependencies": {
+										Type:  genai.TypeArray,
+										Items: &genai.Schema{Type: genai.TypeString},
+										Description: "An array of span IDs that must successfully complete before this span can begin.",
+									},
+								},
+								Required: []string{"id", "operation_name", "agent", "prompt", "dependencies"},
+							},
+						},
+					},
+				},
 			},
 		}, false)
 		jsonStr = ""
@@ -946,6 +970,20 @@ Output your response as strictly valid JSON matching this schema:
 		Config: &genai.GenerateContentConfig{
 			SystemInstruction: genai.NewContentFromText(systemPrompt, genai.Role("system")),
 			ResponseMIMEType:  "application/json",
+			ResponseSchema: &genai.Schema{
+				Type: genai.TypeObject,
+				Properties: map[string]*genai.Schema{
+					"is_resolved": {Type: genai.TypeBoolean, Description: "True if the original goal has been fully completed and verified."},
+					"reasoning":   {Type: genai.TypeString, Description: "Explanation for why the task is or isn't resolved."},
+					"next_steps":  {Type: genai.TypeString, Description: "Explicit instructions for what to do next if not resolved."},
+					"new_facts": {
+						Type:        genai.TypeArray,
+						Items:       &genai.Schema{Type: genai.TypeString},
+						Description: "Timeless facts discovered during this execution to be saved to semantic memory.",
+					},
+				},
+				Required: []string{"is_resolved", "reasoning"},
+			},
 		},
 	}, false)
 

@@ -128,7 +128,6 @@ type defaultSwarm struct {
 	telemetryConfigured bool
 	memory              HierarchicalMemory
 	lsp                 *ManagedLSP
-	embeddedSkills      fs.FS
 }
 
 type SwarmConfig struct {
@@ -140,7 +139,6 @@ type SwarmConfig struct {
 	ForceDonate       bool     // If true, forces the "donate" telemetry flag to true for this run
 	LSPCommand        string   // Optional command to start an MCP-compatible LSP server
 	LSPArgs           []string // Arguments for the LSP command
-	EmbeddedSkills    fs.FS    // Optional embedded filesystem containing default skills
 }
 
 func NewSwarm(cfg ...SwarmConfig) (Swarm, error) {
@@ -303,7 +301,6 @@ func NewSwarm(cfg ...SwarmConfig) (Swarm, error) {
 		trajectoryDir:       trajectoryDir,
 		forceDonate:         forceDonate,
 		telemetryConfigured: telemetryConfigured,
-		embeddedSkills:      cfg[0].EmbeddedSkills,
 	}
 	m.memory = NewHierarchicalMemory(m, NewEpisodicMemory(sessionSvc, m.userID), semanticMem, m)
 
@@ -384,14 +381,12 @@ func (m *defaultSwarm) Reload() error {
 	loadedSkillsMap := make(map[string]*Skill)
 
 	// 1. Load embedded skills first
-	if m.embeddedSkills != nil {
-		if entries, err := fs.ReadDir(m.embeddedSkills, "skills"); err == nil {
-			for _, entry := range entries {
-				if entry.IsDir() {
-					skill, err := LoadSkillFromFS(m.embeddedSkills, filepath.Join("skills", entry.Name()))
-					if err == nil {
-						loadedSkillsMap[skill.Manifest.Name] = skill
-					}
+	if entries, err := fs.ReadDir(DefaultSkills, "skills"); err == nil {
+		for _, entry := range entries {
+			if entry.IsDir() {
+				skill, err := LoadSkillFromFS(DefaultSkills, filepath.Join("skills", entry.Name()))
+				if err == nil {
+					loadedSkillsMap[skill.Manifest.Name] = skill
 				}
 			}
 		}

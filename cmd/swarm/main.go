@@ -10,7 +10,6 @@ import (
 	"os/signal"
 	"syscall"
 
-	root_swarm "github.com/dewitt/swarm"
 	"github.com/dewitt/swarm/pkg/sdk"
 	"github.com/spf13/cobra"
 )
@@ -81,7 +80,6 @@ When run without arguments, it launches a persistent, interactive terminal sessi
 			swarm, err := sdk.NewSwarm(sdk.SwarmConfig{
 				LSPCommand:     lspCommandFlag,
 				LSPArgs:        lspArgsFlag,
-				EmbeddedSkills: root_swarm.DefaultSkills,
 			})
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)

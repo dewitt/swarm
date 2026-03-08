@@ -1257,7 +1257,8 @@ func (m *defaultSwarm) Chat(ctx context.Context, prompt string) (<-chan Observab
 					break // Direct routes exit immediately
 				}
 			} else if graph.ImmediateResponse != "" {
-				if m.runOutputAgent(ctx, out, o, "Swarm", graph.ImmediateResponse) {
+				sanity := m.runOutputAgent(ctx, out, o, "Swarm", graph.ImmediateResponse)
+				if sanity != outputRejected {
 					// Record the immediate response in the persistent session
 					m.appendEvent(ctx, "model", graph.ImmediateResponse)
 					out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm", SpanID: "coordination", TaskName: "Swarm Planning", State: AgentStateComplete, FinalContent: graph.ImmediateResponse}
@@ -1693,10 +1694,18 @@ func (m *defaultSwarm) executeSpan(ctx context.Context, out chan<- ObservableEve
 	}
 
 	// Output Sanity Check (Output Agent)
-	if m.runOutputAgent(ctx, out, o, targetAgent.Name(), finalText) {
+	sanity := m.runOutputAgent(ctx, out, o, targetAgent.Name(), finalText)
+	if sanity != outputRejected {
 		// Record the response in the main conversation history
 		m.appendEvent(ctx, "model", fmt.Sprintf("[%s]: %s", targetAgent.Name(), finalText))
 		out <- ObservableEvent{Timestamp: time.Now(), AgentName: targetAgent.Name(), SpanID: span.ID, TaskName: span.Name, ParentID: span.ParentID, State: AgentStateComplete, FinalContent: finalText}
+		
+		if sanity == outputNeedsInput {
+			// If the agent explicitly asks the user a question, we must override any replan requests
+			// and return normally so the engine halts and bubbles the question up to the user.
+			return finalText, SpanStatusComplete, false
+		}
+		
 		return finalText, SpanStatusComplete, needsReplan
 	}
 
@@ -1710,30 +1719,42 @@ func (m *defaultSwarm) appendEvent(ctx context.Context, author, content string) 
 	}
 }
 
-func (m *defaultSwarm) runOutputAgent(ctx context.Context, out chan<- ObservableEvent, o *Engine, agentName, content string) bool {
+type outputSanity int
+
+const (
+	outputApproved outputSanity = iota
+	outputRejected
+	outputNeedsInput
+)
+
+func (m *defaultSwarm) runOutputAgent(ctx context.Context, out chan<- ObservableEvent, o *Engine, agentName, content string) outputSanity {
 	coaStart := time.Now()
-	coaPrompt := fmt.Sprintf("Sanity check worker: %s. Response: %s. RULE: Output ONLY 'OK' or 'FIX: [reason]'.", agentName, content)
+	coaPrompt := fmt.Sprintf("Sanity check worker: %s. Response: %s. RULE: Output ONLY 'OK', 'FIX: [reason]', or 'ASK_USER' if the agent explicitly asked the user a question requiring an answer before proceeding.", agentName, content)
 	respIter := m.fastModel.GenerateContent(ctx, &model.LLMRequest{
 		Contents: []*genai.Content{genai.NewContentFromText(coaPrompt, genai.Role("user"))},
 		Config:   &genai.GenerateContentConfig{SystemInstruction: genai.NewContentFromText(m.outputInstruction, genai.Role("system"))},
 	}, false)
 
-	approved := true
+	status := outputApproved
 	var res string
 	for resp, err := range respIter {
 		if err == nil && resp.Content != nil && len(resp.Content.Parts) > 0 {
-			res = resp.Content.Parts[0].Text
+			res = strings.TrimSpace(resp.Content.Parts[0].Text)
 			if strings.HasPrefix(res, "FIX:") {
 				out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Output Agent", State: AgentStateError, FinalContent: "Rejected: " + res}
-				approved = false
+				status = outputRejected
+			} else if strings.HasPrefix(res, "ASK_USER") {
+				status = outputNeedsInput
 			}
 		}
 		break
 	}
 
 	// Update UI card state
-	if approved {
+	if status == outputApproved {
 		out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Output Agent", State: AgentStateComplete, FinalContent: "OK"}
+	} else if status == outputNeedsInput {
+		out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Output Agent", State: AgentStateComplete, FinalContent: "Detected user question"}
 	}
 
 	if o != nil {
@@ -1743,7 +1764,8 @@ func (m *defaultSwarm) runOutputAgent(ctx context.Context, out chan<- Observable
 			Duration: time.Since(coaStart).String(), Attributes: map[string]any{"gen_ai.prompt": coaPrompt, "gen_ai.completion": res},
 		})
 	}
-	return approved
+
+	return status
 }
 
 func (m *defaultSwarm) Rewind(n int) error {

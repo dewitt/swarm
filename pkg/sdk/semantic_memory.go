@@ -11,6 +11,16 @@ import (
 	"gorm.io/gorm/logger"
 )
 
+var stopWords = map[string]bool{
+	"a": true, "an": true, "and": true, "are": true, "as": true, "at": true, "be": true, "but": true, "by": true,
+	"for": true, "if": true, "in": true, "into": true, "is": true, "it": true,
+	"no": true, "not": true, "of": true, "on": true, "or": true, "such": true,
+	"that": true, "the": true, "their": true, "then": true, "there": true, "these": true,
+	"they": true, "this": true, "to": true, "was": true, "will": true, "with": true,
+	"what": true, "where": true, "who": true, "why": true, "how": true, "when": true,
+	"does": true, "do": true, "did": true, "can": true, "could": true, "should": true, "would": true,
+}
+
 type SemanticFact struct {
 	ID        uint   `gorm:"primarykey"`
 	Fact      string `gorm:"type:text"`
@@ -50,28 +60,33 @@ func NewSemanticMemory(workspaceDir string) (SemanticMemory, error) {
 	}
 
 	if ftsEnabled {
-		// Only create FTS5 tables and triggers if we verified it is fully supported by the driver
-		db.Exec(`CREATE VIRTUAL TABLE IF NOT EXISTS semantic_facts_fts USING fts5(fact, content='semantic_facts', content_rowid='id');`)
+		// Drop existing FTS table and triggers to apply schema changes (like tokenize='porter')
+		db.Exec(`DROP TRIGGER IF EXISTS semantic_facts_ai;`)
+		db.Exec(`DROP TRIGGER IF EXISTS semantic_facts_ad;`)
+		db.Exec(`DROP TRIGGER IF EXISTS semantic_facts_au;`)
+		db.Exec(`DROP TABLE IF EXISTS semantic_facts_fts;`)
+
+		// Recreate with porter stemmer
+		db.Exec(`CREATE VIRTUAL TABLE semantic_facts_fts USING fts5(fact, content='semantic_facts', content_rowid='id', tokenize='porter');`)
 
 		db.Exec(`
-			CREATE TRIGGER IF NOT EXISTS semantic_facts_ai AFTER INSERT ON semantic_facts BEGIN
+			CREATE TRIGGER semantic_facts_ai AFTER INSERT ON semantic_facts BEGIN
 				INSERT INTO semantic_facts_fts(rowid, fact) VALUES (new.id, new.fact);
 			END;
 		`)
 		db.Exec(`
-			CREATE TRIGGER IF NOT EXISTS semantic_facts_ad AFTER DELETE ON semantic_facts BEGIN
+			CREATE TRIGGER semantic_facts_ad AFTER DELETE ON semantic_facts BEGIN
 				INSERT INTO semantic_facts_fts(semantic_facts_fts, rowid, fact) VALUES ('delete', old.id, old.fact);
 			END;
 		`)
 		db.Exec(`
-			CREATE TRIGGER IF NOT EXISTS semantic_facts_au AFTER UPDATE ON semantic_facts BEGIN
+			CREATE TRIGGER semantic_facts_au AFTER UPDATE ON semantic_facts BEGIN
 				INSERT INTO semantic_facts_fts(semantic_facts_fts, rowid, fact) VALUES ('delete', old.id, old.fact);
 				INSERT INTO semantic_facts_fts(rowid, fact) VALUES (new.id, new.fact);
 			END;
 		`)
 
 		// Rebuild the FTS index to ensure it is fully synchronized with the underlying semantic_facts table.
-		// This guarantees that if FTS was previously disabled and is now enabled, existing facts are indexed.
 		db.Exec(`INSERT INTO semantic_facts_fts(semantic_facts_fts) VALUES('rebuild');`)
 	}
 
@@ -99,10 +114,20 @@ func (sm *sqliteSemanticMemory) Retrieve(query string, limit int) ([]string, err
 		}
 		safeQuery := sb.String()
 
-		// 2. Convert spaces to OR operators so that if ANY keyword matches, the fact is retrieved.
+		// 2. Filter out common stopwords and convert spaces to OR operators
 		// This makes retrieval much more robust for natural language prompts.
 		parts := strings.Fields(safeQuery)
-		if len(parts) > 0 {
+		var filteredParts []string
+		for _, p := range parts {
+			if !stopWords[strings.ToLower(p)] {
+				filteredParts = append(filteredParts, p)
+			}
+		}
+
+		if len(filteredParts) > 0 {
+			safeQuery = strings.Join(filteredParts, " OR ")
+		} else {
+			// Fallback: if everything was a stopword, just use the original parts
 			safeQuery = strings.Join(parts, " OR ")
 		}
 
@@ -126,7 +151,19 @@ func (sm *sqliteSemanticMemory) Retrieve(query string, limit int) ([]string, err
 
 		var orQueries []string
 		var orArgs []interface{}
-		for _, word := range strings.Fields(safeQuery) {
+		
+		parts := strings.Fields(safeQuery)
+		var filteredParts []string
+		for _, p := range parts {
+			if !stopWords[strings.ToLower(p)] {
+				filteredParts = append(filteredParts, p)
+			}
+		}
+		if len(filteredParts) == 0 {
+			filteredParts = parts
+		}
+		
+		for _, word := range filteredParts {
 			orQueries = append(orQueries, "fact LIKE ?")
 			orArgs = append(orArgs, "%"+word+"%")
 		}

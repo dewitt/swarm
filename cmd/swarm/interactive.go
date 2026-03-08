@@ -33,6 +33,11 @@ import (
 	"github.com/dewitt/swarm/pkg/web"
 )
 
+const (
+	borderHeight = 2
+	statusHeight = 1
+)
+
 var (
 	// Brand Colors
 	googleBlue   = lipgloss.Color("#4285F4")
@@ -1889,7 +1894,7 @@ func (m *model) updateViewport() {
 		return
 	}
 
-	// 1. Calculate dynamic UI heights to set the viewport height accurately BEFORE setting content
+	// 1. Calculate dynamic UI heights
 	agentPanelHeight := 0
 	if m.showAgentPanel {
 		agentPanelHeight = lipgloss.Height(m.renderAgentPanel())
@@ -1900,77 +1905,57 @@ func (m *model) updateViewport() {
 		Border(lipgloss.NormalBorder()).
 		BorderForeground(t.borderColor).
 		Padding(0, 1)
-	inputHeight := lipgloss.Height(inputBoxStyle.Width(m.width - 2).Render(m.textArea.View()))
+
+	// Explicitly render the input area to get its real height
+	inputView := inputBoxStyle.Width(m.width - 2).Render(m.textArea.View())
+	inputHeight := lipgloss.Height(inputView)
 
 	acHeight := 0
 	if m.acActive && len(m.acMatches) > 0 {
-		var lines []string
-		for i, match := range m.acMatches {
-			if i == m.acIndex {
-				lines = append(lines, " "+match+" ")
-			} else {
-				lines = append(lines, " "+match+" ")
-			}
-		}
-		if m.acHasMore {
-			lines = append(lines, " ... ")
-		}
-		acView := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Padding(0, 1).Render(strings.Join(lines, "\n"))
-		acHeight = lipgloss.Height(acView)
+		acHeight = 5 // Approximation for autocomplete dropdown
 	}
 
-	statusHeight := 1
-	newHeight := m.height - agentPanelHeight - inputHeight - acHeight - statusHeight - 2
+	// 2. Compute Viewport Height
+	newHeight := m.height - agentPanelHeight - inputHeight - acHeight - statusHeight - borderHeight
 	if newHeight < 1 {
 		newHeight = 1
 	}
 	m.viewport.SetHeight(newHeight)
 
-	// Prepare the dynamic message list
+	// 3. Compute Viewport Width
+	vpWidth := m.width - 8
+	if vpWidth < 10 {
+		vpWidth = 10
+	}
+	m.viewport.SetWidth(vpWidth)
+
+	// 4. Update Markdown Renderer
+	if m.renderer != nil {
+		style := "dark"
+		if !m.isDark {
+			style = "light"
+		}
+		m.renderer, _ = glamour.NewTermRenderer(
+			glamour.WithStandardStyle(style),
+			glamour.WithWordWrap(vpWidth-4),
+		)
+	}
+
+	// 5. Build and Set Content
 	var renderedMessages []string
-	vpWidth := m.viewport.Width()
 	for _, msg := range m.messages {
-		// Just ensure the message block doesn't exceed the viewport width.
-		// If it's already wrapped by glamour, this will mostly be a no-op but safe.
 		renderedMessages = append(renderedMessages, lipgloss.NewStyle().Width(vpWidth).Render(msg))
 	}
 
-	// Add dynamic status if loading
 	if m.loading {
-		if m.observeMode && len(m.observeLog) > 0 {
-			displayLogs := m.observeLog
-			if len(displayLogs) > 10 {
-				displayLogs = displayLogs[len(displayLogs)-10:]
-			}
-
-			observeBox := lipgloss.NewStyle().
-				Border(lipgloss.NormalBorder()).
-				BorderForeground(googleYellow).
-				Padding(0, 1).
-				Width(m.width - 6).
-				Render(lipgloss.JoinVertical(lipgloss.Left,
-					lipgloss.NewStyle().Foreground(googleYellow).Bold(true).Render("👀 Observing Agent Execution:"),
-					strings.Join(displayLogs, "\n"),
-				))
-			renderedMessages = append(renderedMessages, observeBox)
-		}
-
 		status := "Thinking..."
 		if m.globalSummary != "" {
 			status = m.globalSummary
 		}
-		// The user requested '⣾' or a braille spinner. The default spinner in bubbles is dot/braille.
-		// So we will just use m.spinner.View().
-		renderedMessages = append(renderedMessages, m.spinner.View()+" "+lipgloss.NewStyle().Foreground(googleBlue).Italic(true).Render(status))
+		renderedMessages = append(renderedMessages, m.spinner.View()+" "+lipgloss.NewStyle().Foreground(lipgloss.Color("#4169E1")).Italic(true).Render(status))
 	}
 
 	m.viewport.SetContent(strings.Join(renderedMessages, "\n\n"))
-
-	// Give the viewport a moment to update its internal geometry before forcing the scroll.
-	// Since Update() isn't inherently asynchronous with respect to geometry here,
-	// we force the goto bottom if we were already there OR if we just added a command response.
-	// Actually, the most reliable way to prevent the "hidden text" bug when appending large blocks
-	// is to just unconditionally go to the bottom when new messages arrive.
 	m.viewport.GotoBottom()
 }
 

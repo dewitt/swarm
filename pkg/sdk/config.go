@@ -18,6 +18,38 @@ type Config struct {
 	Telemetry bool   `yaml:"telemetry,omitempty"`
 }
 
+// FindProjectRoot searches upwards from the current directory to find the nearest
+// directory containing a .git or .gemini folder. Returns the current working
+// directory if no root is found.
+func FindProjectRoot() string {
+	absPath, err := filepath.Abs(".")
+	if err != nil {
+		return "."
+	}
+	origPath := absPath
+	for {
+		// Look for common project markers
+		if info, err := os.Stat(filepath.Join(absPath, ".git")); err == nil && info.IsDir() {
+			return absPath
+		}
+		if info, err := os.Stat(filepath.Join(absPath, ".gemini")); err == nil && info.IsDir() {
+			return absPath
+		}
+		if info, err := os.Stat(filepath.Join(absPath, "skills")); err == nil && info.IsDir() {
+			return absPath
+		}
+		if _, err := os.Stat(filepath.Join(absPath, "go.mod")); err == nil {
+			return absPath
+		}
+
+		parentDir := filepath.Dir(absPath)
+		if parentDir == absPath {
+			return origPath
+		}
+		absPath = parentDir
+	}
+}
+
 // GetConfigDir returns the directory for Swarm configuration and state, creating it if necessary.
 func GetConfigDir() (string, error) {
 	home, err := os.UserHomeDir()

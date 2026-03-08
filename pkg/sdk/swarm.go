@@ -291,8 +291,8 @@ func NewSwarm(cfg ...SwarmConfig) (Swarm, error) {
 		telemetryConfigured = globalCfg.Telemetry
 	}
 
-	cwd, _ := os.Getwd()
-	semanticMem, err := NewSemanticMemory(cwd)
+	root := FindProjectRoot()
+	semanticMem, err := NewSemanticMemory(root)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize semantic memory: %w", err)
 	}
@@ -478,19 +478,11 @@ func (m *defaultSwarm) Reload() error {
 	}
 
 	// 1. Find the local project skills directory (search upwards)
-	absPath, _ := filepath.Abs(".")
 	localSkillsPath := ""
-	for {
-		testPath := filepath.Join(absPath, "skills")
-		if info, err := os.Stat(testPath); err == nil && info.IsDir() {
-			localSkillsPath = testPath
-			break
-		}
-		parentDir := filepath.Dir(absPath)
-		if parentDir == absPath {
-			break
-		}
-		absPath = parentDir
+	root := FindProjectRoot()
+	testPath := filepath.Join(root, "skills")
+	if info, err := os.Stat(testPath); err == nil && info.IsDir() {
+		localSkillsPath = testPath
 	}
 
 	// 2. Find the global config skills directory

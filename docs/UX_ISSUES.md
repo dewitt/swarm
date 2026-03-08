@@ -30,9 +30,10 @@ collect these over time to inform future sprint priorities.
 
 ## 🎨 Aesthetic Polish
 
-- [ ] **Hidden "/model" Command:** The `Quick Tips` on the splash screen don't
+- [x] **Hidden "/model" Command:** The `Quick Tips` on the splash screen don't
   mention how to change the active LLM. We should add `/model` to the tips so
-  it's discoverable without reading `/help`.
+  it's discoverable without reading `/help`. Fix: Added to boot message
+  footer.
 - [ ] **Web Panel Infinite Reconnect Loop:** When the CLI exits, the browser
   panel flashes a red "Disconnected - Retrying..." badge indefinitely. It
   should detect a graceful shutdown and display a clean "Session Ended" state.

@@ -77,14 +77,21 @@ func (sm *SemanticMemory) Retrieve(query string, limit int) ([]string, error) {
 	var err error
 
 	if sm.ftsEnabled {
-		// Basic sanitization for FTS5: remove characters that trigger FTS5 special syntax
+		// Aggressive sanitization for FTS5 natural language:
+		// 1. Remove all common punctuation that triggers FTS5 special syntax or causes mismatch
 		safeQuery := query
-		for _, char := range []string{"\"", "'", "*", "^", "-", ".", "(", ")", "[", "]", "{", "}"} {
+		for _, char := range []string{"\"", "'", "*", "^", "-", ".", "(", ")", "[", "]", "{", "}", "?", "!", ":", ";", ",", "/"} {
 			safeQuery = strings.ReplaceAll(safeQuery, char, " ")
 		}
 
-		err = sm.db.Raw(`
-			SELECT sf.* FROM semantic_facts sf
+		// 2. Convert spaces to OR operators so that if ANY keyword matches, the fact is retrieved.
+		// This makes retrieval much more robust for natural language prompts.
+		parts := strings.Fields(safeQuery)
+		if len(parts) > 0 {
+			safeQuery = strings.Join(parts, " OR ")
+		}
+
+		err = sm.db.Raw(`			SELECT sf.* FROM semantic_facts sf
 			JOIN semantic_facts_fts fts ON sf.id = fts.rowid
 			WHERE semantic_facts_fts MATCH ?
 			ORDER BY rank

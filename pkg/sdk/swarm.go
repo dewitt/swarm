@@ -753,12 +753,7 @@ func (m *defaultSwarm) Plan(ctx context.Context, prompt string, traj Trajectory)
 		}
 
 		// 2. Look for semantic memories related to the user's actual prompt
-		// Note: we sanitize the prompt slightly to improve FTS5 matching (e.g. removing basic punctuation)
-		cleanPrompt := strings.ReplaceAll(prompt, "?", "")
-		cleanPrompt = strings.ReplaceAll(cleanPrompt, "\"", "")
-		cleanPrompt = strings.ReplaceAll(cleanPrompt, "'", "")
-
-		if userFacts, err := m.semanticMem.Retrieve(cleanPrompt, 3); err == nil && len(userFacts) > 0 {
+		if userFacts, err := m.semanticMem.Retrieve(prompt, 3); err == nil && len(userFacts) > 0 {
 			injectedFacts = append(injectedFacts, userFacts...)
 		}
 

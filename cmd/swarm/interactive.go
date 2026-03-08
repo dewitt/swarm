@@ -2558,14 +2558,9 @@ func (m model) View() tea.View {
 	if m.showAgentPanel {
 		agentPanelView = m.renderAgentPanel()
 	}
-	agentPanelHeight := lipgloss.Height(agentPanelView)
 
 	// Input Box with border
 	inputView := inputBoxStyle.Width(m.width - 2).Render(m.textArea.View())
-	inputHeight := lipgloss.Height(inputView)
-
-	// Status line height
-	statusHeight := 1
 
 	// Autocomplete Box
 	acView := ""
@@ -2583,17 +2578,9 @@ func (m model) View() tea.View {
 		}
 		acView = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(primaryColor).Padding(0, 1).Render(strings.Join(lines, "\n"))
 	}
-	acHeight := lipgloss.Height(acView)
-
-	// Recalculate viewport height to fill remaining space
-	// Subtract 2 for the viewportStyle's own top/bottom borders
-	m.viewport.SetHeight(m.height - agentPanelHeight - inputHeight - acHeight - statusHeight - 2)
-	if m.viewport.Height() < 1 {
-		m.viewport.SetHeight(1)
-	}
 
 	// Output Box (Viewport) with border
-	// Note: Width is already managed in tea.WindowSizeMsg to prevent clipping
+	// Note: Height and Width are already managed in updateViewport to prevent clipping
 	contentWidth := m.width - 6
 	vpWidth := m.viewport.Width()
 	scrollable := m.viewport.TotalLineCount() > m.viewport.Height()

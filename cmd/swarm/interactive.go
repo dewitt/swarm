@@ -1869,6 +1869,7 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 
 		icon := agentMsgStyle.Render("✦ ")
 		m.appendMessage(lipgloss.JoinHorizontal(lipgloss.Top, icon, strings.TrimSpace(out)))
+		m.updateViewport()
 	default:
 		m.appendMessage(lipgloss.NewStyle().Foreground(errorColor).Render("Unknown command: " + cmd))
 	}

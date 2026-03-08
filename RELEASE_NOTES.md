@@ -1,3 +1,66 @@
+# Swarm v0.06 Release Notes
+
+We are excited to announce the **v0.06** release of Swarm. This release
+establishes the foundational pillars of our "Self-Healing Swarm" architecture,
+introduces native semantic codebase mapping, and dramatically improves the
+core stability and reliability of the SDK.
+
+## Core Features and Fixes Delivered in v0.06
+
+### 1. Native Semantic Orchestration (LSP & Tree-sitter)
+
+Swarm agents no longer rely on brittle `grep` searches for codebase discovery.
+We have introduced a dual-engine semantic architecture:
+
+- **Tree-sitter Integration:** Agents can now instantly extract high-level
+  structural skeletons (structs, interfaces, methods) of large files without
+  blowing out their context window with implementation details.
+- **Model Context Protocol (MCP) Bridge:** We integrated the official `mcp-go`
+  SDK, allowing Swarm to orchestrate real Language Servers (like `gopls` or
+  `pyright`) as detached background daemons.
+- **High-Yield Abstractions:** Agents are now equipped with abstracted,
+  type-safe tools (`analyze_impact`, `get_api_signature`, `validate_code`,
+  `rename_symbol`) to execute complex refactors deterministically.
+
+### 2. The Self-Healing Ecosystem
+
+We implemented several critical mechanisms from Epic #29 to allow the Swarm to
+dynamically recover from errors:
+
+- **Asynchronous HITL Interception:** The engine now intercepts and parses
+  sub-agent output. If an agent explicitly asks the user a question or hits a
+  blocking failure, the Swarm will forcibly halt any replanning loops and
+  gracefully bubble the prompt up to the user.
+- **Automated Post-Incident Artifacts:** When the Swarm hits a fatal recursive
+  loop, it now automatically generates a localized `incident_report.md`
+  containing the full JSON trajectory dump for post-mortem analysis.
+- **Dynamic Skill Reloading:** The orchestrator now performs thread-safe
+  hot-reloading of the `skills/` directory mid-session. When the
+  `skill_builder_agent` creates a new skill, the Swarm instantly ingests and
+  routes to it.
+- **Sysadmin Agent:** A new specialized environment manager that safely
+  auto-diagnoses the host OS and installs missing dependencies (via Homebrew,
+  APT, npm) into localized environments.
+
+### 3. Quality of Life & Refactoring
+
+- **SDK Modularization:** Dismantled the massive 1,800-line `swarm.go` God
+  Object into six tightly scoped, domain-specific behavioral files
+  (`swarm_plan.go`, `swarm_reflect.go`, etc.), massively improving agentic
+  navigation and reducing merge conflicts.
+- **Semantic Forgetting (`/forget`):** Added a new CLI command enabling users
+  to surgically purge hallucinated or poisoned facts from the persistent
+  `state.db` database.
+- **UI & Noise Reduction:** Autocomplete suggestion boxes now render as true
+  visual overlays rather than disruptive layout shifts. Single-shot prompt
+  mode is now completely silent by default, hiding intermediate routing steps
+  unless `--verbose` is passed.
+- **Naked Crash Prevention:** Gracefully intercepted missing `GOOGLE_API_KEY`
+  panics, ensuring the terminal doesn't leak raw struct dumps or `lipgloss`
+  ANSI escape artifacts upon early exit.
+
+______________________________________________________________________
+
 # Swarm v0.05 Release Notes
 
 We are thrilled to announce the **v0.05** release of Swarm. This release

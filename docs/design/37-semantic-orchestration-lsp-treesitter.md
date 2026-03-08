@@ -1,8 +1,6 @@
 # Design Doc: Native Semantic Orchestration (LSP & Tree-sitter)
 
-**Status:** Proposed
-**Author:** Gemini CLI Swarm
-**Date:** March 2026
+**Status:** Proposed **Author:** Gemini CLI Swarm **Date:** March 2026
 
 ## Objective
 
@@ -29,6 +27,7 @@ Following the industry standard identified in recent research, we will
 implement a hybrid architecture:
 
 ### A. Tree-sitter (Fast, Local Structural Parsing)
+
 - **Use Case:** Instant codebase mapping, semantic chunking for RAG, and
   extracting function skeletons without needing a functional build
   environment.
@@ -38,10 +37,11 @@ implement a hybrid architecture:
   directory (classes, methods, signatures) without implementation bodies.
 
 ### B. LSP via MCP (Deep, Dynamic Semantic Analysis)
+
 - **Use Case:** Deterministic "Go to Definition," "Find References," "Symbol
   Rename," and real-time type diagnostics.
-- **Implementation:** Abandon custom JSON-RPC wrappers. Integrate the
-  official **Model Context Protocol (MCP)** SDK as a managed intermediary.
+- **Implementation:** Abandon custom JSON-RPC wrappers. Integrate the official
+  **Model Context Protocol (MCP)** SDK as a managed intermediary.
 - **Bridging:** Swarm will spawn language servers (like `gopls` or `pyright`)
   in a detached daemon mode with network listening flags (HTTP/SSE) to
   completely sidestep pipe-based deadlocks.
@@ -53,12 +53,12 @@ implement a hybrid architecture:
 We will not expose raw LSP JSON-RPC to the LLM. Instead, we will register
 abstracted, intent-driven tools:
 
-| Abstracted LLM Tool | Underlying Action | Purpose |
-| :--- | :--- | :--- |
-| `analyze_impact` | `textDocument/references` | Determine the "blast radius" of a change. |
-| `get_api_signature` | `hover` / `signatureHelp` | Understand how to call a function/class. |
-| `validate_code` | `publishDiagnostics` | Real-time grounding and recursive self-correction. |
-| `rename_symbol` | `textDocument/rename` | Safe, project-wide refactoring. |
+| Abstracted LLM Tool | Underlying Action | Purpose | | :--- | :--- | :--- | |
+`analyze_impact` | `textDocument/references` | Determine the "blast radius" of
+a change. | | `get_api_signature` | `hover` / `signatureHelp` | Understand how
+to call a function/class. | | `validate_code` | `publishDiagnostics` |
+Real-time grounding and recursive self-correction. | | `rename_symbol` |
+`textDocument/rename` | Safe, project-wide refactoring. |
 
 ## 4. Context Window & Large Payload Management
 
@@ -69,7 +69,7 @@ references):
    will write the raw result to a hidden temporary file (`.swarm/tmp/...`) and
    return a synthesized summary to the agent with instructions on how to
    paginate through the full file.
-2. **Graph-Based Ranking:** Implement a basic PageRank-style algorithm to
+1. **Graph-Based Ranking:** Implement a basic PageRank-style algorithm to
    prioritize the most "architecturally significant" files in the repository
    map.
 
@@ -77,12 +77,12 @@ references):
 
 1. **Phase 1: MCP Client Integration:** Add the Go MCP SDK dependency and
    implement a `ManagedLSP` struct to handle server lifecycles.
-2. **Phase 2: The "Overwatch" Safety:** Implement hard caps on sequential LSP
+1. **Phase 2: The "Overwatch" Safety:** Implement hard caps on sequential LSP
    calls and timeouts to prevent recursive hallucination loops.
-3. **Phase 3: Autonomous Provisioning:** Enable the SDK to detect missing
+1. **Phase 3: Autonomous Provisioning:** Enable the SDK to detect missing
    binaries and autonomously run `go install` or `npm install` to provision
    the required environment.
-4. **Phase 4: Agentic Eval:** Update `scenario_7_lsp` to verify that agents
+1. **Phase 4: Agentic Eval:** Update `scenario_7_lsp` to verify that agents
    actively prefer these new tools over primitive `grep`.
 
 ## 6. Philosophy Alignment

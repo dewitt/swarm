@@ -512,7 +512,9 @@ func doLogoTick() tea.Cmd {
 }
 
 func initialModel(planMode bool, resume bool) (model, error) {
-	isDark := lipgloss.HasDarkBackground(os.Stdin, os.Stdout)
+	// We assume dark mode initially. We will rely on tea.RequestBackgroundColor 
+	// later in the update loop to adjust it if needed.
+	isDark := true
 
 	ta := textarea.New()
 	ta.SetStyles(textarea.DefaultStyles(isDark))

@@ -49,12 +49,12 @@ func TestSemanticMemoryE2E(t *testing.T) {
 
 	projectRoot := filepath.Join(originalWd, "..", "..")
 	skillsDir := filepath.Join(projectRoot, "skills")
-	
+
 	err = os.Symlink(skillsDir, filepath.Join(tmpDir, "skills"))
 	if err != nil {
 		t.Fatalf("failed to symlink skills dir: %v", err)
 	}
-	
+
 	err = os.Symlink(filepath.Join(projectRoot, "AGENTS.md"), filepath.Join(tmpDir, "AGENTS.md"))
 	if err != nil {
 		t.Fatalf("failed to symlink AGENTS.md: %v", err)
@@ -71,7 +71,7 @@ func TestSemanticMemoryE2E(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	// 3. First Query: Instruct the agent to find the ingredient. 
+	// 3. First Query: Instruct the agent to find the ingredient.
 	// We do NOT tell it to commit anything; we expect passive extraction.
 	t.Log("Sending Query 1: Discovering the fact (Passive)...")
 	q1 := "There is a secret recipe located in the secrets directory. Find it and tell me the hidden ingredient in a clear, natural sentence."

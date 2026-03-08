@@ -4,14 +4,36 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/dewitt/swarm/pkg/sdk"
-
 	tea "charm.land/bubbletea/v2"
+	"github.com/dewitt/swarm/pkg/sdk"
 )
+
+type mockSwarm struct {
+	sdk.Swarm
+}
+
+func (m mockSwarm) SessionID() string { return "test-session" }
+func (m mockSwarm) ListContext() []string { return []string{} }
+func (m mockSwarm) Skills() []*sdk.Skill { return nil }
+func (m mockSwarm) Memory() sdk.HierarchicalMemory {
+	return mockMemory{}
+}
+
+type mockMemory struct {
+	sdk.HierarchicalMemory
+}
+func (m mockMemory) Semantic() sdk.SemanticMemory {
+	return mockSemanticMemory{}
+}
+
+type mockSemanticMemory struct {
+	sdk.SemanticMemory
+}
+func (m mockSemanticMemory) FTSEnabled() bool { return false }
 
 func TestSnapshotUI(t *testing.T) {
 	// 1. Instantiate the model
-	m, _ := initialModel(false, false)
+	m, _ := initialModel(false, false, mockSwarm{})
 
 	// 2. Simulate a terminal window size (e.g., 80x24 standard terminal)
 	// This is critical because the View() function relies on m.width and m.height
@@ -34,7 +56,7 @@ func TestSnapshotUI(t *testing.T) {
 }
 
 func TestSnapshotModelList(t *testing.T) {
-	m, _ := initialModel(false, false)
+	m, _ := initialModel(false, false, mockSwarm{})
 
 	// 1. Simulate size
 	newModel, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
@@ -63,7 +85,7 @@ func TestSnapshotModelList(t *testing.T) {
 }
 
 func TestSnapshotFileAutocomplete(t *testing.T) {
-	m, _ := initialModel(false, false)
+	m, _ := initialModel(false, false, mockSwarm{})
 	newModel, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	m = newModel.(model)
 
@@ -77,7 +99,7 @@ func TestSnapshotFileAutocomplete(t *testing.T) {
 }
 
 func TestHistoryNavigation(t *testing.T) {
-	m, _ := initialModel(false, false)
+	m, _ := initialModel(false, false, mockSwarm{})
 	m.history = []string{"first command", "second command"}
 	m.historyIdx = 2
 
@@ -136,7 +158,7 @@ func TestHistoryNavigation(t *testing.T) {
 }
 
 func TestGitStatusUpdate(t *testing.T) {
-	m, _ := initialModel(false, false)
+	m, _ := initialModel(false, false, mockSwarm{})
 
 	// Initial state
 	m.gitBranch = "old-branch"
@@ -165,7 +187,7 @@ func TestGitStatusUpdate(t *testing.T) {
 }
 
 func TestGitTickUpdate(t *testing.T) {
-	m, _ := initialModel(false, false)
+	m, _ := initialModel(false, false, mockSwarm{})
 
 	// Simulate gitTickMsg
 	msg := gitTickMsg{}
@@ -192,7 +214,7 @@ func TestCheckGitStatus(t *testing.T) {
 }
 
 func TestResponseMsgTriggersGitStatusUpdate(t *testing.T) {
-	m, _ := initialModel(false, false)
+	m, _ := initialModel(false, false, mockSwarm{})
 	msg := responseMsg{text: "some output", isShell: true}
 
 	_, cmd := m.Update(msg)

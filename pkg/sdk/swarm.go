@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"iter"
 	"math/rand"
 	"net"
@@ -127,6 +128,7 @@ type defaultSwarm struct {
 	telemetryConfigured bool
 	memory              HierarchicalMemory
 	lsp                 *ManagedLSP
+	embeddedSkills      fs.FS
 }
 
 type SwarmConfig struct {
@@ -138,6 +140,7 @@ type SwarmConfig struct {
 	ForceDonate       bool     // If true, forces the "donate" telemetry flag to true for this run
 	LSPCommand        string   // Optional command to start an MCP-compatible LSP server
 	LSPArgs           []string // Arguments for the LSP command
+	EmbeddedSkills    fs.FS    // Optional embedded filesystem containing default skills
 }
 
 func NewSwarm(cfg ...SwarmConfig) (Swarm, error) {
@@ -300,6 +303,7 @@ func NewSwarm(cfg ...SwarmConfig) (Swarm, error) {
 		trajectoryDir:       trajectoryDir,
 		forceDonate:         forceDonate,
 		telemetryConfigured: telemetryConfigured,
+		embeddedSkills:      cfg[0].EmbeddedSkills,
 	}
 	m.memory = NewHierarchicalMemory(m, NewEpisodicMemory(sessionSvc, m.userID), semanticMem, m)
 
@@ -368,7 +372,6 @@ func (m *defaultSwarm) Reload() error {
 
 	var subAgents []agent.Agent
 	var loadedSkills []*Skill
-	var skill *Skill
 	var instruction string
 	loadedContext, loadedFiles := LoadContextFiles()
 
@@ -377,47 +380,59 @@ func (m *defaultSwarm) Reload() error {
 		m.pinnedContext[f] = "" // Mark as loaded but don't duplicate content in memory
 	}
 
-	// 1. Find the local project skills directory (search upwards)
+	// Gather all skills
+	loadedSkillsMap := make(map[string]*Skill)
+
+	// 1. Load embedded skills first
+	if m.embeddedSkills != nil {
+		if entries, err := fs.ReadDir(m.embeddedSkills, "skills"); err == nil {
+			for _, entry := range entries {
+				if entry.IsDir() {
+					skill, err := LoadSkillFromFS(m.embeddedSkills, filepath.Join("skills", entry.Name()))
+					if err == nil {
+						loadedSkillsMap[skill.Manifest.Name] = skill
+					}
+				}
+			}
+		}
+	}
+
+	// 2. Load global config skills
+	globalSkillsPath := ""
+	if configDir, err := GetConfigDir(); err == nil {
+		globalSkillsPath = filepath.Join(configDir, "skills")
+		_ = os.MkdirAll(globalSkillsPath, 0o755)
+		if entries, err := os.ReadDir(globalSkillsPath); err == nil {
+			for _, entry := range entries {
+				if entry.IsDir() {
+					skill, err := LoadSkill(filepath.Join(globalSkillsPath, entry.Name()))
+					if err == nil {
+						loadedSkillsMap[skill.Manifest.Name] = skill
+					}
+				}
+			}
+		}
+	}
+
+	// 3. Load local project skills (overrides global)
 	localSkillsPath := ""
 	root := FindProjectRoot()
 	testPath := filepath.Join(root, "skills")
 	if info, err := os.Stat(testPath); err == nil && info.IsDir() {
 		localSkillsPath = testPath
-	}
-
-	// 2. Find the global config skills directory
-	globalSkillsPath := ""
-	if configDir, err := GetConfigDir(); err == nil {
-		globalSkillsPath = filepath.Join(configDir, "skills")
-		_ = os.MkdirAll(globalSkillsPath, 0o755)
-	}
-
-	// Gather all skill directories
-	skillDirs := []string{}
-
-	// Collect local project skills
-	if localSkillsPath != "" {
 		if entries, err := os.ReadDir(localSkillsPath); err == nil {
 			for _, entry := range entries {
 				if entry.IsDir() {
-					skillDirs = append(skillDirs, filepath.Join(localSkillsPath, entry.Name()))
+					skill, err := LoadSkill(filepath.Join(localSkillsPath, entry.Name()))
+					if err == nil {
+						loadedSkillsMap[skill.Manifest.Name] = skill
+					}
 				}
 			}
 		}
 	}
 
-	// Collect global config skills
-	if globalSkillsPath != "" {
-		if entries, err := os.ReadDir(globalSkillsPath); err == nil {
-			for _, entry := range entries {
-				if entry.IsDir() {
-					skillDirs = append(skillDirs, filepath.Join(globalSkillsPath, entry.Name()))
-				}
-			}
-		}
-	}
-
-	if len(skillDirs) == 0 {
+	if len(loadedSkillsMap) == 0 {
 		return fmt.Errorf("could not locate any skills directories")
 	}
 
@@ -425,13 +440,8 @@ func (m *defaultSwarm) Reload() error {
 	var subAgentNames []string
 	var subAgentDescriptions []string
 
-	// 1. Load all skills into agents
-	for _, dir := range skillDirs {
-		var err error
-		skill, err = LoadSkill(dir)
-		if err != nil {
-			continue
-		}
+	// Load all skills into agents
+	for _, skill := range loadedSkillsMap {
 		loadedSkills = append(loadedSkills, skill)
 		// ... existing tool loading logic ...
 		var skillTools []tool.Tool
@@ -475,22 +485,16 @@ func (m *defaultSwarm) Reload() error {
 		return fmt.Errorf("swarm_agent skill not found")
 	}
 
-	// Helper to find a specific skill by directory name across all paths
-	findSkillPath := func(name string) string {
-		for _, dir := range skillDirs {
-			if filepath.Base(dir) == name {
-				return dir
-			}
-		}
-		return ""
+	// Helper to find a specific skill by name
+	findSkill := func(name string) *Skill {
+		return loadedSkillsMap[name]
 	}
 
 	// Re-initialize Swarm Agent with sub-agents and dynamically injected specialist names and descriptions
-	if p := findSkillPath("swarm-agent"); p != "" {
-		skill, _ = LoadSkill(p)
-		if skill != nil {
-			instruction = fmt.Sprintf(skill.Instructions, specialistsList)
-		}
+	if skill := findSkill("swarm_agent"); skill != nil {
+		instruction = fmt.Sprintf(skill.Instructions, specialistsList)
+	} else {
+		return fmt.Errorf("swarm_agent skill not found")
 	}
 
 	var swarmTools []tool.Tool
@@ -508,31 +512,23 @@ func (m *defaultSwarm) Reload() error {
 
 	// 3. Assign core instructions
 	if _, ok := m.agents["input_agent"]; ok {
-		if p := findSkillPath("input-agent"); p != "" {
-			if sk, err := LoadSkill(p); err == nil {
-				m.inputInstruction = sk.Instructions + loadedContext
-			}
+		if sk := findSkill("input_agent"); sk != nil {
+			m.inputInstruction = sk.Instructions + loadedContext
 		}
 	}
 	if _, ok := m.agents["output_agent"]; ok {
-		if p := findSkillPath("output-agent"); p != "" {
-			if sk, err := LoadSkill(p); err == nil {
-				m.outputInstruction = sk.Instructions + loadedContext
-			}
+		if sk := findSkill("output_agent"); sk != nil {
+			m.outputInstruction = sk.Instructions + loadedContext
 		}
 	}
 	if _, ok := m.agents["routing_agent"]; ok {
-		if p := findSkillPath("routing-agent"); p != "" {
-			if sk, err := LoadSkill(p); err == nil {
-				m.routingInstruction = sk.Instructions + loadedContext
-			}
+		if sk := findSkill("routing_agent"); sk != nil {
+			m.routingInstruction = sk.Instructions + loadedContext
 		}
 	}
 	if _, ok := m.agents["planning_agent"]; ok {
-		if p := findSkillPath("planning-agent"); p != "" {
-			if sk, err := LoadSkill(p); err == nil {
-				m.planningInstruction = sk.Instructions + loadedContext
-			}
+		if sk := findSkill("planning_agent"); sk != nil {
+			m.planningInstruction = sk.Instructions + loadedContext
 		}
 	}
 

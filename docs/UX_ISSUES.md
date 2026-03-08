@@ -1,16 +1,26 @@
 # User Experience (UX) Issues Backlog
 
 This document is a running log of friction points, UI/UX flaws, and feature
-requests discovered by the User Advocate (`skills/user-advocate/SKILL.md`).
-We collect these over time to inform future sprint priorities.
+requests discovered by the User Advocate (`skills/user-advocate/SKILL.md`). We
+collect these over time to inform future sprint priorities.
 
 ## 🚨 High Friction
 
+- [x] **Autocomplete UI Overlap:** The autocomplete and slash-command
+  suggestion boxes overlap and misrender over the text input box, causing text
+  glitching because their heights were approximated (hardcoded to 5) instead
+  of calculated exactly based on matches. Fix: Implemented dynamic height
+  calculation and match truncation.
 - [ ] **The "Naked Crash" on Missing API Key:** Running the CLI without
   `GOOGLE_API_KEY` set dumps a raw Go struct memory error to stderr. The CLI
   should intercept this and gracefully prompt the user for the key, or at
   least print a clean, styled error message.
-- [ ] **Noisy Single-Shot CLI Output:** When running `./bin/swarm -p "query"`, the terminal prints all internal routing steps (e.g., `[Input Agent] 🤔 Classifying intent…`, `[Output Agent] OK`) before yielding the final answer. For CLI usage, this feels too verbose. It should only print the final answer to `stdout` by default, reserving the internal chatter for a `--verbose` flag.
+- [ ] **Noisy Single-Shot CLI Output:** When running `./bin/swarm -p "query"`,
+  the terminal prints all internal routing steps (e.g.,
+  `[Input Agent] 🤔 Classifying intent…`, `[Output Agent] OK`) before yielding
+  the final answer. For CLI usage, this feels too verbose. It should only
+  print the final answer to `stdout` by default, reserving the internal
+  chatter for a `--verbose` flag.
 
 ## 🎨 Aesthetic Polish
 
@@ -26,7 +36,11 @@ We collect these over time to inform future sprint priorities.
 - [ ] **Smart Paste Formatting:** Pasting massive blocks of text (like stack
   traces) into the TUI input looks messy. It would be delightful to detect
   large multi-line pastes and automatically wrap them in markdown code blocks.
-- [ ] **Semantic Forgetting (`/forget`):** We now have a beautiful 4-Tier Memory system and a `/memory` command to view stats, but no way for the user to forcefully delete a hallucinated or outdated fact from the SQLite database via the TUI. A `/forget <keyword>` command would give users necessary control over their agent's semantic knowledge.
+- [ ] **Semantic Forgetting (`/forget`):** We now have a beautiful 4-Tier
+  Memory system and a `/memory` command to view stats, but no way for the user
+  to forcefully delete a hallucinated or outdated fact from the SQLite
+  database via the TUI. A `/forget <keyword>` command would give users
+  necessary control over their agent's semantic knowledge.
 
 ______________________________________________________________________
 

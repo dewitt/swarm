@@ -57,12 +57,14 @@ func listLocalFiles(ctx tool.Context, args ListFilesArgs) (ListFilesResult, erro
 			return nil
 		})
 		if err != nil {
-			return ListFilesResult{Error: err.Error()}, nil //nolint:nilerr
+			// Ensure Files is an empty slice, not nil
+			return ListFilesResult{Files: []string{}, Error: err.Error()}, nil //nolint:nilerr
 		}
 	} else {
 		entries, err := os.ReadDir(args.Dir)
 		if err != nil {
-			return ListFilesResult{Error: err.Error()}, nil //nolint:nilerr
+			// Ensure Files is an empty slice, not nil
+			return ListFilesResult{Files: []string{}, Error: err.Error()}, nil //nolint:nilerr
 		}
 		for _, entry := range entries {
 			name := entry.Name()

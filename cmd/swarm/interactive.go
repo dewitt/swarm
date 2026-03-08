@@ -288,6 +288,13 @@ func (m model) theme() themeColors {
 }
 
 func updateAutocomplete(m *model) {
+	oldHeight := m.getAutocompleteHeight()
+	defer func() {
+		if oldHeight != m.getAutocompleteHeight() {
+			m.updateViewport()
+		}
+	}()
+
 	val := m.textArea.Value()
 	m.acHasMore = false
 
@@ -2011,6 +2018,17 @@ func (m *model) appendMessage(msg string) {
 	}
 }
 
+func (m *model) getAutocompleteHeight() int {
+	if m.acActive && len(m.acMatches) > 0 {
+		h := len(m.acMatches) + 2 // 1 top border, 1 bottom border
+		if m.acHasMore {
+			h++
+		}
+		return h
+	}
+	return 0
+}
+
 func (m *model) updateViewport() {
 	if m.width == 0 {
 		return
@@ -2032,10 +2050,7 @@ func (m *model) updateViewport() {
 	inputView := inputBoxStyle.Width(m.width - 2).Render(m.textArea.View())
 	inputHeight := lipgloss.Height(inputView)
 
-	acHeight := 0
-	if m.acActive && len(m.acMatches) > 0 {
-		acHeight = 5 // Approximation for autocomplete dropdown
-	}
+	acHeight := m.getAutocompleteHeight()
 
 	// 2. Compute Viewport Height
 	newHeight := m.height - agentPanelHeight - inputHeight - acHeight - statusHeight - borderHeight
@@ -2679,11 +2694,19 @@ func (m model) View() tea.View {
 	acView := ""
 	if m.acActive && len(m.acMatches) > 0 {
 		var lines []string
+		maxWidth := m.width - 8 // Adjust for border and padding
+		if maxWidth < 10 {
+			maxWidth = 10
+		}
 		for i, match := range m.acMatches {
+			displayMatch := match
+			if len(displayMatch) > maxWidth {
+				displayMatch = displayMatch[:maxWidth-3] + "..."
+			}
 			if i == m.acIndex {
-				lines = append(lines, lipgloss.NewStyle().Foreground(lipgloss.Color("0")).Background(primaryColor).Render(" "+match+" "))
+				lines = append(lines, lipgloss.NewStyle().Foreground(lipgloss.Color("0")).Background(primaryColor).Render(" "+displayMatch+" "))
 			} else {
-				lines = append(lines, " "+match+" ")
+				lines = append(lines, " "+displayMatch+" ")
 			}
 		}
 		if m.acHasMore {

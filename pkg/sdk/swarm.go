@@ -1047,6 +1047,19 @@ func (m *defaultSwarm) Execute(ctx context.Context, g *ExecutionGraph, o *Engine
 					o.MarkFailed(done.ID)
 				}
 				activeSpans--
+
+				if isDeadlocked, reason := o.IsDeadlocked(); isDeadlocked {
+					out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Overwatch", State: AgentStateError, Error: fmt.Errorf("deadlock detected: %s", reason)}
+					// Force a hard replan and explicitly tell the planner WHY it failed so it routes around the block
+					done.Replan = true
+					done.Result = fmt.Sprintf("CRITICAL SYSTEM ERROR (OVERWATCH): %s You MUST find an alternative approach or ask the user for help.", reason)
+					// reset the deadlock flag so the new plan can execute
+					o.mu.Lock()
+					o.deadlocked = false
+					o.deadlockReason = ""
+					o.mu.Unlock()
+				}
+
 				// Handle dynamic replanning or subgraph expansion
 				if done.Replan {
 					if replanCount >= maxReplans {

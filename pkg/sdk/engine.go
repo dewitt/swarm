@@ -59,7 +59,10 @@ type Engine struct {
 	spans          map[string]Span
 	status         map[string]SpanStatus
 	result         map[string]string // Stores the "final response" of completed spans
+	trajectory     []Span
 	totalStartTime time.Time
+	deadlocked     bool
+	deadlockReason string
 }
 
 // NewEngine creates a new Engine for a given initial seed graph.
@@ -181,9 +184,10 @@ func (o *Engine) MarkComplete(spanID string, result string) {
 	t.Attributes["gen_ai.completion"] = result
 	t.Status = SpanStatusComplete
 	o.spans[spanID] = t
-}
 
-// MarkFailed marks a span as failed and invalidates its dependents.
+	o.trajectory = append(o.trajectory, t)
+	o.detectDeadlock(t)
+} // MarkFailed marks a span as failed and invalidates its dependents.
 func (o *Engine) MarkFailed(spanID string) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
@@ -199,7 +203,9 @@ func (o *Engine) MarkFailed(spanID string) {
 	}
 	o.spans[spanID] = t
 
-	// Recursively invalidate all dependents to prevent deadlock
+	o.trajectory = append(o.trajectory, t)
+	o.detectDeadlock(t)
+
 	o.invalidateDependentsLocked(spanID)
 }
 
@@ -265,7 +271,64 @@ type Trajectory struct {
 	TotalDuration string `json:"total_duration"`
 }
 
-// GetTrajectory returns a full timed trajectory of the swarm execution.
+// IsDeadlocked returns true if the engine detected an unrecoverable logic loop.
+func (o *Engine) IsDeadlocked() (bool, string) {
+	o.mu.RLock()
+	defer o.mu.RUnlock()
+	return o.deadlocked, o.deadlockReason
+}
+
+// detectDeadlock evaluates the trajectory history for repetitive failure loops.
+// Must be called with a lock held.
+func (o *Engine) detectDeadlock(latestSpan Span) {
+	if o.deadlocked {
+		return
+	}
+
+	// 1. Tool Failure Deadlock (N consecutive identical tool failures)
+	if latestSpan.Status == SpanStatusFailed && latestSpan.Kind == "tool" {
+		failures := 0
+		for i := len(o.trajectory) - 1; i >= 0; i-- {
+			ts := o.trajectory[i]
+			if ts.Kind == "tool" {
+				if ts.Agent == latestSpan.Agent && ts.Name == latestSpan.Name && ts.Attributes["gen_ai.prompt"] == latestSpan.Attributes["gen_ai.prompt"] {
+					if ts.Status == SpanStatusFailed {
+						failures++
+					} else if ts.Status == SpanStatusComplete {
+						break // A success breaks the streak
+					}
+				}
+			}
+		}
+
+		// Including the current failure we just recorded
+		if failures >= 3 {
+			o.deadlocked = true
+			o.deadlockReason = fmt.Sprintf("Agent %s repeatedly failed to execute tool %s. Forcing structural replan to break deadlock.", latestSpan.Agent, latestSpan.Name)
+			return
+		}
+	}
+
+	// 2. Replanning Deadlock (N consecutive replan requests without meaningful work)
+	if latestSpan.Name == "request_replan" {
+		replans := 0
+		for i := len(o.trajectory) - 1; i >= 0; i-- {
+			ts := o.trajectory[i]
+			if ts.Name == "request_replan" {
+				replans++
+			} else if ts.Kind == "tool" && ts.Status == SpanStatusComplete {
+				break // A successful tool execution breaks the replan streak
+			}
+		}
+
+		if replans >= 3 {
+			o.deadlocked = true
+			o.deadlockReason = "System is caught in a replan loop. Forcing a hard reset and structural review."
+			return
+		}
+	}
+}
+
 func (o *Engine) GetTrajectory() Trajectory {
 	o.mu.RLock()
 	defer o.mu.RUnlock()

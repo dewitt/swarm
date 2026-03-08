@@ -713,7 +713,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.renderer != nil {
 			m.renderer, _ = glamour.NewTermRenderer(
 				glamour.WithStandardStyle(style),
-				glamour.WithWordWrap(m.viewport.Width()),
+				glamour.WithWordWrap(m.viewport.Width()-4),
 			)
 		}
 		return m, nil
@@ -1258,14 +1258,23 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			agentPanelHeight = lipgloss.Height(m.renderAgentPanel())
 		}
 
-		// Viewport height: Screen minus (Agent Panel + Input Area + Status Line + Borders)
-		// Borders: 2 for Agent Panel, 2 for Viewport, 2 for Input = 6 lines
-		// Status Line: 1 line
-		// TextArea height: 3 lines
-		m.viewport.SetWidth(m.width - 6)
-		m.viewport.SetHeight(m.height - m.textArea.Height() - agentPanelHeight - 7)
+		// Recalculate viewport height to fill remaining space
+		// Subtract 2 for the viewportStyle's own top/bottom borders
+		m.viewport.SetHeight(m.height - agentPanelHeight - 7)
+		if m.viewport.Height() < 1 {
+			m.viewport.SetHeight(1)
+		}
 
-		// Update glamour word wrap
+		// Consistently use a width that allows for the scrollbar to prevent jitter/clipping
+		// contentWidth: m.width - 6 (Allows for 2 border, 2 padding, 2 breathing room)
+		// vpWidth: contentWidth - 2 (Always reserve 2 chars for the potential scrollbar)
+		vpWidth := m.width - 8
+		if vpWidth < 10 {
+			vpWidth = 10
+		}
+		m.viewport.SetWidth(vpWidth)
+
+		// Update glamour word wrap (reserve 4 chars for the '✦ ' icon and alignment)
 		if m.renderer != nil {
 			style := "dark"
 			if !m.isDark {
@@ -1273,7 +1282,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.renderer, _ = glamour.NewTermRenderer(
 				glamour.WithStandardStyle(style),
-				glamour.WithWordWrap(m.viewport.Width()),
+				glamour.WithWordWrap(vpWidth-4),
 			)
 		}
 
@@ -1840,11 +1849,11 @@ func (m *model) updateViewport() {
 
 	// Prepare the dynamic message list
 	var renderedMessages []string
+	vpWidth := m.viewport.Width()
 	for _, msg := range m.messages {
-		// Ensure each message is wrapped to the current viewport width.
-		// This prevents terminal-level wrapping that breaks viewport scrolling calculations
-		// and handles terminal resizing correctly.
-		renderedMessages = append(renderedMessages, lipgloss.NewStyle().Width(m.viewport.Width()).Render(msg))
+		// Just ensure the message block doesn't exceed the viewport width.
+		// If it's already wrapped by glamour, this will mostly be a no-op but safe.
+		renderedMessages = append(renderedMessages, lipgloss.NewStyle().Width(vpWidth).Render(msg))
 	}
 
 	// Add dynamic status if loading
@@ -2502,13 +2511,10 @@ func (m model) View() tea.View {
 	}
 
 	// Output Box (Viewport) with border
+	// Note: Width is already managed in tea.WindowSizeMsg to prevent clipping
 	contentWidth := m.width - 6
-	vpWidth := contentWidth
+	vpWidth := m.viewport.Width()
 	scrollable := m.viewport.TotalLineCount() > m.viewport.Height()
-	if scrollable {
-		vpWidth = contentWidth - 2
-	}
-	m.viewport.SetWidth(vpWidth)
 
 	lines := strings.Split(m.viewport.View(), "\n")
 
@@ -2516,11 +2522,13 @@ func (m model) View() tea.View {
 		scrollbar := renderScrollbar(m.viewport.Height(), m.viewport.ScrollPercent(), t.borderColor)
 		var newLines []string
 		for i, line := range lines {
+			// Pad the line to the viewport width, then add the scrollbar
 			padded := lipgloss.PlaceHorizontal(vpWidth, lipgloss.Left, line)
 			if i < len(scrollbar) {
 				newLines = append(newLines, padded+" "+scrollbar[i])
 			} else {
-				newLines = append(newLines, padded)
+				// Reserve space for scrollbar even if it's shorter than the current view
+				newLines = append(newLines, padded+"  ")
 			}
 		}
 		lines = newLines

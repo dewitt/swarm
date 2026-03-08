@@ -151,7 +151,7 @@ func (sm *sqliteSemanticMemory) Retrieve(query string, limit int) ([]string, err
 
 		var orQueries []string
 		var orArgs []interface{}
-		
+
 		parts := strings.Fields(safeQuery)
 		var filteredParts []string
 		for _, p := range parts {
@@ -162,7 +162,7 @@ func (sm *sqliteSemanticMemory) Retrieve(query string, limit int) ([]string, err
 		if len(filteredParts) == 0 {
 			filteredParts = parts
 		}
-		
+
 		for _, word := range filteredParts {
 			orQueries = append(orQueries, "fact LIKE ?")
 			orArgs = append(orArgs, "%"+word+"%")
@@ -216,4 +216,3 @@ func (sm *sqliteSemanticMemory) SemanticStats() MemoryStats {
 func (sm *sqliteSemanticMemory) FTSEnabled() bool {
 	return sm.ftsEnabled
 }
-

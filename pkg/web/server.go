@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
+	"net"
 	"net/http"
 	"sync"
 	"time"
@@ -44,6 +45,10 @@ func (s *Server) Broadcast(event sdk.ObservableEvent) {
 	}
 }
 
+func (s *Server) Addr() string {
+	return s.addr
+}
+
 // Start launches the background HTTP server and the message router loop.
 func (s *Server) Start() error {
 	go s.router()
@@ -69,12 +74,17 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/events", s.handleSSE)
 
 	s.httpServer = &http.Server{
-		Addr:              s.addr,
 		Handler:           mux,
 		ReadHeaderTimeout: 3 * time.Second,
 	}
 
-	if err := s.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+	listener, err := net.Listen("tcp", s.addr)
+	if err != nil {
+		return err
+	}
+	s.addr = listener.Addr().String()
+
+	if err := s.httpServer.Serve(listener); err != nil && err != http.ErrServerClosed {
 		return err
 	}
 	return nil

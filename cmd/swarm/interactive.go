@@ -572,12 +572,22 @@ func initialModel(planMode bool, resume bool) (model, error) {
 
 	if !isTest {
 		webServer = web.NewServer(":5050")
+		// Attempt to start on 5050, if it fails, try finding any open port
 		go func() {
-			_ = webServer.Start()
+			if err := webServer.Start(); err != nil {
+				// Address already in use or other error, try random port
+				webServer = web.NewServer(":0")
+				_ = webServer.Start()
+			}
 		}()
 	} else {
 		// Initialize synchronously in tests to avoid race conditions with mocks
 		swarm, _ = sdk.NewSwarm(sdk.SwarmConfig{ResumeLastSession: resume, DatabaseURI: "file::memory:?cache=shared"})
+	}
+
+	webAddr := ""
+	if webServer != nil {
+		webAddr = webServer.Addr()
 	}
 
 	return model{
@@ -585,7 +595,7 @@ func initialModel(planMode bool, resume bool) (model, error) {
 		viewport:       vp,
 		spinner:        s,
 		listModel:      l,
-		messages:       []string{buildBootMessage(cwd, branch, modified, isDark, activeModel, nil, "Loading...", resume, len(loadedHist) == 0, getUserName(), 0, false)},
+		messages:       []string{buildBootMessage(cwd, branch, modified, isDark, activeModel, nil, "Loading...", resume, len(loadedHist) == 0, getUserName(), 0, false, webAddr)},
 		history:        loadedHist,
 		historyIdx:     len(loadedHist),
 		loading:        false,
@@ -655,13 +665,20 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.swarm = initMsg.swarm
 
+			// Get the actual bound port
+			webAddr := ""
+			if m.webServer != nil {
+				// Give the web server a tiny moment to bind if it was re-attempting on :0
+				time.Sleep(50 * time.Millisecond)
+				webAddr = m.webServer.Addr()
+			}
+
 			// Update the boot message now that we have the swarm instance
 			contextFiles := m.swarm.ListContext()
-			m.messages[0] = buildBootMessage(m.cwd, m.gitBranch, m.gitModified, m.isDark, m.activeModel, contextFiles, m.swarm.SessionID(), m.pendingSwarmCfg.ResumeLastSession, len(m.history) == 0, getUserName(), len(m.swarm.Skills()), m.swarm.Memory().Semantic().FTSEnabled())
+			m.messages[0] = buildBootMessage(m.cwd, m.gitBranch, m.gitModified, m.isDark, m.activeModel, contextFiles, m.swarm.SessionID(), m.pendingSwarmCfg.ResumeLastSession, len(m.history) == 0, getUserName(), len(m.swarm.Skills()), m.swarm.Memory().Semantic().FTSEnabled(), webAddr)
 			m.updateViewport()
 			return m, nil
 		}
-
 		switch msg := msg.(type) {
 		case tea.KeyMsg:
 			if msg.String() == "ctrl+c" {
@@ -2108,7 +2125,7 @@ func (m *model) updateInputStyle() {
 	}
 }
 
-func buildBootMessage(cwd, branch string, modified bool, isDark bool, activeModel string, contextFiles []string, sessionID string, isResume bool, isFirstTime bool, userName string, numSkills int, ftsEnabled bool) string {
+func buildBootMessage(cwd, branch string, modified bool, isDark bool, activeModel string, contextFiles []string, sessionID string, isResume bool, isFirstTime bool, userName string, numSkills int, ftsEnabled bool, webAddr string) string {
 	version := "Unknown"
 	if info, ok := debug.ReadBuildInfo(); ok {
 		version = info.Main.Version
@@ -2214,12 +2231,22 @@ func buildBootMessage(cwd, branch string, modified bool, isDark bool, activeMode
 	)
 
 	// Session Column
+	webUIVal := "Disabled"
+	if webAddr != "" {
+		if strings.HasPrefix(webAddr, ":") {
+			webUIVal = "http://localhost" + webAddr
+		} else {
+			webUIVal = "http://" + webAddr
+		}
+	}
+	
 	sessCol := lipgloss.JoinVertical(lipgloss.Left,
 		headerStyle.Render("[ Session ]"),
 		lipgloss.JoinHorizontal(lipgloss.Top, keyStyle.Render("State:"), valStyle.Render(sessionState)),
 		lipgloss.JoinHorizontal(lipgloss.Top, keyStyle.Render("Model:"), valStyle.Render(activeModel)),
 		lipgloss.JoinHorizontal(lipgloss.Top, keyStyle.Render("Skills:"), valStyle.Render(fmt.Sprintf("%d enabled", numSkills))),
 		lipgloss.JoinHorizontal(lipgloss.Top, keyStyle.Render("Context:"), valStyle.Render(contextStr)),
+		lipgloss.JoinHorizontal(lipgloss.Top, keyStyle.Render("Web UI:"), valStyle.Render(webUIVal)),
 	)
 
 	// Combine columns with spacing

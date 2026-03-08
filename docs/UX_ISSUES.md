@@ -1,7 +1,7 @@
 # User Experience (UX) Issues Backlog
 
 This document is a running log of friction points, UI/UX flaws, and feature
-requests discovered by the User Advocate (`skills/user-advocate/SKILL.md`). We
+requests discovered by the User Advocate (`skills/ux_review/SKILL.md`). We
 collect these over time to inform future sprint priorities.
 
 ## 🚨 High Friction

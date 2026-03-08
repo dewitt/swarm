@@ -3,7 +3,7 @@
 This document is a running log of cognitive failures, tool-use loops, eval
 rubric flaws, and agentic quality issues discovered during routine agentic
 quality reviews by the Agentic Quality Advocate
-(`skills/agentic-quality-advocate/SKILL.md`).
+(`skills/quality_review/SKILL.md`).
 
 ## 🧠 Cognitive & Reasoning Failures
 

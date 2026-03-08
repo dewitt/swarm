@@ -1,5 +1,5 @@
 ---
-name: user_advocate
+name: ux_review
 description: "Specialized agent for performing user-centric UX evaluations, hunting friction points, and polishing terminal and web interfaces."
 tools:
   - list_local_files

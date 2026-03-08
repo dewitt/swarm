@@ -1,5 +1,5 @@
 ---
-name: agentic_quality_advocate
+name: quality_review
 description: "Specialized agent for evaluating Swarm trajectory efficiency, tool-use rigor, orchestration handoffs, and LLM-as-a-Judge grading rubrics."
 tools:
   - list_local_files

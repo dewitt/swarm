@@ -1,5 +1,5 @@
 ---
-name: code_quality_advocate
+name: code_review
 description: "Specialized agent for performing comprehensive codebase reviews, identifying architectural flaws, and enforcing idiomatic design."
 tools:
   - list_local_files

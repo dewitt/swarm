@@ -638,7 +638,13 @@ func initSwarmCmd(cfg sdk.SwarmConfig) tea.Cmd {
 }
 
 func (m model) Init() tea.Cmd {
-	cmds := []tea.Cmd{textarea.Blink, m.spinner.Tick, doGitTick(), tea.RequestBackgroundColor, doLogoTick()}
+	cmds := []tea.Cmd{textarea.Blink, m.spinner.Tick, doGitTick(), doLogoTick()}
+	
+	// We only request background color if we are confident we aren't going to crash immediately,
+	// to prevent terminal escape codes from leaking to stdout.
+	if m.fatalErr == nil {
+		cmds = append(cmds, tea.RequestBackgroundColor)
+	}
 
 	if !strings.HasSuffix(os.Args[0], ".test") {
 		cmds = append(cmds, initSwarmCmd(m.pendingSwarmCfg))

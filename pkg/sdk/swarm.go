@@ -114,6 +114,7 @@ type Swarm interface {
 type telemetryContextKey struct{}
 
 type defaultSwarm struct {
+	mu                  sync.RWMutex
 	run                 *runner.Runner
 	db                  *gorm.DB
 	sessionSvc          session.Service
@@ -450,6 +451,9 @@ func (m *defaultSwarm) Close() error {
 }
 
 func (m *defaultSwarm) Reload() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	var subAgents []agent.Agent
 	var loadedSkills []*Skill
 	var skill *Skill
@@ -808,6 +812,9 @@ func extractJSON(s string) string {
 }
 
 func (m *defaultSwarm) Plan(ctx context.Context, prompt string, traj Trajectory) (*ExecutionGraph, error) {
+	// Dynamically reload skills from disk so that skills created during this session (e.g. by the skill_builder_agent) are immediately available.
+	_ = m.Reload()
+
 	promptForLLM := prompt
 	if len(traj.Spans) > 0 {
 		b, _ := json.MarshalIndent(traj.Spans, "", "  ")
@@ -815,6 +822,7 @@ func (m *defaultSwarm) Plan(ctx context.Context, prompt string, traj Trajectory)
 	}
 
 	// Recompile the descriptions since they aren't stored on the struct
+	m.mu.RLock()
 	var descriptions []string
 	for _, name := range m.subAgentNames {
 		if a, ok := m.agents[name]; ok {
@@ -822,8 +830,11 @@ func (m *defaultSwarm) Plan(ctx context.Context, prompt string, traj Trajectory)
 		}
 	}
 	specialistsList := strings.Join(descriptions, "\n")
+	routingInstruction := m.routingInstruction
+	planningInstruction := m.planningInstruction
+	m.mu.RUnlock()
 
-	routingPrompt := fmt.Sprintf(m.routingInstruction, specialistsList)
+	routingPrompt := fmt.Sprintf(routingInstruction, specialistsList)
 
 	// Inject any critical semantic facts (like tool deprecations) or facts directly relevant to the user's prompt
 	if m.memory != nil && m.memory.Semantic() != nil {
@@ -858,7 +869,7 @@ func (m *defaultSwarm) Plan(ctx context.Context, prompt string, traj Trajectory)
 	}
 	jsonStr = strings.TrimSpace(jsonStr)
 	if strings.Contains(jsonStr, "DEEP_PLAN_REQUIRED") {
-		planningPrompt := fmt.Sprintf(m.planningInstruction, specialistsList)
+		planningPrompt := fmt.Sprintf(planningInstruction, specialistsList)
 
 		if m.memory != nil && m.memory.Semantic() != nil {
 			var injectedFacts []string
@@ -1008,6 +1019,7 @@ func (m *defaultSwarm) Chat(ctx context.Context, prompt string) (<-chan Observab
 		out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Input Agent", SpanID: "input", TaskName: "Classification", State: AgentStateThinking, Thought: "Classifying intent…"}
 
 		// Dynamically inject the last active agent to help the CIA detect digressions
+		m.mu.RLock()
 		lastAgentName := "None (Starting new conversation)"
 		if m.lastAgent != "" {
 			lastAgentName = m.lastAgent
@@ -1020,6 +1032,8 @@ func (m *defaultSwarm) Chat(ctx context.Context, prompt string) (<-chan Observab
 			}
 		}
 		specialistsList := strings.Join(descriptions, "\n")
+		inputInstruction := m.inputInstruction
+		m.mu.RUnlock()
 
 		// Fetch and inject global conversation history for the Input Agent
 		var inputHistoryParts []string
@@ -1029,7 +1043,7 @@ func (m *defaultSwarm) Chat(ctx context.Context, prompt string) (<-chan Observab
 			}
 		}
 
-		dynamicInstruction := m.inputInstruction + fmt.Sprintf("\n\nAVAILABLE AGENTS:\n%s\n\nCURRENT CONTEXT: The last agent to respond was: %s.", specialistsList, lastAgentName)
+		dynamicInstruction := inputInstruction + fmt.Sprintf("\n\nAVAILABLE AGENTS:\n%s\n\nCURRENT CONTEXT: The last agent to respond was: %s.", specialistsList, lastAgentName)
 		if len(inputHistoryParts) > 0 {
 			// Only take the last 5 turns to keep the prompt small and fast
 			if len(inputHistoryParts) > 5 {
@@ -1075,9 +1089,11 @@ func (m *defaultSwarm) Chat(ctx context.Context, prompt string) (<-chan Observab
 			target = "swarm_agent"
 		} else {
 			target = "swarm_agent"
+			m.mu.RLock()
 			if m.lastAgent != "" {
 				target = m.lastAgent
 			}
+			m.mu.RUnlock()
 		}
 		out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Input Agent", SpanID: "input", TaskName: "Classification", State: AgentStateComplete, FinalContent: "Routed to " + target}
 
@@ -1332,7 +1348,10 @@ func (m *defaultSwarm) Execute(ctx context.Context, g *ExecutionGraph, o *Engine
 }
 
 func (m *defaultSwarm) executeSpan(ctx context.Context, out chan<- ObservableEvent, o *Engine, span Span) (string, SpanStatus, bool) {
+	m.mu.RLock()
 	targetAgent, ok := m.agents[span.Agent]
+	m.mu.RUnlock()
+	
 	if !ok {
 		out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm", SpanID: span.ID, TaskName: span.Name, ParentID: span.ParentID, State: AgentStateError, Error: fmt.Errorf("agent not found: %s", span.Agent)}
 		return "Agent not found", SpanStatusFailed, false
@@ -1601,7 +1620,9 @@ func (m *defaultSwarm) executeSpan(ctx context.Context, out chan<- ObservableEve
 	}
 
 	// Update the global state of the last agent to respond
+	m.mu.Lock()
 	m.lastAgent = targetAgent.Name()
+	m.mu.Unlock()
 
 	// If there was a hard error, skip Output Agent and immediately return with failed status and replan flag
 	if strings.Contains(finalText, "\n\nERROR: ") || strings.Contains(finalText, "command not found") {

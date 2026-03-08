@@ -30,6 +30,7 @@ type mockSemanticMemory struct {
 	sdk.SemanticMemory
 }
 func (m mockSemanticMemory) FTSEnabled() bool { return false }
+func (m mockSemanticMemory) Forget(query string) (int, error) { return 0, nil }
 
 func TestSnapshotUI(t *testing.T) {
 	// 1. Instantiate the model

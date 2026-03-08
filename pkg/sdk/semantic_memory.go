@@ -199,6 +199,22 @@ func (sm *sqliteSemanticMemory) List(limit int) ([]string, error) {
 	return results, nil
 }
 
+// Forget removes any facts from semantic memory that contain the given keyword/substring.
+// Returns the number of facts deleted.
+func (sm *sqliteSemanticMemory) Forget(query string) (int, error) {
+	if query == "" {
+		return 0, fmt.Errorf("cannot forget empty query")
+	}
+	
+	// Perform a simple LIKE deletion
+	res := sm.db.Where("fact LIKE ?", "%"+query+"%").Delete(&SemanticFact{})
+	if res.Error != nil {
+		return 0, res.Error
+	}
+	
+	return int(res.RowsAffected), nil
+}
+
 func (sm *sqliteSemanticMemory) SemanticStats() MemoryStats {
 	var count int64
 	sm.db.Model(&SemanticFact{}).Count(&count)

@@ -78,6 +78,9 @@ type SemanticMemory interface {
 	// List returns the most recently committed facts.
 	List(limit int) ([]string, error)
 
+	// Forget removes any facts from semantic memory that contain the given keyword.
+	Forget(query string) (int, error)
+
 	// SemanticStats returns metadata about semantic memory.
 	SemanticStats() MemoryStats
 

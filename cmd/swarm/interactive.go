@@ -1553,6 +1553,7 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 			"  /config      Prints the current global configuration.",
 			"  /memory      Displays current hierarchical memory state (global & semantic facts).",
 			"  /remember    Saves a global preference (e.g. /remember I use tabs).",
+			"  /forget      Deletes facts from semantic memory matching a keyword.",
 			"  /copy        Copies the last agent response to the system clipboard.",
 			"  /observe     Toggles observe mode to see real-time agent activity.",
 			"  /debug       Toggles debug mode to see full swarm trajectories.",
@@ -1885,6 +1886,25 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 			m.appendMessage(lipgloss.NewStyle().Foreground(errorColor).Render("Failed to save memory: " + err.Error()))
 		} else {
 			m.appendMessage(agentMsgStyle.Render("✦ ") + "Got it. I'll remember that for all future sessions.")
+		}
+	case "/forget":
+		parts := strings.Split(m.currentInput, " ")
+		if len(parts) < 2 {
+			m.appendMessage(agentMsgStyle.Render("✦ ") + "Usage: /forget <keyword>")
+			return nil
+		}
+		keyword := strings.Join(parts[1:], " ")
+		
+		mem := m.swarm.Memory()
+		if mem != nil && mem.Semantic() != nil {
+			count, err := mem.Semantic().Forget(keyword)
+			if err != nil {
+				m.appendMessage(lipgloss.NewStyle().Foreground(errorColor).Render(fmt.Sprintf("Failed to forget facts: %v", err)))
+			} else {
+				m.appendMessage(agentMsgStyle.Render("✦ ") + fmt.Sprintf("Successfully deleted %d facts matching '%s'.", count, keyword))
+			}
+		} else {
+			m.appendMessage(lipgloss.NewStyle().Foreground(errorColor).Render("Semantic memory is not initialized."))
 		}
 	case "/memory":
 		var sb strings.Builder

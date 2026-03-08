@@ -43,11 +43,12 @@ collect these over time to inform future sprint priorities.
 - [ ] **Smart Paste Formatting:** Pasting massive blocks of text (like stack
   traces) into the TUI input looks messy. It would be delightful to detect
   large multi-line pastes and automatically wrap them in markdown code blocks.
-- [ ] **Semantic Forgetting (`/forget`):** We now have a beautiful 4-Tier
+- [x] **Semantic Forgetting (`/forget`):** We now have a beautiful 4-Tier
   Memory system and a `/memory` command to view stats, but no way for the user
   to forcefully delete a hallucinated or outdated fact from the SQLite
   database via the TUI. A `/forget <keyword>` command would give users
-  necessary control over their agent's semantic knowledge.
+  necessary control over their agent's semantic knowledge. Fix: Implemented in
+  SemanticMemory and wired up as a TUI slash command.
 
 ______________________________________________________________________
 

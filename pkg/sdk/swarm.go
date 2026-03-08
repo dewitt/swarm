@@ -1264,32 +1264,11 @@ func (m *defaultSwarm) executeSpan(ctx context.Context, out chan<- ObservableEve
 		}
 	}
 
-	// Fetch and inject global conversation history
-	var historyParts []string
-	if sessResp, err := m.sessionSvc.Get(ctx, &session.GetRequest{AppName: "swarm-cli", UserID: m.userID, SessionID: m.sessionID}); err == nil {
-		for ev := range sessResp.Session.Events().All() {
-			if ev.Content != nil {
-				for _, part := range ev.Content.Parts {
-					if part.Text != "" {
-						text := part.Text
-						if len(text) > 4000 {
-							text = text[:4000] + "\n\n...[Content truncated to preserve context limits]..."
-						}
-						historyParts = append(historyParts, fmt.Sprintf("[%s]: %s", ev.Author, text))
-					}
-				}
-			}
-		}
-	}
-
 	promptStr := fmt.Sprintf("TASK: %s\nINSTRUCTIONS: %s", span.Name, span.Prompt)
 	promptStr += fmt.Sprintf("\n\n### TASK CONTEXT\nYour current Task ID is: %s\nIf you need to spawn subtasks, use this ID as their 'parent_id' or explicitly in their 'dependencies' list to ensure they block this task's completion if necessary.", span.ID)
 
 	if len(stateParts) > 0 {
 		promptStr = promptStr + "\n\n### SESSION STATE\n" + strings.Join(stateParts, "\n")
-	}
-	if len(historyParts) > 0 {
-		promptStr = promptStr + "\n\n### CONVERSATION HISTORY (FOR CONTEXT)\n" + strings.Join(historyParts, "\n")
 	}
 	if len(contextParts) > 0 {
 		promptStr = promptStr + "\n\n### RESULTS FROM PREVIOUS TASKS\n" + strings.Join(contextParts, "\n\n")

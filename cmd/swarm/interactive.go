@@ -1915,16 +1915,16 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 		sb.WriteString("| Tier | Count | Token Estimate |\n")
 		sb.WriteString("| :--- | :---: | :------------: |\n")
 
-		wStats := mem.Working().Stats()
+		wStats := mem.Working().WorkingStats()
 		sb.WriteString(fmt.Sprintf("| %s | %d | %d |\n", wStats.Name, wStats.Count, wStats.TokenEstimate))
 
-		eStats := mem.Episodic().Stats(context.Background(), m.swarm.SessionID())
+		eStats := mem.Episodic().EpisodicStats(context.Background(), m.swarm.SessionID())
 		sb.WriteString(fmt.Sprintf("| %s | %d | %d |\n", eStats.Name, eStats.Count, eStats.TokenEstimate))
 
-		sStats := mem.Semantic().Stats()
+		sStats := mem.Semantic().SemanticStats()
 		sb.WriteString(fmt.Sprintf("| %s | %d | %d |\n", sStats.Name, sStats.Count, sStats.TokenEstimate))
 
-		gStats := mem.Global().Stats()
+		gStats := mem.Global().GlobalStats()
 		sb.WriteString(fmt.Sprintf("| %s | %d | %d |\n", gStats.Name, gStats.Count, gStats.TokenEstimate))
 
 		sb.WriteString("\n---\n\n")

@@ -305,7 +305,7 @@ func NewSwarm(cfg ...SwarmConfig) (Swarm, error) {
 		forceDonate:         forceDonate,
 		telemetryConfigured: telemetryConfigured,
 	}
-	m.memory = NewHierarchicalMemory(m, NewEpisodicMemory(sessionSvc, m.userID), semanticMem, NewGlobalMemory())
+	m.memory = NewHierarchicalMemory(m, NewEpisodicMemory(sessionSvc, m.userID), semanticMem, m)
 
 	readStateTool, _ := functiontool.New(functiontool.Config{Name: "read_state"}, m.readState)
 	writeStateTool, _ := functiontool.New(functiontool.Config{Name: "write_state"}, m.writeState)
@@ -632,6 +632,44 @@ func (m *defaultSwarm) GetTrajectory() Trajectory {
 	return Trajectory{}
 }
 
+func (m *defaultSwarm) Load() (string, error) {
+	return LoadMemory()
+}
+
+func (m *defaultSwarm) Save(fact string) error {
+	return SaveMemory(fact)
+}
+
+func (m *defaultSwarm) GlobalStats() MemoryStats {
+	content, _ := LoadMemory()
+	
+	tokens := len(content) / 4
+	count := 1
+	
+	// Add pinned context files to global memory tokens
+	for p, c := range m.pinnedContext {
+		count++
+		if c == "" {
+		    b, _ := os.ReadFile(p)
+		    tokens += len(b) / 4
+		} else {
+		    tokens += len(c) / 4
+		}
+	}
+	
+	// Add skills and instructions size
+	for _, sk := range m.skills {
+		count++
+		tokens += len(sk.Instructions) / 4
+	}
+
+	return MemoryStats{
+		Name:          "Global Memory (Tier 4)",
+		Count:         count,
+		TokenEstimate: tokens,
+	}
+}
+
 func (m *defaultSwarm) GetContext() map[string]string {
 	if m.activeEngine != nil {
 		return m.activeEngine.GetContext()
@@ -639,7 +677,7 @@ func (m *defaultSwarm) GetContext() map[string]string {
 	return make(map[string]string)
 }
 
-func (m *defaultSwarm) Stats() MemoryStats {
+func (m *defaultSwarm) WorkingStats() MemoryStats {
 	if m.activeEngine == nil {
 		return MemoryStats{Name: "Working Memory (Tier 1)"}
 	}

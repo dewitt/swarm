@@ -147,7 +147,7 @@ func (sm *sqliteSemanticMemory) List(limit int) ([]string, error) {
 	return results, nil
 }
 
-func (sm *sqliteSemanticMemory) Stats() MemoryStats {
+func (sm *sqliteSemanticMemory) SemanticStats() MemoryStats {
 	var count int64
 	sm.db.Model(&SemanticFact{}).Count(&count)
 

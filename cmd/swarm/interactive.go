@@ -1194,6 +1194,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.lastResponse = event.FinalContent
 				out := event.FinalContent
 				if m.renderer != nil {
+					// Recreate renderer with correct word wrap since glamour doesn't support dynamic resizing
+					style := "dark"
+					if !m.isDark {
+						style = "light"
+					}
+					m.renderer, _ = glamour.NewTermRenderer(
+						glamour.WithStandardStyle(style),
+						glamour.WithWordWrap(m.viewport.Width()-5),
+					)
 					if rOut, err := m.renderer.Render(out); err == nil {
 						out = rOut
 					}

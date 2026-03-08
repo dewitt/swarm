@@ -2747,11 +2747,15 @@ func (m model) View() tea.View {
 	webUIVal := "swarm mode"
 	if m.webServer != nil && m.webServer.Addr() != "" {
 		addr := m.webServer.Addr()
-		if strings.HasPrefix(addr, ":") {
-			webUIVal = "Web UI: http://localhost" + addr
-		} else {
-			webUIVal = "Web UI: http://" + addr
+		// Replace [::] or 0.0.0.0 with localhost for better readability in the UI
+		if strings.HasPrefix(addr, "[::]") {
+			addr = "localhost" + strings.TrimPrefix(addr, "[::]")
+		} else if strings.HasPrefix(addr, "0.0.0.0") {
+			addr = "localhost" + strings.TrimPrefix(addr, "0.0.0.0")
+		} else if strings.HasPrefix(addr, ":") {
+			addr = "localhost" + addr
 		}
+		webUIVal = "http://" + addr
 	}
 
 	p1 := statusBarStyle.Width(w1).Align(lipgloss.Left).Render(cwdText)

@@ -66,7 +66,33 @@ following rules:
 
 ______________________________________________________________________
 
-## 3. Repository Structure
+## 3. Hierarchical Memory System
+
+Swarm utilizes a structured 4-Tier Memory model to prevent context window
+blowout and ensure facts are preserved across sessions. You MUST utilize these
+tools to shape the context window actively.
+
+1. **Tier 1: Working Memory (Context Isolation):** Sub-agents (like
+   `codebase-investigator`) run in isolated context bubbles. They do not see
+   the global chat history. When you are a sub-agent, use your tools (like
+   `bash_execute`) to find answers, and return a dense summary. Do NOT dump
+   raw bash output into your final response unless explicitly asked, as this
+   poisons the orchestrator's context.
+1. **Tier 2: Episodic Memory (Session History):** The linear timeline of the
+   current chat.
+1. **Tier 3: Semantic Memory (Project Facts):** This is a project-scoped
+   embedded SQLite database (FTS5). If you discover a critical, non-obvious
+   fact about the architecture (e.g., "The build command is X", or "This tool
+   is failing due to Y"), you **MUST** use the `commit_fact` tool to
+   permanently save it. Future Swarm planners will automatically query this
+   database using `retrieve_fact` before they act, preventing repetitive
+   mistakes.
+1. **Tier 4: Global Memory:** User preferences across all projects (managed
+   via the `/remember` command and `.gemini/GEMINI.md` overrides).
+
+______________________________________________________________________
+
+## 4. Repository Structure
 
 - `/cmd/swarm/`: The entry point for the CLI binary (Cobra, Bubble Tea TUI).
 - `/pkg/sdk/`: The embeddable Go SDK. Contains the Swarm, session management
@@ -82,7 +108,7 @@ ______________________________________________________________________
 
 ______________________________________________________________________
 
-## 4. How to Find Work & Contribute
+## 5. How to Find Work ## 4. How to Find Work & Contribute Contribute
 
 If you have been summoned to this repository without a specific task, or if
 you have completed your current assignment and are looking for what to do

@@ -39,7 +39,7 @@ will orchestrate how information flows between them.
 - **Content:** The immediate execution graph and stdout from the *current*
   tool invocations.
 - **Management (Context Isolation):** To prevent "context poisoning,"
-  sub-agents (like `codebase-investigator`) must operate in isolated context
+  sub-agents (like `codebase_investigator`) must operate in isolated context
   windows. They execute noisy `grep` or `ls` commands in their own sandbox and
   return *only* a dense, synthesized summary to the primary Swarm
   orchestrator's Working Memory.

@@ -34,7 +34,7 @@ ______________________________________________________________________
 
 - **Prompt:** `"How many Go files are there in this repo?"`
 - **Expected Spans:**
-  1. `input_agent`: Outputs `ROUTE TO: codebase-investigator` (or
+  1. `input_agent`: Outputs `ROUTE TO: codebase_investigator` (or
      `swarm_agent`).
   1. `worker_agent`: Analyzes the request, executes a tool (e.g.,
      `bash_execute` running `find . -name "*.go" | wc -l`), and synthesizes

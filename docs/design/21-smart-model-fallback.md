@@ -21,7 +21,7 @@ self-healing routing mesh.
    endpoint is wholly unresponsive, replanning to the exact same model will
    result in an infinite failure loop.
 1. **Quota and Rate Limits:** Agents operating autonomously (like the
-   `codebase-investigator`) can burn through token quotas quickly.
+   `codebase_investigator`) can burn through token quotas quickly.
 1. **Task-Specific Degradation:** Certain models excel at logic but fail at
    formatting or specific tool use.
 

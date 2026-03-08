@@ -14,7 +14,7 @@ Analysis of recent E2E evaluation failures (specifically Scenarios 1, 3, and
 
 1. The user asks Swarm to "fix a bug in main.go".
 1. The Swarm Agent generates an initial `ExecutionGraph` containing a single
-   span: `[{"agent": "codebase-investigator"}]`.
+   span: `[{"agent": "codebase_investigator"}]`.
 1. The engine executes the graph. The investigator successfully finds the bug
    and outputs a correct textual report.
 1. Because the sub-agent didn't error (it completed its scope), it doesn't

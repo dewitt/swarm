@@ -73,7 +73,7 @@ blowout and ensure facts are preserved across sessions. You MUST utilize these
 tools to shape the context window actively.
 
 1. **Tier 1: Working Memory (Context Isolation):** Sub-agents (like
-   `codebase-investigator`) run in isolated context bubbles. They do not see
+   `codebase_investigator`) run in isolated context bubbles. They do not see
    the global chat history. When you are a sub-agent, use your tools (like
    `bash_execute`) to find answers, and return a dense summary. Do NOT dump
    raw bash output into your final response unless explicitly asked, as this

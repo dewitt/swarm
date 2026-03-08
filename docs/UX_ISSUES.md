@@ -19,12 +19,14 @@ collect these over time to inform future sprint priorities.
   least print a clean, styled error message. Fix: Intercepted genai client
   init error and surfaced clean guidance in both single-shot and interactive
   modes.
-- [ ] **Noisy Single-Shot CLI Output:** When running `./bin/swarm -p "query"`,
+- [x] **Noisy Single-Shot CLI Output:** When running `./bin/swarm -p "query"`,
   the terminal prints all internal routing steps (e.g.,
   `[Input Agent] 🤔 Classifying intent…`, `[Output Agent] OK`) before yielding
   the final answer. For CLI usage, this feels too verbose. It should only
   print the final answer to `stdout` by default, reserving the internal
-  chatter for a `--verbose` flag.
+  chatter for a `--verbose` flag. Fix: Hiding intermediate agent events and
+  confirmation agents in single-shot mode unless `--verbose` or `-v` is
+  passed.
 
 ## 🎨 Aesthetic Polish
 

@@ -139,7 +139,7 @@ type defaultSwarm struct {
 	trajectoryDir       string
 	forceDonate         bool
 	telemetryConfigured bool
-	semanticMem         *SemanticMemory
+	memory              HierarchicalMemory
 }
 
 type SwarmConfig struct {
@@ -302,8 +302,8 @@ func NewSwarm(cfg ...SwarmConfig) (Swarm, error) {
 		trajectoryDir:       trajectoryDir,
 		forceDonate:         forceDonate,
 		telemetryConfigured: telemetryConfigured,
-		semanticMem:         semanticMem,
 	}
+	m.memory = NewHierarchicalMemory(m, NewEpisodicMemory(sessionSvc, m.userID), semanticMem, NewGlobalMemory())
 
 	readStateTool, _ := functiontool.New(functiontool.Config{Name: "read_state"}, m.readState)
 	writeStateTool, _ := functiontool.New(functiontool.Config{Name: "write_state"}, m.writeState)
@@ -322,11 +322,10 @@ func NewSwarm(cfg ...SwarmConfig) (Swarm, error) {
 }
 
 func (m *defaultSwarm) readState(ctx tool.Context, req struct{ Key string }) (string, error) {
-	resp, err := m.sessionSvc.Get(context.Background(), &session.GetRequest{AppName: "swarm-cli", UserID: m.userID, SessionID: m.sessionID})
-	if err != nil {
-		return "", err
+	if m.memory == nil || m.memory.Episodic() == nil {
+		return "", fmt.Errorf("episodic memory not initialized")
 	}
-	val, err := resp.Session.State().Get(req.Key)
+	val, err := m.memory.Episodic().GetState(context.Background(), m.sessionID, req.Key)
 	if err != nil {
 		return "", err
 	}
@@ -339,23 +338,13 @@ func (m *defaultSwarm) writeState(ctx tool.Context, req struct {
 	Value any
 },
 ) (string, error) {
-	resp, err := m.sessionSvc.Get(context.Background(), &session.GetRequest{AppName: "swarm-cli", UserID: m.userID, SessionID: m.sessionID})
+	if m.memory == nil || m.memory.Episodic() == nil {
+		return "", fmt.Errorf("episodic memory not initialized")
+	}
+	err := m.memory.Episodic().SetState(context.Background(), m.sessionID, req.Key, req.Value)
 	if err != nil {
 		return "", err
 	}
-	err = resp.Session.State().Set(req.Key, req.Value)
-	if err != nil {
-		return "", err
-	}
-	// We must also manually trigger a save since we are bypassing the Runner's auto-delta commit
-	ev := session.NewEvent("")
-	ev.Author = "System"
-	ev.LLMResponse = model.LLMResponse{
-		Content: genai.NewContentFromText(fmt.Sprintf("State updated: %s", req.Key), genai.Role("system")),
-	}
-	ev.Actions = session.EventActions{StateDelta: map[string]any{req.Key: req.Value}}
-
-	_ = m.sessionSvc.AppendEvent(context.Background(), resp.Session, ev)
 	return "State updated successfully.", nil
 }
 
@@ -363,10 +352,10 @@ func (m *defaultSwarm) commitFact(ctx tool.Context, req struct {
 	Fact string
 },
 ) (string, error) {
-	if m.semanticMem == nil {
+	if m.memory == nil || m.memory.Semantic() == nil {
 		return "", fmt.Errorf("semantic memory not initialized")
 	}
-	err := m.semanticMem.Commit(req.Fact)
+	err := m.memory.Semantic().Commit(req.Fact)
 	if err != nil {
 		return "", fmt.Errorf("failed to commit fact: %w", err)
 	}
@@ -378,7 +367,7 @@ func (m *defaultSwarm) retrieveFact(ctx tool.Context, req struct {
 	Limit int
 },
 ) (string, error) {
-	if m.semanticMem == nil {
+	if m.memory == nil || m.memory.Semantic() == nil {
 		return "", fmt.Errorf("semantic memory not initialized")
 	}
 
@@ -387,7 +376,7 @@ func (m *defaultSwarm) retrieveFact(ctx tool.Context, req struct {
 		limit = 5
 	}
 
-	facts, err := m.semanticMem.Retrieve(req.Query, limit)
+	facts, err := m.memory.Semantic().Retrieve(req.Query, limit)
 	if err != nil {
 		return "", fmt.Errorf("failed to retrieve facts: %w", err)
 	}
@@ -643,6 +632,26 @@ func (m *defaultSwarm) Reload() error {
 	return nil
 }
 
+func (m *defaultSwarm) AddSpans(spans ...Span) {
+	if m.activeEngine != nil {
+		m.activeEngine.AddSpans(spans...)
+	}
+}
+
+func (m *defaultSwarm) GetTrajectory() Trajectory {
+	if m.activeEngine != nil {
+		return m.activeEngine.GetTrajectory()
+	}
+	return Trajectory{}
+}
+
+func (m *defaultSwarm) GetContext() map[string]string {
+	if m.activeEngine != nil {
+		return m.activeEngine.GetContext()
+	}
+	return make(map[string]string)
+}
+
 func (m *defaultSwarm) Skills() []*Skill { return m.skills }
 func (m *defaultSwarm) AddContext(path string) error {
 	b, err := os.ReadFile(path)
@@ -670,10 +679,10 @@ func (m *defaultSwarm) ListContext() []string {
 }
 
 func (m *defaultSwarm) ListFacts(limit int) ([]string, error) {
-	if m.semanticMem == nil {
+	if m.memory == nil || m.memory.Semantic() == nil {
 		return nil, fmt.Errorf("semantic memory not initialized")
 	}
-	return m.semanticMem.List(limit)
+	return m.memory.Semantic().List(limit)
 }
 
 func (m *defaultSwarm) Reset() {
@@ -736,16 +745,16 @@ func (m *defaultSwarm) Plan(ctx context.Context, prompt string, traj Trajectory)
 	routingPrompt := fmt.Sprintf(m.routingInstruction, specialistsList)
 
 	// Inject any critical semantic facts (like tool deprecations) or facts directly relevant to the user's prompt
-	if m.semanticMem != nil {
+	if m.memory != nil && m.memory.Semantic() != nil {
 		var injectedFacts []string
 
 		// 1. Always look for system-level tool failures
-		if sysFacts, err := m.semanticMem.Retrieve("TOOL FAILURE OFFLINE", 3); err == nil && len(sysFacts) > 0 {
+		if sysFacts, err := m.memory.Semantic().Retrieve("TOOL FAILURE OFFLINE", 3); err == nil && len(sysFacts) > 0 {
 			injectedFacts = append(injectedFacts, sysFacts...)
 		}
 
 		// 2. Look for semantic memories related to the user's actual prompt
-		if userFacts, err := m.semanticMem.Retrieve(prompt, 3); err == nil && len(userFacts) > 0 {
+		if userFacts, err := m.memory.Semantic().Retrieve(prompt, 3); err == nil && len(userFacts) > 0 {
 			injectedFacts = append(injectedFacts, userFacts...)
 		}
 
@@ -770,8 +779,8 @@ func (m *defaultSwarm) Plan(ctx context.Context, prompt string, traj Trajectory)
 	if strings.Contains(jsonStr, "DEEP_PLAN_REQUIRED") {
 		planningPrompt := fmt.Sprintf(m.planningInstruction, specialistsList)
 
-		if m.semanticMem != nil {
-			if facts, err := m.semanticMem.Retrieve("TOOL FAILURE OFFLINE", 5); err == nil && len(facts) > 0 {
+		if m.memory != nil && m.memory.Semantic() != nil {
+			if facts, err := m.memory.Semantic().Retrieve("TOOL FAILURE OFFLINE", 5); err == nil && len(facts) > 0 {
 				planningPrompt += "\n\n### CRITICAL SYSTEM FACTS (SEMANTIC MEMORY):\n" + strings.Join(facts, "\n")
 			}
 		}
@@ -913,19 +922,9 @@ func (m *defaultSwarm) Chat(ctx context.Context, prompt string) (<-chan Observab
 
 		// Fetch and inject global conversation history for the Input Agent
 		var inputHistoryParts []string
-		if sessResp, err := m.sessionSvc.Get(ctx, &session.GetRequest{AppName: "swarm-cli", UserID: m.userID, SessionID: m.sessionID}); err == nil {
-			for ev := range sessResp.Session.Events().All() {
-				if ev.Content != nil {
-					for _, part := range ev.Content.Parts {
-						if part.Text != "" {
-							text := part.Text
-							if len(text) > 500 {
-								text = text[:500] + "..." // Truncate history heavily for the fast CIA
-							}
-							inputHistoryParts = append(inputHistoryParts, fmt.Sprintf("[%s]: %s", ev.Author, text))
-						}
-					}
-				}
+		if m.memory != nil && m.memory.Episodic() != nil {
+			if hist, err := m.memory.Episodic().GetRecentHistory(ctx, m.sessionID, 5); err == nil {
+				inputHistoryParts = hist
 			}
 		}
 
@@ -1161,8 +1160,8 @@ func (m *defaultSwarm) Execute(ctx context.Context, g *ExecutionGraph, o *Engine
 					out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Overwatch", State: AgentStateError, Error: fmt.Errorf("deadlock detected: %s", reason)}
 
 					// Automatically commit this failure to semantic memory so it persists across sessions
-					if m.semanticMem != nil {
-						_ = m.semanticMem.Commit(fmt.Sprintf("TOOL FAILURE (Overwatch): %s", reason))
+					if m.memory != nil && m.memory.Semantic() != nil {
+						_ = m.memory.Semantic().Commit(fmt.Sprintf("TOOL FAILURE (Overwatch): %s", reason))
 					}
 
 					// Force a hard replan and explicitly tell the planner WHY it failed so it routes around the block
@@ -1263,6 +1262,9 @@ func (m *defaultSwarm) executeSpan(ctx context.Context, out chan<- ObservableEve
 		var history []string
 		var newLines bool
 
+		var obsRunning bool
+		var obsMu sync.Mutex
+
 		baseInterval := 2 * time.Second
 		interval := baseInterval
 		maxInterval := 60 * time.Second
@@ -1284,6 +1286,15 @@ func (m *defaultSwarm) executeSpan(ctx context.Context, out chan<- ObservableEve
 				newLines = true
 			case <-timer.C:
 				if newLines {
+					obsMu.Lock()
+					if obsRunning {
+						obsMu.Unlock()
+						timer.Reset(interval)
+						continue
+					}
+					obsRunning = true
+					obsMu.Unlock()
+
 					newLines = false
 
 					histCopy := make([]string, len(history))
@@ -1291,6 +1302,11 @@ func (m *defaultSwarm) executeSpan(ctx context.Context, out chan<- ObservableEve
 					obsWg.Add(1)
 					go func(hist []string) {
 						defer obsWg.Done()
+						defer func() {
+							obsMu.Lock()
+							obsRunning = false
+							obsMu.Unlock()
+						}()
 						obsCtx, obsCancel := context.WithTimeout(spanCtx, 15*time.Second) // Fix: Tie observer timeout directly to spanCtx
 						defer obsCancel()
 
@@ -1299,7 +1315,7 @@ func (m *defaultSwarm) executeSpan(ctx context.Context, out chan<- ObservableEve
 						respIter := m.fastModel.GenerateContent(obsCtx, &model.LLMRequest{Contents: []*genai.Content{genai.NewContentFromText(obsPrompt, genai.Role("user"))}}, false)
 						for resp, err := range respIter {
 							if err != nil {
-								// Silently ignore transient errors in the background observer loop
+								out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Observer", SpanID: span.ID, TaskName: span.Name, ParentID: span.ParentID, State: AgentStateWaiting, ObserverSummary: "Telemetry summary failed: " + err.Error()}
 								break
 							}
 							if resp.Content != nil && len(resp.Content.Parts) > 0 {
@@ -1482,21 +1498,9 @@ func (m *defaultSwarm) executeSpan(ctx context.Context, out chan<- ObservableEve
 }
 
 func (m *defaultSwarm) appendEvent(ctx context.Context, author, content string) {
-	if m.sessionSvc == nil {
-		return
+	if m.memory != nil && m.memory.Episodic() != nil {
+		_ = m.memory.Episodic().AppendEvent(ctx, m.sessionID, author, content)
 	}
-	// Fetch the actual session object to fulfill the interface
-	resp, err := m.sessionSvc.Get(ctx, &session.GetRequest{AppName: "swarm-cli", UserID: m.userID, SessionID: m.sessionID})
-	if err != nil {
-		return
-	}
-	_ = m.sessionSvc.AppendEvent(ctx, resp.Session, &session.Event{
-		Timestamp: time.Now(),
-		Author:    author,
-		LLMResponse: model.LLMResponse{
-			Content: genai.NewContentFromText(content, genai.Role(author)),
-		},
-	})
 }
 
 func (m *defaultSwarm) runOutputAgent(ctx context.Context, out chan<- ObservableEvent, o *Engine, agentName, content string) bool {

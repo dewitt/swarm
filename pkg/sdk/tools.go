@@ -256,7 +256,10 @@ func bashExecuteTool(ctx tool.Context, args BashExecuteArgs) (BashExecuteResult,
 			line := scanner.Text()
 			buf.WriteString(line + "\n")
 			if telemetry != nil {
-				telemetry <- line
+				select {
+				case telemetry <- line:
+				default:
+				}
 			}
 		}
 	}
@@ -266,14 +269,16 @@ func bashExecuteTool(ctx tool.Context, args BashExecuteArgs) (BashExecuteResult,
 
 	var err error
 	if args.IsBackground {
-		// Small sleep to catch immediate errors (e.g. command not found, or immediate crash)
-		time.Sleep(500 * time.Millisecond)
-
-		// Check if it's still running
-		if cmd.ProcessState != nil && cmd.ProcessState.Exited() {
-			err = cmd.Wait() // Populate exit code
+		done := make(chan error, 1)
+		go func() {
+			done <- cmd.Wait()
 			wg.Wait()
-		} else {
+		}()
+
+		select {
+		case err = <-done:
+			// Process exited quickly
+		case <-time.After(500 * time.Millisecond):
 			// It's still running! Return PGID.
 			pgid, _ := syscall.Getpgid(cmd.Process.Pid)
 			return BashExecuteResult{

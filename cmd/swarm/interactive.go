@@ -876,7 +876,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if len(m.history) > 1000 {
 						m.history = m.history[len(m.history)-1000:]
 					}
-					saveHistory(m.history)
+					histCopy := make([]string, len(m.history))
+					copy(histCopy, m.history)
+					cmds = append(cmds, func() tea.Msg {
+						saveHistory(histCopy)
+						return nil
+					})
 				}
 				m.historyIdx = len(m.history)
 

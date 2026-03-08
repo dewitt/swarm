@@ -17,12 +17,12 @@ type SemanticFact struct {
 	CreatedAt int64  `gorm:"autoCreateTime"`
 }
 
-type SemanticMemory struct {
+type sqliteSemanticMemory struct {
 	db         *gorm.DB
 	ftsEnabled bool
 }
 
-func NewSemanticMemory(workspaceDir string) (*SemanticMemory, error) {
+func NewSemanticMemory(workspaceDir string) (SemanticMemory, error) {
 	geminiDir := filepath.Join(workspaceDir, ".gemini")
 	_ = os.MkdirAll(geminiDir, 0o755)
 	dbPath := filepath.Join(geminiDir, "state.db")
@@ -71,14 +71,14 @@ func NewSemanticMemory(workspaceDir string) (*SemanticMemory, error) {
 		`)
 	}
 
-	return &SemanticMemory{db: db, ftsEnabled: ftsEnabled}, nil
+	return &sqliteSemanticMemory{db: db, ftsEnabled: ftsEnabled}, nil
 }
 
-func (sm *SemanticMemory) Commit(fact string) error {
+func (sm *sqliteSemanticMemory) Commit(fact string) error {
 	return sm.db.Create(&SemanticFact{Fact: fact}).Error
 }
 
-func (sm *SemanticMemory) Retrieve(query string, limit int) ([]string, error) {
+func (sm *sqliteSemanticMemory) Retrieve(query string, limit int) ([]string, error) {
 	var facts []SemanticFact
 	var err error
 
@@ -105,7 +105,21 @@ func (sm *SemanticMemory) Retrieve(query string, limit int) ([]string, error) {
 		`, safeQuery, limit).Scan(&facts).Error
 	} else {
 		// Fallback to simple LIKE search if FTS5 is not available in the binary
-		err = sm.db.Where("fact LIKE ?", "%"+query+"%").Order("created_at desc").Limit(limit).Find(&facts).Error
+		safeQuery := query
+		for _, char := range []string{"\"", "'", "*", "^", "-", ".", "(", ")", "[", "]", "{", "}", "?", "!", ":", ";", ",", "/"} {
+			safeQuery = strings.ReplaceAll(safeQuery, char, " ")
+		}
+		var orQueries []string
+		var orArgs []interface{}
+		for _, word := range strings.Fields(safeQuery) {
+			orQueries = append(orQueries, "fact LIKE ?")
+			orArgs = append(orArgs, "%"+word+"%")
+		}
+		if len(orQueries) > 0 {
+			err = sm.db.Where(strings.Join(orQueries, " OR "), orArgs...).Order("id desc").Limit(limit).Find(&facts).Error
+		} else {
+			err = sm.db.Order("id desc").Limit(limit).Find(&facts).Error
+		}
 	}
 
 	if err != nil {
@@ -119,7 +133,7 @@ func (sm *SemanticMemory) Retrieve(query string, limit int) ([]string, error) {
 	return results, nil
 }
 
-func (sm *SemanticMemory) List(limit int) ([]string, error) {
+func (sm *sqliteSemanticMemory) List(limit int) ([]string, error) {
 	var facts []SemanticFact
 	err := sm.db.Order("id desc").Limit(limit).Find(&facts).Error
 	if err != nil {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -114,7 +115,17 @@ func (m *defaultSwarm) Execute(ctx context.Context, g *ExecutionGraph, o *Engine
 				// Handle dynamic replanning or subgraph expansion
 				if done.Replan {
 					if replanCount >= maxReplans {
-						out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm", State: AgentStateError, Error: fmt.Errorf("maximum replan attempts reached, halting loop")}
+						errMsg := fmt.Errorf("maximum replan attempts reached, halting loop")
+						out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm", State: AgentStateError, Error: errMsg}
+						
+						// Automated Post-Incident Artifact Generation
+						traj := o.GetTrajectory()
+						b, _ := json.MarshalIndent(traj, "", "  ")
+						
+						report := fmt.Sprintf("# Swarm Incident Report\n\n**Date:** %s\n**Session ID:** %s\n**Reason:** %v\n\n## Final Agent Error\n```\n%s\n```\n\n## Trajectory Dump\n```json\n%s\n```\n\n*Please review this report to identify tool failures or prompt loops. You can use the `agentic_quality_advocate` to analyze this file.*", time.Now().Format(time.RFC1123), m.sessionID, errMsg, done.Result, string(b))
+						
+						_ = os.WriteFile("incident_report.md", []byte(report), 0644)
+						
 						continue
 					}
 					replanCount++

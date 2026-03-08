@@ -80,6 +80,9 @@ type SemanticMemory interface {
 
 	// SemanticStats returns metadata about semantic memory.
 	SemanticStats() MemoryStats
+
+	// FTSEnabled returns true if the semantic memory is backed by FTS5.
+	FTSEnabled() bool
 }
 
 // GlobalMemory provides access to system-wide parameters and preferences (Tier 4).

@@ -160,3 +160,8 @@ func (sm *sqliteSemanticMemory) SemanticStats() MemoryStats {
 		TokenEstimate: int(totalChars) / 4,
 	}
 }
+
+func (sm *sqliteSemanticMemory) FTSEnabled() bool {
+	return sm.ftsEnabled
+}
+

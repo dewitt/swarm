@@ -585,7 +585,7 @@ func initialModel(planMode bool, resume bool) (model, error) {
 		viewport:       vp,
 		spinner:        s,
 		listModel:      l,
-		messages:       []string{buildBootMessage(cwd, branch, modified, isDark, activeModel, nil, "Loading...", resume, len(loadedHist) == 0, getUserName(), 0)},
+		messages:       []string{buildBootMessage(cwd, branch, modified, isDark, activeModel, nil, "Loading...", resume, len(loadedHist) == 0, getUserName(), 0, false)},
 		history:        loadedHist,
 		historyIdx:     len(loadedHist),
 		loading:        false,
@@ -657,7 +657,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			// Update the boot message now that we have the swarm instance
 			contextFiles := m.swarm.ListContext()
-			m.messages[0] = buildBootMessage(m.cwd, m.gitBranch, m.gitModified, m.isDark, m.activeModel, contextFiles, m.swarm.SessionID(), m.pendingSwarmCfg.ResumeLastSession, len(m.history) == 0, getUserName(), len(m.swarm.Skills()))
+			m.messages[0] = buildBootMessage(m.cwd, m.gitBranch, m.gitModified, m.isDark, m.activeModel, contextFiles, m.swarm.SessionID(), m.pendingSwarmCfg.ResumeLastSession, len(m.history) == 0, getUserName(), len(m.swarm.Skills()), m.swarm.Memory().Semantic().FTSEnabled())
 			m.updateViewport()
 			return m, nil
 		}
@@ -2099,7 +2099,7 @@ func (m *model) updateInputStyle() {
 	}
 }
 
-func buildBootMessage(cwd, branch string, modified bool, isDark bool, activeModel string, contextFiles []string, sessionID string, isResume bool, isFirstTime bool, userName string, numSkills int) string {
+func buildBootMessage(cwd, branch string, modified bool, isDark bool, activeModel string, contextFiles []string, sessionID string, isResume bool, isFirstTime bool, userName string, numSkills int, ftsEnabled bool) string {
 	version := "Unknown"
 	if info, ok := debug.ReadBuildInfo(); ok {
 		version = info.Main.Version
@@ -2189,12 +2189,19 @@ func buildBootMessage(cwd, branch string, modified bool, isDark bool, activeMode
 		envBranchVal += valModifiedStyle.Render(modStr)
 	}
 
+	envOSArchVal := fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH)
+	if ftsEnabled {
+		envOSArchVal += " (FTS5)"
+	} else {
+		envOSArchVal += " (No FTS5)"
+	}
+
 	envCol := lipgloss.JoinVertical(lipgloss.Left,
 		headerStyle.Render("[ Environment ]"),
 		lipgloss.JoinHorizontal(lipgloss.Top, keyStyle.Render("Dir:"), valStyle.Render(displayDir)),
 		lipgloss.JoinHorizontal(lipgloss.Top, keyStyle.Render("Branch:"), envBranchVal),
 		lipgloss.JoinHorizontal(lipgloss.Top, keyStyle.Render("HEAD:"), valStyle.Render(headHash)),
-		lipgloss.JoinHorizontal(lipgloss.Top, keyStyle.Render("OS/Arch:"), valStyle.Render(fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH))),
+		lipgloss.JoinHorizontal(lipgloss.Top, keyStyle.Render("OS/Arch:"), valStyle.Render(envOSArchVal)),
 	)
 
 	// Session Column

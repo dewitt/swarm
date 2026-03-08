@@ -1,5 +1,9 @@
 # Design: Tool Reliability Scoring & Flake Memory
 
+> **DEPRECATED:** This narrow, hardcoded SQLite approach has been superseded
+> by the generalized semantic state approach described in
+> [Design 35: Hierarchical Memory System](35-hierarchical-memory-system.md).
+
 *Resolves an initiative in Epic #29 (The Self-Healing Swarm).*
 
 ## 1. Context & Motivation

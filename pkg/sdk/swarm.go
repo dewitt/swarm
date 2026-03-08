@@ -743,13 +743,29 @@ func (m *defaultSwarm) Plan(ctx context.Context, prompt string, traj Trajectory)
 
 	routingPrompt := fmt.Sprintf(m.routingInstruction, specialistsList)
 
-	// Inject any critical semantic facts (like tool deprecations) to guide routing
+	// Inject any critical semantic facts (like tool deprecations) or facts directly relevant to the user's prompt
 	if m.semanticMem != nil {
-		if facts, err := m.semanticMem.Retrieve("TOOL FAILURE OFFLINE", 5); err == nil && len(facts) > 0 {
-			routingPrompt += "\n\n### CRITICAL SYSTEM FACTS (SEMANTIC MEMORY):\n" + strings.Join(facts, "\n")
+		var injectedFacts []string
+
+		// 1. Always look for system-level tool failures
+		if sysFacts, err := m.semanticMem.Retrieve("TOOL FAILURE OFFLINE", 3); err == nil && len(sysFacts) > 0 {
+			injectedFacts = append(injectedFacts, sysFacts...)
+		}
+
+		// 2. Look for semantic memories related to the user's actual prompt
+		// Note: we sanitize the prompt slightly to improve FTS5 matching (e.g. removing basic punctuation)
+		cleanPrompt := strings.ReplaceAll(prompt, "?", "")
+		cleanPrompt = strings.ReplaceAll(cleanPrompt, "\"", "")
+		cleanPrompt = strings.ReplaceAll(cleanPrompt, "'", "")
+
+		if userFacts, err := m.semanticMem.Retrieve(cleanPrompt, 3); err == nil && len(userFacts) > 0 {
+			injectedFacts = append(injectedFacts, userFacts...)
+		}
+
+		if len(injectedFacts) > 0 {
+			routingPrompt += "\n\n### CRITICAL SYSTEM FACTS (SEMANTIC MEMORY):\n" + strings.Join(injectedFacts, "\n")
 		}
 	}
-
 	respIter := m.fastModel.GenerateContent(ctx, &model.LLMRequest{
 		Contents: []*genai.Content{genai.NewContentFromText(prompt, genai.Role("user"))},
 		Config:   &genai.GenerateContentConfig{SystemInstruction: genai.NewContentFromText(routingPrompt, genai.Role("system"))},

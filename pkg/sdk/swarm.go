@@ -82,9 +82,10 @@ type ObservableEvent struct {
 }
 
 type Reflection struct {
-	IsResolved bool   `json:"is_resolved"`
-	Reasoning  string `json:"reasoning"`
-	NextSteps  string `json:"next_steps"`
+	IsResolved bool     `json:"is_resolved"`
+	Reasoning  string   `json:"reasoning"`
+	NextSteps  string   `json:"next_steps"`
+	NewFacts   []string `json:"new_facts,omitempty"`
 }
 
 type Swarm interface {
@@ -307,12 +308,11 @@ func NewSwarm(cfg ...SwarmConfig) (Swarm, error) {
 
 	readStateTool, _ := functiontool.New(functiontool.Config{Name: "read_state"}, m.readState)
 	writeStateTool, _ := functiontool.New(functiontool.Config{Name: "write_state"}, m.writeState)
-	commitFactTool, _ := functiontool.New(functiontool.Config{Name: "commit_fact"}, m.commitFact)
 	retrieveFactTool, _ := functiontool.New(functiontool.Config{Name: "retrieve_fact"}, m.retrieveFact)
 	spawnSubtaskTool, _ := functiontool.New(functiontool.Config{Name: "spawn_subtask"}, m.spawnSubtask)
 	m.toolRegistry = map[string]tool.Tool{
 		"list_local_files": listTool, "read_local_file": readTool, "grep_search": grepTool, "write_local_file": writeTool, "git_commit": gitCommit, "git_push": gitPush, "bash_execute": bashExecute, "web_fetch": webFetchTool, "google_search": googleSearchTool, "request_replan": replanTool,
-		"read_state": readStateTool, "write_state": writeStateTool, "commit_fact": commitFactTool, "retrieve_fact": retrieveFactTool, "spawn_subtask": spawnSubtaskTool,
+		"read_state": readStateTool, "write_state": writeStateTool, "retrieve_fact": retrieveFactTool, "spawn_subtask": spawnSubtaskTool,
 	}
 
 	if err := m.Reload(); err != nil {
@@ -346,20 +346,6 @@ func (m *defaultSwarm) writeState(ctx tool.Context, req struct {
 		return "", err
 	}
 	return "State updated successfully.", nil
-}
-
-func (m *defaultSwarm) commitFact(ctx tool.Context, req struct {
-	Fact string
-},
-) (string, error) {
-	if m.memory == nil || m.memory.Semantic() == nil {
-		return "", fmt.Errorf("semantic memory not initialized")
-	}
-	err := m.memory.Semantic().Commit(req.Fact)
-	if err != nil {
-		return "", fmt.Errorf("failed to commit fact: %w", err)
-	}
-	return "Fact successfully committed to semantic memory.", nil
 }
 
 func (m *defaultSwarm) retrieveFact(ctx tool.Context, req struct {
@@ -821,11 +807,16 @@ func (m *defaultSwarm) Reflect(ctx context.Context, prompt string, traj Trajecto
 	systemPrompt := `You are Swarm. Your job is to evaluate whether the user's original goal has been FULLY completed based on the execution trajectory.
 If it is completed, set is_resolved to true.
 If the agent only diagnosed a problem but did not physically apply the fix (e.g., using write_local_file), then the task is NOT resolved. You must set is_resolved to false and provide explicit next_steps to implement the fix.
+
+Additionally, you MUST identify any "timeless facts" discovered during this execution. A timeless fact is a piece of information that is true across sessions and projects (e.g., "The build command for this repo is X", "The secret ingredient is Y", "Tool Z is currently down").
+If you find such facts, include them in the "new_facts" array. Be exhaustive but precise. Avoid ephemeral conversational state.
+
 Output your response as strictly valid JSON matching this schema:
 {
   "is_resolved": boolean,
   "reasoning": "string",
-  "next_steps": "string"
+  "next_steps": "string",
+  "new_facts": ["string"]
 }`
 
 	userPrompt := fmt.Sprintf("Original Goal: %s\n\nExecution Trajectory:\n%s", prompt, string(b))
@@ -1049,6 +1040,13 @@ func (m *defaultSwarm) Chat(ctx context.Context, prompt string) (<-chan Observab
 					if err != nil {
 						out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm", SpanID: "reflection", TaskName: "Reflection", State: AgentStateError, Error: fmt.Errorf("reflection failed: %w", err)}
 						return
+					}
+
+					// Automatically commit any new facts discovered during reflection
+					if m.memory != nil && m.memory.Semantic() != nil && len(reflection.NewFacts) > 0 {
+						for _, fact := range reflection.NewFacts {
+							_ = m.memory.Semantic().Commit(fact)
+						}
 					}
 
 					if reflection.IsResolved {
@@ -1372,6 +1370,13 @@ func (m *defaultSwarm) executeSpan(ctx context.Context, out chan<- ObservableEve
 
 	promptStr := fmt.Sprintf("TASK: %s\nINSTRUCTIONS: %s", span.Name, span.Prompt)
 	promptStr += fmt.Sprintf("\n\n### TASK CONTEXT\nYour current Task ID is: %s\nIf you need to spawn subtasks, use this ID as their 'parent_id' or explicitly in their 'dependencies' list to ensure they block this task's completion if necessary.", span.ID)
+
+	// Inject relevant semantic memory facts
+	if m.memory != nil && m.memory.Semantic() != nil {
+		if facts, err := m.memory.Semantic().Retrieve(span.Prompt, 3); err == nil && len(facts) > 0 {
+			promptStr += "\n\n### RELEVANT MEMORY FACTS:\n" + strings.Join(facts, "\n")
+		}
+	}
 
 	if len(stateParts) > 0 {
 		promptStr = promptStr + "\n\n### SESSION STATE\n" + strings.Join(stateParts, "\n")

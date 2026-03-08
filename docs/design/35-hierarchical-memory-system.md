@@ -63,13 +63,15 @@ will orchestrate how information flows between them.
 - **Content:** Persistent, timeless facts distilled from episodic memory
   (e.g., "The build command is X", or "Claude-code is currently
   rate-limited").
-- **Management (SQLite + FTS5):** We reject the "Polyglot" approach of
-  external vector databases as too heavy for a CLI. Instead, we will use a
-  unified, embedded **SQLite database**. We will leverage the `FTS5` extension
-  for lightning-fast lexical search (exact keyword matching), which is often
-  superior to fuzzy cosine similarity for strict syntactical coding tasks.
-  Agents will use `commit_fact` and `retrieve_fact` tools to query this
-  embedded pipeline.
+- **Management (Reflective Extraction):** We reject the "Active Committing"
+  approach, as it couples domain logic with memory management. Instead, we
+  implement **Passive Reflective Extraction**. The Swarm Orchestrator's
+  `Reflect` phase is tasked with analyzing the execution trajectory after a
+  cycle and identifying "timeless facts" (e.g., discovering an undocumented
+  test command). These facts are then automatically committed to the unified,
+  embedded **SQLite database (FTS5)**. Agents remain entirely unaware of the
+  underlying memory infrastructure, receiving relevant facts injected into
+  their prompt by the orchestrator during the `Plan` phase.
 
 ### Tier 4: Global Memory (Foundational Parameters)
 

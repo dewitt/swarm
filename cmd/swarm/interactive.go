@@ -250,6 +250,7 @@ type model struct {
 	// Boot Logo Animation
 	logoFrame   int
 	hasRunTasks bool
+	fatalErr    error
 }
 
 type themeColors struct {
@@ -662,8 +663,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Handle async initialization
 		if initMsg, ok := msg.(swarmInitMsg); ok {
 			if initMsg.err != nil {
-				m.appendMessage(lipgloss.NewStyle().Foreground(errorColor).Render(fmt.Sprintf("Failed to initialize Swarm: %v", initMsg.err)))
-				return m, nil
+				m.quitting = true
+				m.fatalErr = initMsg.err
+				return m, tea.Quit
 			}
 			m.swarm = initMsg.swarm
 
@@ -2813,10 +2815,18 @@ func launchInteractiveShell(planMode bool, resume bool) error {
 		return err
 	}
 	p := tea.NewProgram(m)
-	if _, err := p.Run(); err != nil {
+	finalModel, err := p.Run()
+	if err != nil {
 		m.cleanup()
 		return fmt.Errorf("error: %w", err)
 	}
+
 	m.cleanup()
+	
+	if fm, ok := finalModel.(model); ok {
+		if fm.fatalErr != nil {
+			return fm.fatalErr
+		}
+	}
 	return nil
 }

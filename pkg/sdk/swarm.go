@@ -207,14 +207,23 @@ func NewSwarm(cfg ...SwarmConfig) (Swarm, error) {
 		var err error
 		flashModel, err = gemini.NewModel(ctx, "gemini-2.5-flash", clientConfig)
 		if err != nil {
+			if strings.Contains(err.Error(), "api key is required") {
+				return nil, fmt.Errorf("Missing API Key: Please set the GOOGLE_API_KEY environment variable. You can get one from https://aistudio.google.dev/app/apikey")
+			}
 			return nil, err
 		}
 		proModel, err = gemini.NewModel(ctx, proModelName, clientConfig)
 		if err != nil {
+			if strings.Contains(err.Error(), "api key is required") {
+				return nil, fmt.Errorf("Missing API Key: Please set the GOOGLE_API_KEY environment variable. You can get one from https://aistudio.google.dev/app/apikey")
+			}
 			return nil, err
 		}
 		fastModel, err = gemini.NewModel(ctx, "gemini-2.5-flash", clientConfig)
 		if err != nil {
+			if strings.Contains(err.Error(), "api key is required") {
+				return nil, fmt.Errorf("Missing API Key: Please set the GOOGLE_API_KEY environment variable. You can get one from https://aistudio.google.dev/app/apikey")
+			}
 			return nil, err
 		}
 

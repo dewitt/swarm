@@ -2050,7 +2050,7 @@ func (m *model) updateViewport() {
 	inputView := inputBoxStyle.Width(m.width - 2).Render(m.textArea.View())
 	inputHeight := lipgloss.Height(inputView)
 
-	acHeight := m.getAutocompleteHeight()
+	acHeight := 0 // Keep height constant to draw acView as an overlay
 
 	// 2. Compute Viewport Height
 	newHeight := m.height - agentPanelHeight - inputHeight - acHeight - statusHeight - borderHeight
@@ -2712,7 +2712,7 @@ func (m model) View() tea.View {
 		if m.acHasMore {
 			lines = append(lines, " ... ")
 		}
-		acView = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(primaryColor).Padding(0, 1).Render(strings.Join(lines, "\n"))
+		acView = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(primaryColor).Padding(0, 1).Width(m.width - 2).Render(strings.Join(lines, "\n"))
 	}
 
 	// Output Box (Viewport) with border
@@ -2749,7 +2749,15 @@ func (m model) View() tea.View {
 	// Main body is just the vertical stack of the sections
 	var mainBody string
 	if acView != "" {
-		mainBody = lipgloss.JoinVertical(lipgloss.Left, agentPanelView, vpView, acView, inputView)
+		vpLines := strings.Split(vpView, "\n")
+		acLines := strings.Split(acView, "\n")
+		
+		acHeight := len(acLines)
+		if len(vpLines) >= acHeight {
+			vpLines = append(vpLines[:len(vpLines)-acHeight], acLines...)
+			vpView = strings.Join(vpLines, "\n")
+		}
+		mainBody = lipgloss.JoinVertical(lipgloss.Left, agentPanelView, vpView, inputView)
 	} else {
 		mainBody = lipgloss.JoinVertical(lipgloss.Left, agentPanelView, vpView, inputView)
 	}

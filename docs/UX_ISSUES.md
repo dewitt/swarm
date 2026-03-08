@@ -10,7 +10,9 @@ collect these over time to inform future sprint priorities.
   suggestion boxes overlap and misrender over the text input box, causing text
   glitching because their heights were approximated (hardcoded to 5) instead
   of calculated exactly based on matches. Fix: Implemented dynamic height
-  calculation and match truncation.
+  calculation and match truncation. Additionally, converted the autocomplete
+  box into a true visual overlay (Z-index style) over the chat viewport so it
+  no longer shoves the chat history upwards when triggered.
 - [ ] **The "Naked Crash" on Missing API Key:** Running the CLI without
   `GOOGLE_API_KEY` set dumps a raw Go struct memory error to stderr. The CLI
   should intercept this and gracefully prompt the user for the key, or at

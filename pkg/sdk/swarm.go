@@ -91,6 +91,7 @@ type Swarm interface {
 	AddContext(path string) error
 	DropContext(path string)
 	ListContext() []string
+	ListFacts(limit int) ([]string, error)
 	Plan(ctx context.Context, prompt string, traj Trajectory) (*ExecutionGraph, error)
 	Reflect(ctx context.Context, prompt string, traj Trajectory) (*Reflection, error)
 	Execute(ctx context.Context, g *ExecutionGraph, o *Engine) (<-chan ObservableEvent, *Engine, error)
@@ -674,6 +675,13 @@ func (m *defaultSwarm) ListContext() []string {
 		p = append(p, path)
 	}
 	return p
+}
+
+func (m *defaultSwarm) ListFacts(limit int) ([]string, error) {
+	if m.semanticMem == nil {
+		return nil, fmt.Errorf("semantic memory not initialized")
+	}
+	return m.semanticMem.List(limit)
 }
 
 func (m *defaultSwarm) Reset() {

@@ -343,7 +343,7 @@ func updateAutocomplete(m *model) {
 
 	slashCommands := []string{
 		"help", "clear", "context", "drop", "skills",
-		"sessions", "model", "remember", "plan", "act", "exit", "quit",
+		"sessions", "model", "memory", "remember", "plan", "act", "exit", "quit",
 	}
 
 	if strings.HasPrefix(lastWord, "@") {
@@ -1493,6 +1493,7 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 			"  /model       Set the active LLM provider (e.g. /model auto).",
 			"  /model list  Open an interactive list of all available models.",
 			"  /config      Prints the current global configuration.",
+			"  /memory      Displays current hierarchical memory state (global & semantic facts).",
 			"  /remember    Saves a global preference (e.g. /remember I use tabs).",
 			"  /copy        Copies the last agent response to the system clipboard.",
 			"  /observe     Toggles observe mode to see real-time agent activity.",
@@ -1827,6 +1828,35 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 		} else {
 			m.appendMessage(agentMsgStyle.Render("✦ ") + "Got it. I'll remember that for all future sessions.")
 		}
+	case "/memory":
+		var lines []string
+		lines = append(lines, lipgloss.NewStyle().Bold(true).Render("Hierarchical Memory State"))
+		lines = append(lines, "")
+
+		// 1. Global Memory
+		globalMem, _ := sdk.LoadMemory()
+		if globalMem != "" {
+			lines = append(lines, lipgloss.NewStyle().Foreground(googleYellow).Render("[ Global Preferences ]"))
+			lines = append(lines, strings.TrimSpace(globalMem))
+			lines = append(lines, "")
+		}
+
+		// 2. Semantic Memory
+		facts, err := m.swarm.ListFacts(10)
+		if err != nil {
+			lines = append(lines, lipgloss.NewStyle().Foreground(errorColor).Render("Failed to read semantic memory: "+err.Error()))
+		} else if len(facts) > 0 {
+			lines = append(lines, lipgloss.NewStyle().Foreground(googleBlue).Render("[ Semantic Project Facts ]"))
+			for _, f := range facts {
+				lines = append(lines, "  - "+f)
+			}
+		} else {
+			lines = append(lines, lipgloss.NewStyle().Foreground(googleBlue).Render("[ Semantic Project Facts ]"))
+			lines = append(lines, "  (No semantic facts recorded for this project yet)")
+		}
+
+		icon := agentMsgStyle.Render("✦ ")
+		m.appendMessage(lipgloss.JoinHorizontal(lipgloss.Top, icon, lipgloss.JoinVertical(lipgloss.Left, lines...)))
 	default:
 		m.appendMessage(lipgloss.NewStyle().Foreground(errorColor).Render("Unknown command: " + cmd))
 	}
@@ -2051,7 +2081,7 @@ func buildBootMessage(cwd, branch string, modified bool, isDark bool, activeMode
 	// Tips footer
 	tipsLabel := lipgloss.NewStyle().Foreground(googleYellow).Bold(true).Render("💡 Tips: ")
 	tipsContent := lipgloss.NewStyle().Foreground(t.labelFg).Render(
-		"[/help] commands   [/skills] view skills   [/debug] toggle debug   [!] shell mode",
+		"[/help] commands   [/memory] view facts   [/skills] view skills   [!] shell mode",
 	)
 	footer := lipgloss.JoinHorizontal(lipgloss.Top, tipsLabel, tipsContent)
 

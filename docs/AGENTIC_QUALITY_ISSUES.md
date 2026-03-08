@@ -6,15 +6,15 @@ quality reviews (`docs/AGENTIC_QUALITY_REVIEW_GUIDE.md`).
 
 ## 🧠 Cognitive & Reasoning Failures
 
-- None currently identified.
+- **Tool Execution Blindness (Claude Code Agent):** In `scenario_3`, the `claude_code_agent` encountered a "Credit balance is too low" error from the `claude` CLI tool. While it recognized the failure and asked for a replan, the Swarm orchestrator failed to properly parse the replan output and crashed (`invalid character 'I' looking for beginning of value`). This indicates brittle error handling during Swarm coordination.
 
 ## 🛠️ Tool Use & Orchestration Flaws
 
-- None currently identified.
+- **Coordination JSON Parsing Crash:** As seen in `scenario_3`, the orchestrator failed to parse the JSON output from an agent requesting a replan (`invalid character 'I' looking for beginning of value`). This suggests the LLM generated non-compliant JSON or markdown ticks that the orchestrator failed to sanitize before unmarshaling.
 
 ## ⚖️ Evaluation & Rubric Improvements
 
-- None currently identified.
+- **Scenario 6 Timeout (`scenario_6_protoc`):** `scenario_6` consistently hangs and causes the test suite to panic due to a 10-minute timeout. This indicates either a severe agentic infinite loop within the scenario, or a blocking shell command (e.g., waiting for user input) during the `protoc` generation task. The scenario needs a hard timeout at the agent level or a review of its testing environment.
 
 ## 📝 Prompt & Skill Tuning
 

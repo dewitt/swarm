@@ -926,9 +926,25 @@ func (m *defaultSwarm) Plan(ctx context.Context, prompt string, traj Trajectory)
 		}
 		jsonStr = strings.TrimSpace(jsonStr)
 	}
-	jsonStr = extractJSON(jsonStr)
-	var graph ExecutionGraph
+	jsonStr = strings.TrimSpace(jsonStr)
 	
+	// Remove markdown ticks if the LLM ignores the schema constraints
+	if strings.HasPrefix(jsonStr, "```json") {
+		jsonStr = strings.TrimPrefix(jsonStr, "```json")
+		jsonStr = strings.TrimSuffix(jsonStr, "```")
+		jsonStr = strings.TrimSpace(jsonStr)
+	}
+	
+	jsonStr = extractJSON(jsonStr)
+
+	var graph ExecutionGraph
+
+	// If extractJSON couldn't find a JSON object or array, and the string is just conversational text,
+	// gracefully wrap it in an immediate response instead of crashing.
+	if jsonStr != "" && !strings.HasPrefix(jsonStr, "{") && !strings.HasPrefix(jsonStr, "[") {
+		return &ExecutionGraph{ImmediateResponse: jsonStr}, nil
+	}
+
 	// Handle cases where the LLM returns an array directly instead of an object wrapping "spans"
 	if strings.HasPrefix(strings.TrimSpace(jsonStr), "[") {
 		var spans []Span

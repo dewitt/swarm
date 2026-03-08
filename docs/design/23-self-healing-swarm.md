@@ -106,13 +106,13 @@ iterations, it should synthesize those steps into a test script. If a future
 change breaks this learned workflow, the swarm detects it via local regression
 and self-corrects the codebase.
 
-### 9. Tool Reliability Scoring
+### 9. Tool Reliability Scoring & Flake Memory
 
-Maintain a moving average reliability score for every tool registered in the
-`Adk`. If `bash_execute` degrades below an 80% success rate on a specific
-machine architecture, the planner will dynamically deprecate it for that
-session and favor alternative tools, warning the user of the system
-instability.
+For sophisticated coding tasks, Swarm should ideally delegate to the most capable external agent wrappers (e.g., `codex`, `claude-code`, `cursor`). However, these tools are highly volatile—they require active subscriptions, are subject to API rate limits, and often suffer from unexpected outages. 
+
+Currently, Swarm treats every session as a blank slate. If `codex` is out of credits today, Swarm will still try to use it (and fail) on the very first prompt tomorrow. 
+
+We must introduce a persistent "Flake Memory" and reliability scoring matrix. If an agentwrapper consistently fails with systemic errors (e.g., "Credit balance too low", "API unreachable"), the routing engine should explicitly remember this state across sessions. It should dynamically deprecate the broken tool, update its own system prompt with a warning ("Do not use Codex, it is currently degraded"), and fall back to the next best alternative (e.g., raw `gemini-cli` or `bash_execute`) without requiring the user to watch it fail 3 times first.
 
 ### 10. Heuristic Deadlock Detection ("Overwatch")
 

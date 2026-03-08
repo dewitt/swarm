@@ -834,7 +834,32 @@ func (m *defaultSwarm) Chat(ctx context.Context, prompt string) (<-chan Observab
 		}
 		specialistsList := strings.Join(descriptions, "\n")
 
+		// Fetch and inject global conversation history for the Input Agent
+		var inputHistoryParts []string
+		if sessResp, err := m.sessionSvc.Get(ctx, &session.GetRequest{AppName: "swarm-cli", UserID: m.userID, SessionID: m.sessionID}); err == nil {
+			for ev := range sessResp.Session.Events().All() {
+				if ev.Content != nil {
+					for _, part := range ev.Content.Parts {
+						if part.Text != "" {
+							text := part.Text
+							if len(text) > 500 {
+								text = text[:500] + "..." // Truncate history heavily for the fast CIA
+							}
+							inputHistoryParts = append(inputHistoryParts, fmt.Sprintf("[%s]: %s", ev.Author, text))
+						}
+					}
+				}
+			}
+		}
+
 		dynamicInstruction := m.inputInstruction + fmt.Sprintf("\n\nAVAILABLE AGENTS:\n%s\n\nCURRENT CONTEXT: The last agent to respond was: %s.", specialistsList, lastAgentName)
+		if len(inputHistoryParts) > 0 {
+			// Only take the last 5 turns to keep the prompt small and fast
+			if len(inputHistoryParts) > 5 {
+				inputHistoryParts = inputHistoryParts[len(inputHistoryParts)-5:]
+			}
+			dynamicInstruction += "\n\nRECENT CONVERSATION HISTORY:\n" + strings.Join(inputHistoryParts, "\n")
+		}
 
 		inputIter := m.fastModel.GenerateContent(ctx, &model.LLMRequest{
 			Contents: []*genai.Content{genai.NewContentFromText(prompt, genai.Role("user"))},

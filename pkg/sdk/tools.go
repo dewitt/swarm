@@ -20,6 +20,15 @@ import (
 	"google.golang.org/genai"
 )
 
+func expandHomeDir(path string) string {
+	if strings.HasPrefix(path, "~/") {
+		if home, err := os.UserHomeDir(); err == nil {
+			return filepath.Join(home, path[2:])
+		}
+	}
+	return path
+}
+
 // === Builtin Tools ===
 
 type ListFilesArgs struct {
@@ -36,6 +45,7 @@ func listLocalFiles(ctx tool.Context, args ListFilesArgs) (ListFilesResult, erro
 	if args.Dir == "" {
 		args.Dir = "."
 	}
+	args.Dir = expandHomeDir(args.Dir)
 	var files []string
 
 	if args.Recursive {
@@ -92,11 +102,12 @@ type ReadFileResult struct {
 }
 
 func readLocalFile(ctx tool.Context, args ReadFileArgs) (ReadFileResult, error) {
-	b, err := os.ReadFile(args.Path)
+	args.Path = expandHomeDir(args.Path)
+	data, err := os.ReadFile(args.Path)
 	if err != nil {
 		return ReadFileResult{Error: err.Error()}, nil //nolint:nilerr
 	}
-	return ReadFileResult{Content: string(b)}, nil
+	return ReadFileResult{Content: string(data)}, nil
 }
 
 type GrepArgs struct {
@@ -135,6 +146,7 @@ type WriteFileResult struct {
 }
 
 func writeLocalFile(ctx tool.Context, args WriteFileArgs) (WriteFileResult, error) {
+	args.Path = expandHomeDir(args.Path)
 	dir := filepath.Dir(args.Path)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return WriteFileResult{Success: false, Error: err.Error()}, nil //nolint:nilerr

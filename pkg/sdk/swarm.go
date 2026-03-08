@@ -984,7 +984,14 @@ func (m *defaultSwarm) Chat(ctx context.Context, prompt string) (<-chan Observab
 			if target == "swarm_agent" {
 				out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm", SpanID: "coordination", TaskName: "Swarm Planning", State: AgentStateThinking, Thought: "Analyzing request…"}
 				planStart := time.Now()
-				graph, err = m.Plan(ctx, cyclePrompt, o.GetTrajectory())
+
+				// Inject the same history parts into the planner if available
+				plannerPrompt := cyclePrompt
+				if cycle == 0 && len(inputHistoryParts) > 0 {
+					plannerPrompt += "\n\n### RECENT CONVERSATION HISTORY (For Context):\n" + strings.Join(inputHistoryParts, "\n")
+				}
+
+				graph, err = m.Plan(ctx, plannerPrompt, o.GetTrajectory())
 				if err != nil {
 					out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Swarm", SpanID: "coordination", TaskName: "Swarm Planning", State: AgentStateError, Error: fmt.Errorf("coordination failed: %w", err)}
 					return

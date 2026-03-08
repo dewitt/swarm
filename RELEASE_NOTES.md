@@ -1,3 +1,29 @@
+# Swarm v0.05 Release Notes
+
+We are thrilled to announce the **v0.05** release of Swarm. This release introduces a paradigm-shifting **4-Tier Hierarchical Memory** architecture designed to permanently solve "context rot" and token exhaustion during long-horizon, massively multi-agent workflows. It also includes comprehensive stability, concurrency, and performance improvements across the entire codebase.
+
+## Core Features and Fixes Delivered in v0.05
+
+### 1. The 4-Tier Hierarchical Memory System
+We have completely redesigned the Swarm memory engine to mimic the paging logic of modern operating systems, separating state into four distinct, rigorously typed tiers:
+- **Working Memory (Tier 1):** The ephemeral execution state. We introduced a new **Passive Episodic Pruning** algorithm. Massive tool outputs (like 15,000-line `grep` logs) are now automatically truncated from the context window once their semantic value has been extracted, keeping the agent's prompt fast, cheap, and highly focused.
+- **Episodic Memory (Tier 2):** A high-fidelity, chronological audit log of all interactions and LLM responses, stored safely in the underlying session database.
+- **Semantic Memory (Tier 3):** An embedded SQLite database utilizing the `FTS5` extension. We implemented **Passive Reflective Extraction**: the orchestrator now monitors the execution graph in the background and automatically extracts "timeless facts" (e.g., project-specific build commands, API keys, hidden paths) without requiring agents to explicitly call a `commit_fact` tool. These facts are seamlessly injected into the active prompt of all agents during the routing phase.
+- **Global Memory (Tier 4):** Centralized tracking of foundational instructions, combining pinned context files (`@`), loaded `SKILL.md` documents, and user preferences (`/remember`).
+
+### 2. Memory Observability and State Interception
+- **Enhanced `/memory` Command:** The `/memory` TUI command now renders a dynamic, right-aligned table providing real-time token footprint estimates and entity counts for all four memory tiers.
+- **Input Agent as a Memory Interceptor:** The routing logic has been upgraded so that the `input_agent` actively reads Semantic Memory. If a user asks a question that is already stored as a known fact, the Input Agent bypasses specialized search/codebase tools entirely, allowing the orchestrator to instantly answer from cache.
+
+### 3. Comprehensive Concurrency & Reliability Audit
+We executed a rigorous, top-to-bottom architectural audit against our `CODE_REVIEW_GUIDE.md` standards, remediating several critical systemic issues:
+- **TUI Async Initialization:** Eliminated synchronous SQLite locks that were blocking the main thread during startup. Swarm now boots asynchronously via Bubble Tea `tea.Cmd`, rendering instantly.
+- **Orphaned Goroutine Leaks:** Fixed a silent file-descriptor and goroutine leak in the `bashExecuteTool` telemetry stream where background processes would outlive their observer channels.
+- **Sub-process Reaping:** Shell commands executed via the CLI now strictly enforce UNIX Process Group ID (PGID) cancellation. If a user interrupts (`^C`) a long-running test watcher, Swarm securely tears down the entire process tree, not just the parent bash shell.
+- **Robust Telemetry Backoff:** The background LLM Observer loop now enforces mutex-locked interval throttling and actively broadcasts transient LLM provider failures to the UI, preventing silent background crashes or API rate-limit exhaustion.
+
+______________________________________________________________________
+
 # Swarm v0.04 Release Notes
 
 We are excited to announce the **v0.04** release of Swarm. This release

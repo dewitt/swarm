@@ -195,28 +195,28 @@ type uiSpan struct {
 }
 
 type model struct {
-	textArea     textarea.Model
-	viewport     viewport.Model
-	spinner      spinner.Model
-	listModel    list.Model
-	messages     []string
-	history      []string
-	historyIdx   int
-	currentInput string
-	swarm        sdk.Swarm
+	textArea        textarea.Model
+	viewport        viewport.Model
+	spinner         spinner.Model
+	listModel       list.Model
+	messages        []string
+	history         []string
+	historyIdx      int
+	currentInput    string
+	swarm           sdk.Swarm
 	pendingSwarmCfg sdk.SwarmConfig
-	width        int
-	height       int
-	loading      bool
-	quitting     bool
-	planMode     bool
-	state        uiState
-	cwd          string
-	gitBranch    string
-	gitModified  bool
-	activeModel  string
-	renderer     *glamour.TermRenderer
-	webServer    *web.Server
+	width           int
+	height          int
+	loading         bool
+	quitting        bool
+	planMode        bool
+	state           uiState
+	cwd             string
+	gitBranch       string
+	gitModified     bool
+	activeModel     string
+	renderer        *glamour.TermRenderer
+	webServer       *web.Server
 
 	statusMsg    string
 	lastResponse string
@@ -626,11 +626,11 @@ func initSwarmCmd(cfg sdk.SwarmConfig) tea.Cmd {
 
 func (m model) Init() tea.Cmd {
 	cmds := []tea.Cmd{textarea.Blink, m.spinner.Tick, doGitTick(), tea.RequestBackgroundColor, doLogoTick()}
-	
+
 	if !strings.HasSuffix(os.Args[0], ".test") {
 		cmds = append(cmds, initSwarmCmd(m.pendingSwarmCfg))
 	}
-	
+
 	for _, a := range m.agents {
 		cmds = append(cmds, a.spin.Tick)
 	}
@@ -654,7 +654,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			m.swarm = initMsg.swarm
-			
+
 			// Update the boot message now that we have the swarm instance
 			contextFiles := m.swarm.ListContext()
 			m.messages[0] = buildBootMessage(m.cwd, m.gitBranch, m.gitModified, m.isDark, m.activeModel, contextFiles, m.swarm.SessionID(), m.pendingSwarmCfg.ResumeLastSession, len(m.history) == 0, getUserName(), len(m.swarm.Skills()))
@@ -675,7 +675,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.textArea.SetWidth(msg.Width - 4)
 			return m, nil
 		}
-		
+
 		m.spinner, spCmd = m.spinner.Update(msg)
 		return m, spCmd
 	}

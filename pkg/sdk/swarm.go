@@ -893,9 +893,20 @@ func (m *defaultSwarm) Plan(ctx context.Context, prompt string, traj Trajectory)
 	}
 	jsonStr = extractJSON(jsonStr)
 	var graph ExecutionGraph
-	if err := json.Unmarshal([]byte(jsonStr), &graph); err != nil {
-		return nil, fmt.Errorf("failed to parse orchestration plan from LLM output (expected JSON): %w\nRaw output:\n%s", err, jsonStr)
+	
+	// Handle cases where the LLM returns an array directly instead of an object wrapping "spans"
+	if strings.HasPrefix(strings.TrimSpace(jsonStr), "[") {
+		var spans []Span
+		if err := json.Unmarshal([]byte(jsonStr), &spans); err != nil {
+			return nil, fmt.Errorf("failed to parse orchestration plan from LLM output (expected JSON array): %w\nRaw output:\n%s", err, jsonStr)
+		}
+		graph.Spans = spans
+	} else {
+		if err := json.Unmarshal([]byte(jsonStr), &graph); err != nil {
+			return nil, fmt.Errorf("failed to parse orchestration plan from LLM output (expected JSON object): %w\nRaw output:\n%s", err, jsonStr)
+		}
 	}
+
 	return &graph, nil
 }
 

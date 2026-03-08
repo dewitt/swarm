@@ -928,6 +928,13 @@ func (m *defaultSwarm) Chat(ctx context.Context, prompt string) (<-chan Observab
 			dynamicInstruction += "\n\nRECENT CONVERSATION HISTORY:\n" + strings.Join(inputHistoryParts, "\n")
 		}
 
+		// Inject relevant semantic memory facts for the Input Agent so it can short-circuit to Swarm if the answer is known
+		if m.memory != nil && m.memory.Semantic() != nil {
+			if facts, err := m.memory.Semantic().Retrieve(prompt, 3); err == nil && len(facts) > 0 {
+				dynamicInstruction += "\n\n### RELEVANT SYSTEM FACTS (SEMANTIC MEMORY):\n" + strings.Join(facts, "\n")
+			}
+		}
+
 		inputIter := m.fastModel.GenerateContent(ctx, &model.LLMRequest{
 			Contents: []*genai.Content{genai.NewContentFromText(prompt, genai.Role("user"))},
 			Config:   &genai.GenerateContentConfig{SystemInstruction: genai.NewContentFromText(dynamicInstruction, genai.Role("system"))},

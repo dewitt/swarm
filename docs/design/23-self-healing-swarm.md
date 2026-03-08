@@ -51,7 +51,7 @@ trajectory DB during idle time. It will identify systemic failure modes (e.g.,
 repeatedly failing `bash_execute` syntaxes) and globally inject avoidance
 heuristics into the `System Prompt` of the routing agent.
 
-### 2. Automated Skill Generation (`SKILL.md` Synthesis)
+### 2. [x] Automated Skill Generation (`SKILL.md` Synthesis)
 
 Trajectories show high reliance on generic bash commands for specific tasks
 (e.g., JSON parsing, Git rebasing). When the Analyst detects repeated

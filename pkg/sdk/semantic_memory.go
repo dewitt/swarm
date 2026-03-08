@@ -41,12 +41,18 @@ func NewSemanticMemory(workspaceDir string) (*SemanticMemory, error) {
 	}
 
 	ftsEnabled := true
-	// Create FTS5 virtual table if not exists
-	err = db.Exec(`CREATE VIRTUAL TABLE IF NOT EXISTS semantic_facts_fts USING fts5(fact, content='semantic_facts', content_rowid='id');`).Error
+	// Test if FTS5 is actually available in the sqlite driver before doing ANYTHING with it
+	err = db.Exec("CREATE VIRTUAL TABLE test_fts_support USING fts5(content);").Error
 	if err != nil {
 		ftsEnabled = false
 	} else {
-		// Only create triggers if the FTS table successfully created
+		db.Exec("DROP TABLE test_fts_support;")
+	}
+
+	if ftsEnabled {
+		// Only create FTS5 tables and triggers if we verified it is fully supported by the driver
+		db.Exec(`CREATE VIRTUAL TABLE IF NOT EXISTS semantic_facts_fts USING fts5(fact, content='semantic_facts', content_rowid='id');`)
+
 		db.Exec(`
 			CREATE TRIGGER IF NOT EXISTS semantic_facts_ai AFTER INSERT ON semantic_facts BEGIN
 				INSERT INTO semantic_facts_fts(rowid, fact) VALUES (new.id, new.fact);

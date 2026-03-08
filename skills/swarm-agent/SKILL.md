@@ -9,6 +9,8 @@ tools:
   - grep_search
   - read_state
   - write_state
+  - commit_fact
+  - retrieve_fact
   - spawn_subtask
 ---
 
@@ -24,6 +26,13 @@ to a specialist *asynchronously*, use the `spawn_subtask` tool.
 
 - **`spawn_subtask`**: Dynamically appends a new node to the active swarm execution.
 - Set the `parent_id` to your current Task ID (provided in your TASK CONTEXT) so the UI correctly visualizes the dependency tree.
+
+### SEMANTIC MEMORY (PERSISTENT FACTS):
+
+You have access to a project-scoped Semantic Memory database. Use this to permanently record lessons learned, tool reliability, or architectural facts so they persist across sessions.
+
+- **`commit_fact(fact)`**: Permanently records a specific string fact (e.g., "The `codex` tool is failing due to low credits", "The test command here is `npm run test:ci`").
+- **`retrieve_fact(query, limit)`**: Searches the semantic memory for relevant past knowledge. Always try retrieving facts before trying to blindly execute risky or unknown tasks.
 
 ### SESSION STATE & COORDINATION:
 

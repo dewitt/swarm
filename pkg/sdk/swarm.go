@@ -138,6 +138,7 @@ type defaultSwarm struct {
 	trajectoryDir       string
 	forceDonate         bool
 	telemetryConfigured bool
+	semanticMem         *SemanticMemory
 }
 
 type SwarmConfig struct {
@@ -289,19 +290,28 @@ func NewSwarm(cfg ...SwarmConfig) (Swarm, error) {
 		telemetryConfigured = globalCfg.Telemetry
 	}
 
+	cwd, _ := os.Getwd()
+	semanticMem, err := NewSemanticMemory(cwd)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize semantic memory: %w", err)
+	}
+
 	m := &defaultSwarm{
 		db: db, sessionSvc: sessionSvc, userID: "local_user", sessionID: sessionID, clientCfg: clientConfig, pinnedContext: make(map[string]string), flashModel: flashModel, proModel: proModel, fastModel: fastModel, debugMode: debugMode,
 		trajectoryDir:       trajectoryDir,
 		forceDonate:         forceDonate,
 		telemetryConfigured: telemetryConfigured,
+		semanticMem:         semanticMem,
 	}
 
 	readStateTool, _ := functiontool.New(functiontool.Config{Name: "read_state"}, m.readState)
 	writeStateTool, _ := functiontool.New(functiontool.Config{Name: "write_state"}, m.writeState)
+	commitFactTool, _ := functiontool.New(functiontool.Config{Name: "commit_fact"}, m.commitFact)
+	retrieveFactTool, _ := functiontool.New(functiontool.Config{Name: "retrieve_fact"}, m.retrieveFact)
 	spawnSubtaskTool, _ := functiontool.New(functiontool.Config{Name: "spawn_subtask"}, m.spawnSubtask)
 	m.toolRegistry = map[string]tool.Tool{
 		"list_local_files": listTool, "read_local_file": readTool, "grep_search": grepTool, "write_local_file": writeTool, "git_commit": gitCommit, "git_push": gitPush, "bash_execute": bashExecute, "web_fetch": webFetchTool, "google_search": googleSearchTool, "request_replan": replanTool,
-		"read_state": readStateTool, "write_state": writeStateTool, "spawn_subtask": spawnSubtaskTool,
+		"read_state": readStateTool, "write_state": writeStateTool, "commit_fact": commitFactTool, "retrieve_fact": retrieveFactTool, "spawn_subtask": spawnSubtaskTool,
 	}
 
 	if err := m.Reload(); err != nil {
@@ -346,6 +356,47 @@ func (m *defaultSwarm) writeState(ctx tool.Context, req struct {
 
 	_ = m.sessionSvc.AppendEvent(context.Background(), resp.Session, ev)
 	return "State updated successfully.", nil
+}
+
+func (m *defaultSwarm) commitFact(ctx tool.Context, req struct {
+	Fact string
+},
+) (string, error) {
+	if m.semanticMem == nil {
+		return "", fmt.Errorf("semantic memory not initialized")
+	}
+	err := m.semanticMem.Commit(req.Fact)
+	if err != nil {
+		return "", fmt.Errorf("failed to commit fact: %w", err)
+	}
+	return "Fact successfully committed to semantic memory.", nil
+}
+
+func (m *defaultSwarm) retrieveFact(ctx tool.Context, req struct {
+	Query string
+	Limit int
+},
+) (string, error) {
+	if m.semanticMem == nil {
+		return "", fmt.Errorf("semantic memory not initialized")
+	}
+
+	limit := req.Limit
+	if limit == 0 {
+		limit = 5
+	}
+
+	facts, err := m.semanticMem.Retrieve(req.Query, limit)
+	if err != nil {
+		return "", fmt.Errorf("failed to retrieve facts: %w", err)
+	}
+
+	if len(facts) == 0 {
+		return "No relevant facts found in semantic memory.", nil
+	}
+
+	b, _ := json.MarshalIndent(facts, "", "  ")
+	return string(b), nil
 }
 
 func (m *defaultSwarm) spawnSubtask(ctx tool.Context, req struct {
@@ -683,6 +734,14 @@ func (m *defaultSwarm) Plan(ctx context.Context, prompt string, traj Trajectory)
 	specialistsList := strings.Join(descriptions, "\n")
 
 	routingPrompt := fmt.Sprintf(m.routingInstruction, specialistsList)
+
+	// Inject any critical semantic facts (like tool deprecations) to guide routing
+	if m.semanticMem != nil {
+		if facts, err := m.semanticMem.Retrieve("TOOL FAILURE OFFLINE", 5); err == nil && len(facts) > 0 {
+			routingPrompt += "\n\n### CRITICAL SYSTEM FACTS (SEMANTIC MEMORY):\n" + strings.Join(facts, "\n")
+		}
+	}
+
 	respIter := m.fastModel.GenerateContent(ctx, &model.LLMRequest{
 		Contents: []*genai.Content{genai.NewContentFromText(prompt, genai.Role("user"))},
 		Config:   &genai.GenerateContentConfig{SystemInstruction: genai.NewContentFromText(routingPrompt, genai.Role("system"))},
@@ -699,6 +758,13 @@ func (m *defaultSwarm) Plan(ctx context.Context, prompt string, traj Trajectory)
 	jsonStr = strings.TrimSpace(jsonStr)
 	if strings.Contains(jsonStr, "DEEP_PLAN_REQUIRED") {
 		planningPrompt := fmt.Sprintf(m.planningInstruction, specialistsList)
+
+		if m.semanticMem != nil {
+			if facts, err := m.semanticMem.Retrieve("TOOL FAILURE OFFLINE", 5); err == nil && len(facts) > 0 {
+				planningPrompt += "\n\n### CRITICAL SYSTEM FACTS (SEMANTIC MEMORY):\n" + strings.Join(facts, "\n")
+			}
+		}
+
 		respIter = m.proModel.GenerateContent(ctx, &model.LLMRequest{
 			Contents: []*genai.Content{genai.NewContentFromText(prompt, genai.Role("user"))},
 			Config: &genai.GenerateContentConfig{
@@ -1075,6 +1141,12 @@ func (m *defaultSwarm) Execute(ctx context.Context, g *ExecutionGraph, o *Engine
 
 				if isDeadlocked, reason := o.IsDeadlocked(); isDeadlocked {
 					out <- ObservableEvent{Timestamp: time.Now(), AgentName: "Overwatch", State: AgentStateError, Error: fmt.Errorf("deadlock detected: %s", reason)}
+
+					// Automatically commit this failure to semantic memory so it persists across sessions
+					if m.semanticMem != nil {
+						_ = m.semanticMem.Commit(fmt.Sprintf("TOOL FAILURE (Overwatch): %s", reason))
+					}
+
 					// Force a hard replan and explicitly tell the planner WHY it failed so it routes around the block
 					done.Replan = true
 					done.Result = fmt.Sprintf("CRITICAL SYSTEM ERROR (OVERWATCH): %s You MUST find an alternative approach or ask the user for help.", reason)

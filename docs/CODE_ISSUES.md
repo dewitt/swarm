@@ -2,7 +2,7 @@
 
 This document is a running log of architectural flaws, bugs, and technical
 debt discovered during automated and manual code reviews
-(`docs/CODE_REVIEW_GUIDE.md`).
+by the Code Quality Advocate (`skills/code-quality-advocate/SKILL.md`).
 
 ## 🚨 Critical Bugs & Issues
 

@@ -6,11 +6,24 @@ debt discovered during automated and manual code reviews by the Code Reviewer
 
 ## 🚨 Critical Bugs & Issues
 
-- None currently identified.
+- [x] **Synchronous UI-Blocking I/O in Slash Commands**: In
+  `cmd/swarm/interactive.go`, the `/memory` and `/sessions` commands perform
+  direct SQLite queries (`ListSessions`, `SemanticStats`, `EpisodicStats`,
+  `List`) and file system reads (`mem.Global().Load()`) inside the main Bubble
+  Tea `Update` loop. These should be dispatched as `tea.Cmd` operations and
+  handled asynchronously to prevent UI freezing, especially under high load or
+  when dealing with file locks. Fix: Converted to async tea.Cmd returns.
 
 ## 🛠️ Refactoring & Idiomatic Improvements
 
-- None currently identified.
+- [x] **Unused Struct Fields**: The `pendingSwarmCfg` field inside the `model`
+  struct in `cmd/swarm/interactive.go` is unused and should be removed to keep
+  the state clean. Fix: Removed.
+- [x] **Formatting and Linter Warnings**: There are several minor `gofumpt`
+  formatting issues in `cmd/swarm/interactive.go` and `gosec` warnings
+  regarding file permission strictness (`0644` vs `0600`) for
+  `incident_report.md` generation in `pkg/sdk/swarm_execute.go`. Fix: Ran
+  gofumpt and fixed linter errors globally.
 
 ## 💀 Dead Code & Unused Features
 

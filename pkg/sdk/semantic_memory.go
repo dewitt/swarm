@@ -205,13 +205,13 @@ func (sm *sqliteSemanticMemory) Forget(query string) (int, error) {
 	if query == "" {
 		return 0, fmt.Errorf("cannot forget empty query")
 	}
-	
+
 	// Perform a simple LIKE deletion
 	res := sm.db.Where("fact LIKE ?", "%"+query+"%").Delete(&SemanticFact{})
 	if res.Error != nil {
 		return 0, res.Error
 	}
-	
+
 	return int(res.RowsAffected), nil
 }
 

@@ -54,10 +54,10 @@ func generateGoSkeleton(path string) (string, error) {
 		if !ok {
 			break
 		}
-		
+
 		var declNode *sitter.Node
 		var nameNode *sitter.Node
-		
+
 		for _, c := range m.Captures {
 			captureName := q.CaptureNameForId(c.Index)
 			if captureName == "decl" {
@@ -72,7 +72,7 @@ func generateGoSkeleton(path string) (string, error) {
 				continue
 			}
 			processedDecls[declNode] = true
-			
+
 			startPos := nameNode.StartPoint()
 			line := startPos.Row + 1
 			col := startPos.Column + 1

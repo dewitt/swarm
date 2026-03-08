@@ -539,7 +539,7 @@ func (s *defaultSwarm) analyzeImpact(ctx tool.Context, args LSPToolArgs) (LSPToo
 		"column": args.Column,
 	})
 	if err != nil {
-		return LSPToolResult{Error: err.Error()}, nil
+		return LSPToolResult{Error: err.Error()}, nil //nolint:nilerr
 	}
 	if res.IsError {
 		return LSPToolResult{Error: fmt.Sprintf("LSP Error: %v", res.Content)}, nil
@@ -557,7 +557,7 @@ func (s *defaultSwarm) getAPISignature(ctx tool.Context, args LSPToolArgs) (LSPT
 		"column": args.Column,
 	})
 	if err != nil {
-		return LSPToolResult{Error: err.Error()}, nil
+		return LSPToolResult{Error: err.Error()}, nil //nolint:nilerr
 	}
 	if res.IsError {
 		return LSPToolResult{Error: fmt.Sprintf("LSP Error: %v", res.Content)}, nil
@@ -567,7 +567,8 @@ func (s *defaultSwarm) getAPISignature(ctx tool.Context, args LSPToolArgs) (LSPT
 
 func (s *defaultSwarm) validateCode(ctx tool.Context, args struct {
 	File string `json:"file"`
-}) (LSPToolResult, error) {
+},
+) (LSPToolResult, error) {
 	if s.lsp == nil {
 		return LSPToolResult{Error: "LSP is not configured for this session"}, nil
 	}
@@ -575,7 +576,7 @@ func (s *defaultSwarm) validateCode(ctx tool.Context, args struct {
 		"file": resolveLSPPath(args.File),
 	})
 	if err != nil {
-		return LSPToolResult{Error: err.Error()}, nil
+		return LSPToolResult{Error: err.Error()}, nil //nolint:nilerr
 	}
 	if res.IsError {
 		return LSPToolResult{Error: fmt.Sprintf("LSP Error: %v", res.Content)}, nil
@@ -594,7 +595,7 @@ func (s *defaultSwarm) renameSymbol(ctx tool.Context, args LSPToolArgs) (LSPTool
 		"newName": args.NewName,
 	})
 	if err != nil {
-		return LSPToolResult{Error: err.Error()}, nil
+		return LSPToolResult{Error: err.Error()}, nil //nolint:nilerr
 	}
 	if res.IsError {
 		return LSPToolResult{Error: fmt.Sprintf("LSP Error: %v", res.Content)}, nil

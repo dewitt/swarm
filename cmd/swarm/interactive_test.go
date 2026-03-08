@@ -12,9 +12,9 @@ type mockSwarm struct {
 	sdk.Swarm
 }
 
-func (m mockSwarm) SessionID() string { return "test-session" }
+func (m mockSwarm) SessionID() string     { return "test-session" }
 func (m mockSwarm) ListContext() []string { return []string{} }
-func (m mockSwarm) Skills() []*sdk.Skill { return nil }
+func (m mockSwarm) Skills() []*sdk.Skill  { return nil }
 func (m mockSwarm) Memory() sdk.HierarchicalMemory {
 	return mockMemory{}
 }
@@ -22,6 +22,7 @@ func (m mockSwarm) Memory() sdk.HierarchicalMemory {
 type mockMemory struct {
 	sdk.HierarchicalMemory
 }
+
 func (m mockMemory) Semantic() sdk.SemanticMemory {
 	return mockSemanticMemory{}
 }
@@ -29,7 +30,8 @@ func (m mockMemory) Semantic() sdk.SemanticMemory {
 type mockSemanticMemory struct {
 	sdk.SemanticMemory
 }
-func (m mockSemanticMemory) FTSEnabled() bool { return false }
+
+func (m mockSemanticMemory) FTSEnabled() bool                 { return false }
 func (m mockSemanticMemory) Forget(query string) (int, error) { return 0, nil }
 
 func TestSnapshotUI(t *testing.T) {

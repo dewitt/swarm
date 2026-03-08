@@ -195,28 +195,27 @@ type uiSpan struct {
 }
 
 type model struct {
-	textArea        textarea.Model
-	viewport        viewport.Model
-	spinner         spinner.Model
-	listModel       list.Model
-	messages        []string
-	history         []string
-	historyIdx      int
-	currentInput    string
-	swarm           sdk.Swarm
-	pendingSwarmCfg sdk.SwarmConfig
-	width           int
-	height          int
-	loading         bool
-	quitting        bool
-	planMode        bool
-	state           uiState
-	cwd             string
-	gitBranch       string
-	gitModified     bool
-	activeModel     string
-	renderer        *glamour.TermRenderer
-	webServer       *web.Server
+	textArea     textarea.Model
+	viewport     viewport.Model
+	spinner      spinner.Model
+	listModel    list.Model
+	messages     []string
+	history      []string
+	historyIdx   int
+	currentInput string
+	swarm        sdk.Swarm
+	width        int
+	height       int
+	loading      bool
+	quitting     bool
+	planMode     bool
+	state        uiState
+	cwd          string
+	gitBranch    string
+	gitModified  bool
+	activeModel  string
+	renderer     *glamour.TermRenderer
+	webServer    *web.Server
 
 	statusMsg    string
 	lastResponse string
@@ -619,6 +618,7 @@ func initialModel(planMode bool, resume bool, s sdk.Swarm) (model, error) {
 		swarm:          s,
 	}, nil
 }
+
 func (m model) Init() tea.Cmd {
 	cmds := []tea.Cmd{textarea.Blink, m.spinner.Tick, doGitTick(), doLogoTick(), tea.RequestBackgroundColor}
 
@@ -1568,35 +1568,29 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 		icon := agentMsgStyle.Render("✦ ")
 		m.appendMessage(lipgloss.JoinHorizontal(lipgloss.Top, icon, helpText))
 	case "/sessions":
-		sessions, err := m.swarm.ListSessions(context.Background())
-		if err != nil {
-			m.appendMessage(lipgloss.NewStyle().Foreground(errorColor).Render("Failed to list sessions: " + err.Error()))
-			return nil
-		}
-		if len(sessions) == 0 {
-			m.appendMessage(agentMsgStyle.Render("✦ ") + "No sessions found in the database.")
-			return nil
-		}
-
-		var lines []string
-		lines = append(lines, lipgloss.NewStyle().Bold(true).Render(fmt.Sprintf("Stored Sessions (%d)", len(sessions))))
-		lines = append(lines, "")
-
-		for _, s := range sessions {
-			id := lipgloss.NewStyle().Foreground(primaryColor).Render(s.ID)
-			summaryStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#888888")).Italic(true)
-			content := fmt.Sprintf("- %s (Last Updated: %s)", id, s.UpdatedAt)
-			if s.Summary != "" && s.Summary != s.ID {
-				// Clean up the summary text
-				cleanSummary := strings.ReplaceAll(s.Summary, "\n", " ")
-				content += fmt.Sprintf("\n  %s", summaryStyle.Render(cleanSummary))
+		m.loading = true
+		m.globalSummary = "Fetching sessions..."
+		return func() tea.Msg {
+			sessions, err := m.swarm.ListSessions(context.Background())
+			if err != nil {
+				return responseMsg{err: fmt.Errorf("Failed to list sessions: %w", err)}
 			}
-			lines = append(lines, content)
-			lines = append(lines, "") // Add a blank line between sessions for readability
-		}
+			if len(sessions) == 0 {
+				return responseMsg{text: "No sessions found in the database."}
+			}
 
-		icon := agentMsgStyle.Render("✦ ")
-		m.appendMessage(lipgloss.JoinHorizontal(lipgloss.Top, icon, lipgloss.JoinVertical(lipgloss.Left, lines...)))
+			var mdLines []string
+			mdLines = append(mdLines, fmt.Sprintf("### Stored Sessions (%d)\n", len(sessions)))
+			for _, s := range sessions {
+				content := fmt.Sprintf("- **%s** (Last Updated: %s)", s.ID, s.UpdatedAt)
+				if s.Summary != "" && s.Summary != s.ID {
+					cleanSummary := strings.ReplaceAll(s.Summary, "\n", " ")
+					content += fmt.Sprintf("\n  _%s_", cleanSummary)
+				}
+				mdLines = append(mdLines, content)
+			}
+			return responseMsg{text: strings.Join(mdLines, "\n")}
+		}
 	case "/web":
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -1894,7 +1888,7 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 			return nil
 		}
 		keyword := strings.Join(parts[1:], " ")
-		
+
 		mem := m.swarm.Memory()
 		if mem != nil && mem.Semantic() != nil {
 			count, err := mem.Semantic().Forget(keyword)
@@ -1907,62 +1901,54 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 			m.appendMessage(lipgloss.NewStyle().Foreground(errorColor).Render("Semantic memory is not initialized."))
 		}
 	case "/memory":
-		var sb strings.Builder
-		sb.WriteString("### Hierarchical Memory State\n\n")
+		m.loading = true
+		m.globalSummary = "Fetching memory stats..."
+		return func() tea.Msg {
+			var sb strings.Builder
+			sb.WriteString("### Hierarchical Memory State\n\n")
 
-		mem := m.swarm.Memory()
+			mem := m.swarm.Memory()
 
-		// 1. Stats Table
-		sb.WriteString("| Tier | Count | Token Estimate |\n")
-		sb.WriteString("| :--- | ---: | ---: |\n")
+			sb.WriteString("| Tier | Count | Token Estimate |\n")
+			sb.WriteString("| :--- | ---: | ---: |\n")
 
-		wStats := mem.Working().WorkingStats()
-		sb.WriteString(fmt.Sprintf("| %s | %s | %s |\n", wStats.Name, formatInt(wStats.Count), formatInt(wStats.TokenEstimate)))
+			wStats := mem.Working().WorkingStats()
+			sb.WriteString(fmt.Sprintf("| %s | %s | %s |\n", wStats.Name, formatInt(wStats.Count), formatInt(wStats.TokenEstimate)))
 
-		eStats := mem.Episodic().EpisodicStats(context.Background(), m.swarm.SessionID())
-		sb.WriteString(fmt.Sprintf("| %s | %s | %s |\n", eStats.Name, formatInt(eStats.Count), formatInt(eStats.TokenEstimate)))
+			eStats := mem.Episodic().EpisodicStats(context.Background(), m.swarm.SessionID())
+			sb.WriteString(fmt.Sprintf("| %s | %s | %s |\n", eStats.Name, formatInt(eStats.Count), formatInt(eStats.TokenEstimate)))
 
-		sStats := mem.Semantic().SemanticStats()
-		sb.WriteString(fmt.Sprintf("| %s | %s | %s |\n", sStats.Name, formatInt(sStats.Count), formatInt(sStats.TokenEstimate)))
+			sStats := mem.Semantic().SemanticStats()
+			sb.WriteString(fmt.Sprintf("| %s | %s | %s |\n", sStats.Name, formatInt(sStats.Count), formatInt(sStats.TokenEstimate)))
 
-		gStats := mem.Global().GlobalStats()
-		sb.WriteString(fmt.Sprintf("| %s | %s | %s |\n", gStats.Name, formatInt(gStats.Count), formatInt(gStats.TokenEstimate)))
+			gStats := mem.Global().GlobalStats()
+			sb.WriteString(fmt.Sprintf("| %s | %s | %s |\n", gStats.Name, formatInt(gStats.Count), formatInt(gStats.TokenEstimate)))
 
-		sb.WriteString("\n---\n\n")
+			sb.WriteString("\n---\n\n")
 
-		// 2. Global Memory
-		globalMem, _ := mem.Global().Load()
-		if globalMem != "" {
-			sb.WriteString("#### [ Global Preferences ]\n")
-			sb.WriteString(strings.TrimSpace(globalMem))
-			sb.WriteString("\n\n")
-		}
-
-		// 3. Semantic Memory
-		facts, err := mem.Semantic().List(10)
-		if err != nil {
-			sb.WriteString("#### [ Semantic Project Facts ]\n")
-			sb.WriteString(fmt.Sprintf("> Error reading semantic memory: %s\n", err.Error()))
-		} else if len(facts) > 0 {
-			sb.WriteString("#### [ Semantic Project Facts ]\n")
-			for _, f := range facts {
-				sb.WriteString(fmt.Sprintf("- %s\n", f))
+			globalMem, _ := mem.Global().Load()
+			if globalMem != "" {
+				sb.WriteString("#### [ Global Preferences ]\n")
+				sb.WriteString(strings.TrimSpace(globalMem))
+				sb.WriteString("\n\n")
 			}
-		} else {
-			sb.WriteString("#### [ Semantic Project Facts ]\n")
-			sb.WriteString("_No semantic facts recorded for this project yet._\n")
-		}
 
-		out := sb.String()
-		if m.renderer != nil {
-			if rOut, err := m.renderer.Render(out); err == nil {
-				out = rOut
+			facts, err := mem.Semantic().List(10)
+			if err != nil {
+				sb.WriteString("#### [ Semantic Project Facts ]\n")
+				sb.WriteString(fmt.Sprintf("> Error reading semantic memory: %s\n", err.Error()))
+			} else if len(facts) > 0 {
+				sb.WriteString("#### [ Semantic Project Facts ]\n")
+				for _, f := range facts {
+					sb.WriteString(fmt.Sprintf("- %s\n", f))
+				}
+			} else {
+				sb.WriteString("#### [ Semantic Project Facts ]\n")
+				sb.WriteString("_No semantic facts recorded for this project yet._\n")
 			}
-		}
 
-		icon := agentMsgStyle.Render("✦ ")
-		m.appendMessage(lipgloss.JoinHorizontal(lipgloss.Top, icon, strings.TrimSpace(out)))
-		m.updateViewport()
+			return responseMsg{text: strings.TrimSpace(sb.String())}
+		}
 	default:
 		m.appendMessage(lipgloss.NewStyle().Foreground(errorColor).Render("Unknown command: " + cmd))
 		m.updateViewport()
@@ -2710,7 +2696,7 @@ func (m model) View() tea.View {
 	if acView != "" {
 		vpLines := strings.Split(vpView, "\n")
 		acLines := strings.Split(acView, "\n")
-		
+
 		acHeight := len(acLines)
 		if len(vpLines) >= acHeight {
 			vpLines = append(vpLines[:len(vpLines)-acHeight], acLines...)

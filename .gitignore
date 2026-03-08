@@ -38,4 +38,5 @@ node_modules/
 *.png
 *.db
 .config/
-swarm
+/swarm
+/cmd/swarm/swarm

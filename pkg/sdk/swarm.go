@@ -134,10 +134,10 @@ type SwarmConfig struct {
 	ResumeLastSession bool
 	Debug             bool
 	DatabaseURI       string
-	TrajectoryDir     string // Optional override for where trajectories are saved (e.g., "eval_trajectories")
-	ForceDonate       bool           // If true, forces the "donate" telemetry flag to true for this run
-	LSPCommand        string         // Optional command to start an MCP-compatible LSP server
-	LSPArgs           []string       // Arguments for the LSP command
+	TrajectoryDir     string   // Optional override for where trajectories are saved (e.g., "eval_trajectories")
+	ForceDonate       bool     // If true, forces the "donate" telemetry flag to true for this run
+	LSPCommand        string   // Optional command to start an MCP-compatible LSP server
+	LSPArgs           []string // Arguments for the LSP command
 }
 
 func NewSwarm(cfg ...SwarmConfig) (Swarm, error) {

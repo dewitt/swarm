@@ -30,11 +30,11 @@ func generateGoSkeleton(path string) (string, error) {
 
 	n := tree.RootNode()
 
-	// Query for high-level structural elements
+	// Query for high-level structural elements and their identifiers
 	q, err := sitter.NewQuery([]byte(`
-		(type_declaration) @type
-		(method_declaration) @method
-		(function_declaration) @func
+		(type_declaration (type_spec name: (type_identifier) @name)) @decl
+		(method_declaration name: (field_identifier) @name) @decl
+		(function_declaration name: (identifier) @name) @decl
 	`), golang.GetLanguage())
 	if err != nil {
 		return "", fmt.Errorf("failed to compile query: %w", err)
@@ -46,21 +46,41 @@ func generateGoSkeleton(path string) (string, error) {
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("// SKELETON OF %s\n\n", path))
 
+	// We use a map to deduplicate because @decl and @name trigger matches
+	processedDecls := make(map[*sitter.Node]bool)
+
 	for {
 		m, ok := qc.NextMatch()
 		if !ok {
 			break
 		}
+		
+		var declNode *sitter.Node
+		var nameNode *sitter.Node
+		
 		for _, c := range m.Captures {
-			node := c.Node
-			startPos := node.StartPoint()
+			captureName := q.CaptureNameForId(c.Index)
+			if captureName == "decl" {
+				declNode = c.Node
+			} else if captureName == "name" {
+				nameNode = c.Node
+			}
+		}
+
+		if declNode != nil && nameNode != nil {
+			if processedDecls[declNode] {
+				continue
+			}
+			processedDecls[declNode] = true
+			
+			startPos := nameNode.StartPoint()
 			line := startPos.Row + 1
 			col := startPos.Column + 1
 
-			if node.Type() == "function_declaration" || node.Type() == "method_declaration" {
+			if declNode.Type() == "function_declaration" || declNode.Type() == "method_declaration" {
 				sb.WriteString(fmt.Sprintf("// L%d:C%d\n", line, col))
-				for i := 0; i < int(node.ChildCount()); i++ {
-					child := node.Child(i)
+				for i := 0; i < int(declNode.ChildCount()); i++ {
+					child := declNode.Child(i)
 					if child.Type() == "block" {
 						// Skip the implementation body
 						continue
@@ -68,9 +88,9 @@ func generateGoSkeleton(path string) (string, error) {
 					sb.WriteString(child.Content(code) + " ")
 				}
 				sb.WriteString("{ /* ... */ }\n")
-			} else if node.Type() == "type_declaration" {
+			} else if declNode.Type() == "type_declaration" {
 				sb.WriteString(fmt.Sprintf("// L%d:C%d\n", line, col))
-				sb.WriteString(node.Content(code) + "\n")
+				sb.WriteString(declNode.Content(code) + "\n")
 			}
 			sb.WriteString("\n")
 		}

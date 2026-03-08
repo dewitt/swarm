@@ -482,3 +482,23 @@ func requestReplan(ctx tool.Context, args ReplanArgs) (ReplanResult, error) {
 		Message: "Replan requested. The engine will pivot after this span concludes.",
 	}, nil
 }
+
+// === Tree-sitter Tool ===
+
+type GetCodeSkeletonArgs struct {
+	Path string `json:"path"`
+}
+
+type GetCodeSkeletonResult struct {
+	Content string `json:"content"`
+	Error   string `json:"error,omitempty"`
+}
+
+func getCodeSkeletonTool(ctx tool.Context, args GetCodeSkeletonArgs) (GetCodeSkeletonResult, error) {
+	args.Path = expandHomeDir(args.Path)
+	skeleton, err := getCodeSkeleton(args.Path)
+	if err != nil {
+		return GetCodeSkeletonResult{Error: err.Error()}, nil //nolint:nilerr
+	}
+	return GetCodeSkeletonResult{Content: skeleton}, nil
+}

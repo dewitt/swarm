@@ -303,9 +303,10 @@ func NewSwarm(cfg ...SwarmConfig) (Swarm, error) {
 	writeStateTool, _ := functiontool.New(functiontool.Config{Name: "write_state"}, m.writeState)
 	retrieveFactTool, _ := functiontool.New(functiontool.Config{Name: "retrieve_fact"}, m.retrieveFact)
 	spawnSubtaskTool, _ := functiontool.New(functiontool.Config{Name: "spawn_subtask"}, m.spawnSubtask)
+	codeSkeletonTool, _ := functiontool.New(functiontool.Config{Name: "get_code_skeleton"}, getCodeSkeletonTool)
 	m.toolRegistry = map[string]tool.Tool{
 		"list_local_files": listTool, "read_local_file": readTool, "grep_search": grepTool, "write_local_file": writeTool, "git_commit": gitCommit, "git_push": gitPush, "bash_execute": bashExecute, "web_fetch": webFetchTool, "google_search": googleSearchTool, "request_replan": replanTool,
-		"read_state": readStateTool, "write_state": writeStateTool, "retrieve_fact": retrieveFactTool, "spawn_subtask": spawnSubtaskTool,
+		"read_state": readStateTool, "write_state": writeStateTool, "retrieve_fact": retrieveFactTool, "spawn_subtask": spawnSubtaskTool, "get_code_skeleton": codeSkeletonTool,
 	}
 
 	if err := m.Reload(); err != nil {

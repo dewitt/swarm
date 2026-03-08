@@ -6,6 +6,7 @@ description:
 tools:
   - list_local_files
   - read_local_file
+  - get_code_skeleton
   - grep_search
   - bash_execute
   - commit_fact

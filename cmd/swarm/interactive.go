@@ -1889,6 +1889,43 @@ func (m *model) updateViewport() {
 		return
 	}
 
+	// 1. Calculate dynamic UI heights to set the viewport height accurately BEFORE setting content
+	agentPanelHeight := 0
+	if m.showAgentPanel {
+		agentPanelHeight = lipgloss.Height(m.renderAgentPanel())
+	}
+
+	t := m.theme()
+	inputBoxStyle := lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(t.borderColor).
+		Padding(0, 1)
+	inputHeight := lipgloss.Height(inputBoxStyle.Width(m.width - 2).Render(m.textArea.View()))
+
+	acHeight := 0
+	if m.acActive && len(m.acMatches) > 0 {
+		var lines []string
+		for i, match := range m.acMatches {
+			if i == m.acIndex {
+				lines = append(lines, " "+match+" ")
+			} else {
+				lines = append(lines, " "+match+" ")
+			}
+		}
+		if m.acHasMore {
+			lines = append(lines, " ... ")
+		}
+		acView := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Padding(0, 1).Render(strings.Join(lines, "\n"))
+		acHeight = lipgloss.Height(acView)
+	}
+
+	statusHeight := 1
+	newHeight := m.height - agentPanelHeight - inputHeight - acHeight - statusHeight - 2
+	if newHeight < 1 {
+		newHeight = 1
+	}
+	m.viewport.SetHeight(newHeight)
+
 	// Prepare the dynamic message list
 	var renderedMessages []string
 	vpWidth := m.viewport.Width()

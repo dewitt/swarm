@@ -10,6 +10,7 @@ We collect these over time to inform future sprint priorities.
   `GOOGLE_API_KEY` set dumps a raw Go struct memory error to stderr. The CLI
   should intercept this and gracefully prompt the user for the key, or at
   least print a clean, styled error message.
+- [ ] **Noisy Single-Shot CLI Output:** When running `./bin/swarm -p "query"`, the terminal prints all internal routing steps (e.g., `[Input Agent] 🤔 Classifying intent…`, `[Output Agent] OK`) before yielding the final answer. For CLI usage, this feels too verbose. It should only print the final answer to `stdout` by default, reserving the internal chatter for a `--verbose` flag.
 
 ## 🎨 Aesthetic Polish
 
@@ -19,17 +20,13 @@ We collect these over time to inform future sprint priorities.
 - [ ] **Web Panel Infinite Reconnect Loop:** When the CLI exits, the browser
   panel flashes a red "Disconnected - Retrying..." badge indefinitely. It
   should detect a graceful shutdown and display a clean "Session Ended" state.
-- [ ] **Boot Block Readability & Wrapping:** The initial boot message uses
-  hardcoded 80-column markdown wrapping and lacks visual hierarchy. It needs
-  to be refactored into a responsive, multi-column `lipgloss` dashboard that
-  cleanly separates Environment data from Session data and restores missing
-  "Quick Tips".
 
 ## 💡 Feature Proposals
 
 - [ ] **Smart Paste Formatting:** Pasting massive blocks of text (like stack
   traces) into the TUI input looks messy. It would be delightful to detect
   large multi-line pastes and automatically wrap them in markdown code blocks.
+- [ ] **Semantic Forgetting (`/forget`):** We now have a beautiful 4-Tier Memory system and a `/memory` command to view stats, but no way for the user to forcefully delete a hallucinated or outdated fact from the SQLite database via the TUI. A `/forget <keyword>` command would give users necessary control over their agent's semantic knowledge.
 
 ______________________________________________________________________
 

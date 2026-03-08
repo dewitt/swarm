@@ -103,6 +103,14 @@ func (s *Server) router() {
 		}
 		s.clientsMu.RUnlock()
 	}
+
+	// Clean up all client channels when event stream closes
+	s.clientsMu.Lock()
+	defer s.clientsMu.Unlock()
+	for clientChan := range s.clients {
+		close(clientChan)
+		delete(s.clients, clientChan)
+	}
 }
 
 // handleSSE upgrades the HTTP connection to a persistent event stream.
@@ -138,7 +146,10 @@ func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
 		select {
 		case <-r.Context().Done():
 			return // Client disconnected
-		case event := <-clientChan:
+		case event, ok := <-clientChan:
+			if !ok {
+				return // Server stopped and closed channel
+			}
 			eventJSON, err := json.Marshal(event)
 			if err != nil {
 				continue

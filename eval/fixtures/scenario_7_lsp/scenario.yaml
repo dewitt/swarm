@@ -1,4 +1,4 @@
-id: scenario_7_lsp
+id: scenario_7
 name: The Semantic Refactor
 prompt: >
   We need to refactor the codebase. Rename the `Calculate` method of the `SpecialEngine` struct to `Compute` across the entire project. You MUST use the `codebase_investigator` agent to perform semantic analysis before making the change. Do NOT rename `NormalEngine.Calculate`. Ensure all tests pass.

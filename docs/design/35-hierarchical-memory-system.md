@@ -13,8 +13,7 @@ management is becoming a bottleneck. Currently, we rely on disparate systems:
   responses stored in SQLite.
 - **Working Context:** The ephemeral execution trajectory passed between
   routing and reflection phases.
-- **Global Preferences:** The `~/.swarm/SWARM.md` and `.swarm/SWARM.md`
-  files.
+- **Global Preferences:** The `~/.swarm/SWARM.md` and `.swarm/SWARM.md` files.
 
 **The Problem:** Context grows linearly until it hits a token limit (context
 blowout), driving up latency and cost, while degrading the LLM's reasoning
@@ -79,8 +78,8 @@ will orchestrate how information flows between them.
 - **Content:** User identity, global API availability, cross-project
   preferences (e.g., "Always use tabs").
 - **Management:** Managed by global config and the `/remember` command,
-  feeding into the foundational system prompt via cascading
-  `.swarm/SWARM.md` file overrides.
+  feeding into the foundational system prompt via cascading `.swarm/SWARM.md`
+  file overrides.
 
 ## 3. Impact on Existing Designs
 

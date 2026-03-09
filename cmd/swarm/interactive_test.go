@@ -12,9 +12,9 @@ type mockSwarm struct {
 	sdk.Swarm
 }
 
-func (m mockSwarm) SessionID() string        { return "test-session" }
-func (m mockSwarm) ListContext() []string    { return []string{} }
-func (m mockSwarm) Skills() []*sdk.Skill     { return nil }
+func (m mockSwarm) SessionID() string          { return "test-session" }
+func (m mockSwarm) ListContext() []string      { return []string{} }
+func (m mockSwarm) Skills() []*sdk.Skill       { return nil }
 func (m mockSwarm) SkillSearchPaths() []string { return nil }
 func (m mockSwarm) Memory() sdk.HierarchicalMemory {
 	return mockMemory{}

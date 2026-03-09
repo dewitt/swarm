@@ -2,8 +2,9 @@
 
 We are excited to announce the **v0.06** release of Swarm. This release
 establishes the foundational pillars of our "Self-Healing Swarm" architecture,
-introduces native semantic codebase mapping, and dramatically improves the
-core stability and reliability of the SDK.
+introduces native semantic codebase mapping, drastically improves the core
+stability of the SDK, and brings Swarm into complete compliance with native OS
+directory standards.
 
 ## Core Features and Fixes Delivered in v0.06
 
@@ -42,7 +43,25 @@ dynamically recover from errors:
   auto-diagnoses the host OS and installs missing dependencies (via Homebrew,
   APT, npm) into localized environments.
 
-### 3. Quality of Life & Refactoring
+### 3. OS Compliance and Configuration Overhaul
+
+- **XDG Base Directory Support:** Swarm completely abandons hardcoded
+  dotfiles. It now uses the OS-native user config directory (e.g.,
+  `~/Library/Application Support/swarm`, `%AppData%`, or `~/.config/swarm`)
+  for global preferences.
+- **System-Wide Skills:** Skills can now be installed globally via system
+  package managers into `/usr/share/swarm/skills`. The CLI dynamically
+  discovers them while still respecting local project overrides.
+- **Embedded Zero-Config Installs:** The core foundational skills
+  (`swarm_agent`, `input_agent`) are now compiled directly into the binary
+  using `//go:embed`. This guarantees that running
+  `go install github.com/dewitt/swarm/cmd/swarm@latest` will yield a perfectly
+  functioning CLI from any directory on your computer without manual
+  configuration.
+- **`.swarm` Migration:** The project-local config directory has been
+  officially renamed from `.gemini` to `.swarm`.
+
+### 4. Quality of Life & Refactoring
 
 - **SDK Modularization:** Dismantled the massive 1,800-line `swarm.go` God
   Object into six tightly scoped, domain-specific behavioral files
@@ -58,6 +77,9 @@ dynamically recover from errors:
 - **Naked Crash Prevention:** Gracefully intercepted missing `GOOGLE_API_KEY`
   panics, ensuring the terminal doesn't leak raw struct dumps or `lipgloss`
   ANSI escape artifacts upon early exit.
+- **Asynchronous Dashboards:** The `/memory` and `/sessions` TUI commands have
+  been rewritten to execute asynchronously, ensuring the UI never blocks while
+  performing massive SQLite operations.
 
 ______________________________________________________________________
 

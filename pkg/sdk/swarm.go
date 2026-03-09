@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"iter"
 	"math/rand"
 	"net"
@@ -15,6 +16,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/adrg/xdg"
+	"github.com/dewitt/swarm/skills"
 	"google.golang.org/adk/agent"
 	"google.golang.org/adk/agent/llmagent"
 	"google.golang.org/adk/model"
@@ -378,13 +381,24 @@ func (m *defaultSwarm) Reload() error {
 
 	// Gather all skills
 	loadedSkillsMap := make(map[string]*Skill)
+	var searchedPaths []string
 
-	// 1. Load system-wide default skills
-	systemSkillsPaths := []string{
-		"/usr/local/share/swarm/skills",
-		"/usr/share/swarm/skills",
+	// 1. Load embedded skills first
+	if entries, err := fs.ReadDir(skills.DefaultSkills, "."); err == nil {
+		for _, entry := range entries {
+			if entry.IsDir() {
+				skill, err := LoadSkillFromFS(skills.DefaultSkills, entry.Name())
+				if err == nil {
+					loadedSkillsMap[skill.Manifest.Name] = skill
+				}
+			}
+		}
 	}
-	for _, path := range systemSkillsPaths {
+
+	// 2. Load system-wide default skills (DataDirs)
+	for _, dataDir := range xdg.DataDirs {
+		path := filepath.Join(dataDir, "swarm", "skills")
+		searchedPaths = append(searchedPaths, path)
 		if entries, err := os.ReadDir(path); err == nil {
 			for _, entry := range entries {
 				if entry.IsDir() {
@@ -394,37 +408,33 @@ func (m *defaultSwarm) Reload() error {
 					}
 				}
 			}
-			break // Stop if we found a valid system directory
 		}
 	}
 
-	// 2. Load global config skills
-	globalSkillsPath := ""
-	if configDir, err := GetConfigDir(); err == nil {
-		globalSkillsPath = filepath.Join(configDir, "skills")
-		_ = os.MkdirAll(globalSkillsPath, 0o755)
-		if entries, err := os.ReadDir(globalSkillsPath); err == nil {
-			for _, entry := range entries {
-				if entry.IsDir() {
-					skill, err := LoadSkill(filepath.Join(globalSkillsPath, entry.Name()))
-					if err == nil {
-						loadedSkillsMap[skill.Manifest.Name] = skill
-					}
+	// 2. Load global config skills (DataHome)
+	globalSkillsPath := filepath.Join(xdg.DataHome, "swarm", "skills")
+	searchedPaths = append(searchedPaths, globalSkillsPath)
+	_ = os.MkdirAll(globalSkillsPath, 0o755)
+	if entries, err := os.ReadDir(globalSkillsPath); err == nil {
+		for _, entry := range entries {
+			if entry.IsDir() {
+				skill, err := LoadSkill(filepath.Join(globalSkillsPath, entry.Name()))
+				if err == nil {
+					loadedSkillsMap[skill.Manifest.Name] = skill
 				}
 			}
 		}
 	}
 
 	// 3. Load local project skills (overrides global)
-	localSkillsPath := ""
 	root := FindProjectRoot()
 	testPath := filepath.Join(root, "skills")
+	searchedPaths = append(searchedPaths, testPath)
 	if info, err := os.Stat(testPath); err == nil && info.IsDir() {
-		localSkillsPath = testPath
-		if entries, err := os.ReadDir(localSkillsPath); err == nil {
+		if entries, err := os.ReadDir(testPath); err == nil {
 			for _, entry := range entries {
 				if entry.IsDir() {
-					skill, err := LoadSkill(filepath.Join(localSkillsPath, entry.Name()))
+					skill, err := LoadSkill(filepath.Join(testPath, entry.Name()))
 					if err == nil {
 						loadedSkillsMap[skill.Manifest.Name] = skill
 					}
@@ -434,7 +444,7 @@ func (m *defaultSwarm) Reload() error {
 	}
 
 	if len(loadedSkillsMap) == 0 {
-		return fmt.Errorf("could not locate any skills directories")
+		return fmt.Errorf("could not locate any skills directories. Searched:\n- %s", strings.Join(searchedPaths, "\n- "))
 	}
 
 	m.agents = make(map[string]agent.Agent)

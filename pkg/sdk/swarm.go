@@ -87,6 +87,7 @@ type Swarm interface {
 	Reload() error
 	Rewind(n int) error
 	Skills() []*Skill
+	SkillSearchPaths() []string
 	Memory() HierarchicalMemory
 	ListModels(ctx context.Context) ([]ModelInfo, error)
 	ListSessions(ctx context.Context) ([]SessionInfo, error)
@@ -130,6 +131,7 @@ type defaultSwarm struct {
 	telemetryConfigured bool
 	memory              HierarchicalMemory
 	lsp                 *ManagedLSP
+	skillSearchPaths    []string
 }
 
 type SwarmConfig struct {
@@ -443,6 +445,8 @@ func (m *defaultSwarm) Reload() error {
 		}
 	}
 
+	m.skillSearchPaths = searchedPaths
+
 	if len(loadedSkillsMap) == 0 {
 		return fmt.Errorf("could not locate any skills directories. Searched:\n- %s", strings.Join(searchedPaths, "\n- "))
 	}
@@ -628,6 +632,8 @@ func (m *defaultSwarm) WorkingStats() MemoryStats {
 }
 
 func (m *defaultSwarm) Skills() []*Skill { return m.skills }
+
+func (m *defaultSwarm) SkillSearchPaths() []string { return m.skillSearchPaths }
 
 func (m *defaultSwarm) Memory() HierarchicalMemory { return m.memory }
 

@@ -1708,26 +1708,53 @@ func (m *model) handleSlashCommand(input string) tea.Cmd {
 		}
 
 		skills := m.swarm.Skills()
-		if len(skills) == 0 {
-			m.appendMessage(agentMsgStyle.Render("✦ ") + "No dynamic skills are currently loaded.")
-			return nil
-		}
-
 		var lines []string
 		lines = append(lines, lipgloss.NewStyle().Bold(true).Render("Loaded Skills"))
 		lines = append(lines, "")
 
-		// Use the actual viewport width for text wrapping (minus icon and padding)
-		wrapWidth := m.viewport.Width() - 4
-		if wrapWidth < 20 {
-			wrapWidth = 20
+		if len(skills) == 0 {
+			lines = append(lines, "No dynamic skills are currently loaded.")
+		} else {
+			// Use the actual viewport width for text wrapping (minus icon and padding)
+			wrapWidth := m.viewport.Width() - 4
+			if wrapWidth < 20 {
+				wrapWidth = 20
+			}
+
+			for _, s := range skills {
+				name := lipgloss.NewStyle().Foreground(primaryColor).Render(s.Manifest.Name)
+				desc := s.Manifest.Description
+
+				// Show path indicator
+				loc := s.Path
+				if !strings.Contains(loc, "/") && !strings.Contains(loc, "\\") {
+					loc = "built-in (embedded)"
+				} else {
+					// try to shorten home dir
+					if home, err := os.UserHomeDir(); err == nil && strings.HasPrefix(loc, home) {
+						loc = "~" + strings.TrimPrefix(loc, home)
+					}
+				}
+
+				content := fmt.Sprintf("- %s: %s\n  %s", name, desc, lipgloss.NewStyle().Foreground(lipgloss.Color("#888888")).Italic(true).Render(loc))
+				lines = append(lines, lipgloss.NewStyle().Width(wrapWidth).Render(content))
+			}
 		}
 
-		for _, s := range skills {
-			name := lipgloss.NewStyle().Foreground(primaryColor).Render(s.Manifest.Name)
-			desc := s.Manifest.Description
-			content := fmt.Sprintf("- %s: %s", name, desc)
-			lines = append(lines, lipgloss.NewStyle().Width(wrapWidth).Render(content))
+		lines = append(lines, "")
+		lines = append(lines, lipgloss.NewStyle().Bold(true).Render("Search Paths"))
+		lines = append(lines, "")
+
+		paths := m.swarm.SkillSearchPaths()
+		if len(paths) == 0 {
+			lines = append(lines, "- (No external search paths configured)")
+		} else {
+			for _, p := range paths {
+				if home, err := os.UserHomeDir(); err == nil && strings.HasPrefix(p, home) {
+					p = "~" + strings.TrimPrefix(p, home)
+				}
+				lines = append(lines, "- "+p)
+			}
 		}
 
 		icon := agentMsgStyle.Render("✦ ")

@@ -20,13 +20,15 @@ type Config struct {
 
 // FindProjectRoot searches upwards from the current directory to find the nearest
 // directory containing a .git or .gemini folder. Returns the current working
-// directory if no root is found.
+// directory if no root is found or if it hits the user's home directory.
 func FindProjectRoot() string {
 	absPath, err := filepath.Abs(".")
 	if err != nil {
 		return "."
 	}
 	origPath := absPath
+	home, _ := os.UserHomeDir()
+
 	for {
 		// Look for common project markers
 		if info, err := os.Stat(filepath.Join(absPath, ".git")); err == nil && info.IsDir() {
@@ -34,6 +36,10 @@ func FindProjectRoot() string {
 		}
 		if info, err := os.Stat(filepath.Join(absPath, ".gemini")); err == nil && info.IsDir() {
 			return absPath
+		}
+
+		if absPath == home {
+			return origPath
 		}
 
 		parent := filepath.Dir(absPath)

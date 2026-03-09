@@ -35,21 +35,15 @@ func FindProjectRoot() string {
 		if info, err := os.Stat(filepath.Join(absPath, ".gemini")); err == nil && info.IsDir() {
 			return absPath
 		}
-		if info, err := os.Stat(filepath.Join(absPath, "skills")); err == nil && info.IsDir() {
-			return absPath
-		}
-		if _, err := os.Stat(filepath.Join(absPath, "go.mod")); err == nil {
-			return absPath
-		}
 
-		parentDir := filepath.Dir(absPath)
-		if parentDir == absPath {
+		parent := filepath.Dir(absPath)
+		if parent == absPath {
+			// Reached the root without finding a marker
 			return origPath
 		}
-		absPath = parentDir
+		absPath = parent
 	}
 }
-
 // GetConfigDir returns the directory for Swarm configuration and state, creating it if necessary.
 func GetConfigDir() (string, error) {
 	home, err := os.UserHomeDir()

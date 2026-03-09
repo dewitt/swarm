@@ -49,7 +49,7 @@ What am I doing right now?
   ID/Summary\]".
 - **Active Model:** The default LLM provider (e.g., `gemini-2.5-pro`).
 - **Context Files:** A list of globally loaded or pinned files (e.g.,
-  `AGENTS.md`, `.gemini/GEMINI.md`). If the list is empty, omit this section.
+  `AGENTS.md`, `.swarm/SWARM.md`). If the list is empty, omit this section.
 
 ## Design Iterations (Markdown Mockups)
 

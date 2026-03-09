@@ -33,9 +33,9 @@ type sqliteSemanticMemory struct {
 }
 
 func NewSemanticMemory(workspaceDir string) (SemanticMemory, error) {
-	geminiDir := filepath.Join(workspaceDir, ".gemini")
-	_ = os.MkdirAll(geminiDir, 0o755)
-	dbPath := filepath.Join(geminiDir, "state.db")
+	swarmDir := filepath.Join(workspaceDir, ".swarm")
+	_ = os.MkdirAll(swarmDir, 0o755)
+	dbPath := filepath.Join(swarmDir, "state.db")
 
 	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Silent),

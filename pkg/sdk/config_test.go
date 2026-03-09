@@ -2,7 +2,6 @@ package sdk_test
 
 import (
 	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/dewitt/swarm/pkg/sdk"
@@ -25,7 +24,8 @@ func TestConfigSaveAndLoad(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Verify the file was physically created
-	path := filepath.Join(tempHome, ".config", "swarm", "config.yaml")
+	path, err := sdk.DefaultConfigPath()
+	assert.NoError(t, err)
 	_, err = os.Stat(path)
 	assert.NoError(t, err)
 

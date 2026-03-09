@@ -61,7 +61,7 @@ observability into native ecosystems.
     execution and automatically injects them into future prompts. Use
     `/forget` to purge hallucinated or outdated facts.
   - *Global Memory*: Cross-project preferences set via `/remember` or
-    `.gemini/GEMINI.md` files.
+    `.swarm/SWARM.md` files.
 
 - **Async Execution & Input Queueing**: The CLI operates asynchronously. You
   are never locked out while agents are working. You can queue up multiple

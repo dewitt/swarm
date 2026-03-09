@@ -61,7 +61,7 @@ When the `skill-creator` is invoked to fulfill a missing capability:
 1. **Research:** It uses `web_researcher` to look up the best practices or CLI
    commands for the requested technology.
 1. **Draft:** It uses `write_local_file` to create a new `SKILL.md` in the
-   `.gemini/skills/` directory (or the project's local skills folder).
+   `.swarm/skills/` directory (or the project's local skills folder).
 1. **Notify:** It informs the `swarm` orchestrator that the new skill is
    ready.
 1. **Reload:** The `swarm` CLI automatically detects the new file (or we
@@ -76,7 +76,7 @@ When the `skill-creator` is invoked to fulfill a missing capability:
 1. **Update `skills/skill-creator/SKILL.md`:** Refine the prompt to ensure it
    generates high-quality, production-ready skills that strictly adhere to the
    `agentskills.io` specification. It must know to place these skills in
-   `.gemini/skills/` (or the appropriate configured directory).
+   `.swarm/skills/` (or the appropriate configured directory).
 1. **Add Web Research:** Give the `skill-creator` access to the
    `web_researcher` tool so it doesn't hallucinate API usages or CLI flags
    when writing the new skill.

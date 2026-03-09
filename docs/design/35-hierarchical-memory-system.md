@@ -13,7 +13,7 @@ management is becoming a bottleneck. Currently, we rely on disparate systems:
   responses stored in SQLite.
 - **Working Context:** The ephemeral execution trajectory passed between
   routing and reflection phases.
-- **Global Preferences:** The `~/.gemini/GEMINI.md` and `.gemini/GEMINI.md`
+- **Global Preferences:** The `~/.swarm/SWARM.md` and `.swarm/SWARM.md`
   files.
 
 **The Problem:** Context grows linearly until it hits a token limit (context
@@ -59,7 +59,7 @@ will orchestrate how information flows between them.
 
 ### Tier 3: Semantic Memory (Factual Substrates)
 
-- **Scope:** The local repository/workspace (`.gemini/state/`).
+- **Scope:** The local repository/workspace (`.swarm/state/`).
 - **Content:** Persistent, timeless facts distilled from episodic memory
   (e.g., "The build command is X", or "Claude-code is currently
   rate-limited").
@@ -80,7 +80,7 @@ will orchestrate how information flows between them.
   preferences (e.g., "Always use tabs").
 - **Management:** Managed by global config and the `/remember` command,
   feeding into the foundational system prompt via cascading
-  `.gemini/GEMINI.md` file overrides.
+  `.swarm/SWARM.md` file overrides.
 
 ## 3. Impact on Existing Designs
 

@@ -19,7 +19,7 @@ type Config struct {
 }
 
 // FindProjectRoot searches upwards from the current directory to find the nearest
-// directory containing a .git or .gemini folder. Returns the current working
+// directory containing a .git or .swarm folder. Returns the current working
 // directory if no root is found or if it hits the user's home directory.
 func FindProjectRoot() string {
 	absPath, err := filepath.Abs(".")
@@ -34,7 +34,7 @@ func FindProjectRoot() string {
 		if info, err := os.Stat(filepath.Join(absPath, ".git")); err == nil && info.IsDir() {
 			return absPath
 		}
-		if info, err := os.Stat(filepath.Join(absPath, ".gemini")); err == nil && info.IsDir() {
+		if info, err := os.Stat(filepath.Join(absPath, ".swarm")); err == nil && info.IsDir() {
 			return absPath
 		}
 
@@ -50,19 +50,25 @@ func FindProjectRoot() string {
 		absPath = parent
 	}
 }
+
 // GetConfigDir returns the directory for Swarm configuration and state, creating it if necessary.
 func GetConfigDir() (string, error) {
-	home, err := os.UserHomeDir()
+	configDir, err := os.UserConfigDir()
 	if err != nil {
-		return "", err
+		// Fallback if UserConfigDir fails (though rare)
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+		configDir = filepath.Join(home, ".config")
 	}
 
-	configDir := filepath.Join(home, ".config", "swarm")
-	if err := os.MkdirAll(configDir, 0o755); err != nil {
+	swarmDir := filepath.Join(configDir, "swarm")
+	if err := os.MkdirAll(swarmDir, 0o755); err != nil {
 		return "", fmt.Errorf("failed to create config directory: %w", err)
 	}
 
-	return configDir, nil
+	return swarmDir, nil
 }
 
 // DefaultConfigPath returns the path to the global configuration file.

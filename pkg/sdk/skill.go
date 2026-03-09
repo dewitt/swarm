@@ -3,10 +3,8 @@ package sdk
 import (
 	"bytes"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -26,15 +24,11 @@ type Skill struct {
 	Path         string
 }
 
-// LoadSkill reads a skill directory adhering to the agentskills.io standard from the local disk.
+// LoadSkill reads a skill directory adhering to the agentskills.io standard.
+// It looks for a SKILL.md file with YAML frontmatter for metadata, and the rest as instructions.
 func LoadSkill(skillDir string) (*Skill, error) {
-	return LoadSkillFromFS(os.DirFS("/"), strings.TrimPrefix(skillDir, "/"))
-}
-
-// LoadSkillFromFS reads a skill directory adhering to the agentskills.io standard from an abstract filesystem.
-func LoadSkillFromFS(fsys fs.FS, skillDir string) (*Skill, error) {
 	skillDir = filepath.Clean(skillDir)
-	info, err := fs.Stat(fsys, skillDir)
+	info, err := os.Stat(skillDir)
 	if err != nil {
 		return nil, fmt.Errorf("skill directory not found: %w", err)
 	}
@@ -47,11 +41,11 @@ func LoadSkillFromFS(fsys fs.FS, skillDir string) (*Skill, error) {
 	}
 
 	skillPath := filepath.Join(skillDir, "SKILL.md")
-	if _, err := fs.Stat(fsys, skillPath); err != nil {
+	if _, err := os.Stat(skillPath); err != nil {
 		return nil, fmt.Errorf("could not find SKILL.md in %s: %w", skillDir, err)
 	}
 
-	data, err := fs.ReadFile(fsys, skillPath)
+	data, err := os.ReadFile(skillPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read SKILL.md in %s: %w", skillDir, err)
 	}

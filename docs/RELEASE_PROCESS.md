@@ -30,7 +30,7 @@ corrupt, breaking the agent metadata parser.
 The safe formatting command is:
 
 ```bash
-find . -type f -name "*.md" -not -path "./skills/*" -not -path "./.gemini/*" -not -path "*/.git/*" -exec mdformat --wrap 78 {} +
+find . -type f -name "*.md" -not -path "./skills/*" -not -path "./.swarm/*" -not -path "*/.git/*" -exec mdformat --wrap 78 {} +
 ```
 
 ## 3. Release Notes

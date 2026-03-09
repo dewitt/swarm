@@ -88,7 +88,7 @@ tools to shape the context window actively.
    database using `retrieve_fact` before they act, preventing repetitive
    mistakes.
 1. **Tier 4: Global Memory:** User preferences across all projects (managed
-   via the `/remember` command and `.gemini/GEMINI.md` overrides).
+   via the `/remember` command and `.swarm/SWARM.md` overrides).
 
 ______________________________________________________________________
 

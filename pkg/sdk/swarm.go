@@ -5,7 +5,6 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"io/fs"
 	"iter"
 	"math/rand"
 	"net"
@@ -380,15 +379,22 @@ func (m *defaultSwarm) Reload() error {
 	// Gather all skills
 	loadedSkillsMap := make(map[string]*Skill)
 
-	// 1. Load embedded skills first
-	if entries, err := fs.ReadDir(DefaultSkills, "skills"); err == nil {
-		for _, entry := range entries {
-			if entry.IsDir() {
-				skill, err := LoadSkillFromFS(DefaultSkills, filepath.Join("skills", entry.Name()))
-				if err == nil {
-					loadedSkillsMap[skill.Manifest.Name] = skill
+	// 1. Load system-wide default skills
+	systemSkillsPaths := []string{
+		"/usr/local/share/swarm/skills",
+		"/usr/share/swarm/skills",
+	}
+	for _, path := range systemSkillsPaths {
+		if entries, err := os.ReadDir(path); err == nil {
+			for _, entry := range entries {
+				if entry.IsDir() {
+					skill, err := LoadSkill(filepath.Join(path, entry.Name()))
+					if err == nil {
+						loadedSkillsMap[skill.Manifest.Name] = skill
+					}
 				}
 			}
+			break // Stop if we found a valid system directory
 		}
 	}
 
